@@ -24,6 +24,7 @@ export interface AppState {
   shuffle: boolean
   repeat: "off" | "all" | "one"
   theme: "light" | "dark"
+  videoMode: boolean
 }
 
 const STORAGE_KEY = "spotify-youtube-app-state"

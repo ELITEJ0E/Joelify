@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, List } from "lucide-react"
+import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, List, Music, Video } from "lucide-react"
 import Image from "next/image"
 import { useApp } from "@/contexts/AppContext"
 import { YouTubePlayer } from "./YouTubePlayer"
@@ -18,12 +18,16 @@ export function PlayerControls() {
     shuffle,
     repeat,
     playbackPosition,
+    videoMode,
+    currentPlaylistId,
+    playlists,
     setCurrentTrack,
     setQueue,
     setVolume,
     toggleShuffle,
     toggleRepeat,
     setPlaybackPosition,
+    toggleVideoMode,
   } = useApp()
 
   const [player, setPlayer] = useState<any>(null)
@@ -32,6 +36,7 @@ export function PlayerControls() {
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const playedTracksRef = useRef<Set<string>>(new Set())
 
   // Handle player ready
   const handlePlayerReady = (playerInstance: any) => {
@@ -52,7 +57,10 @@ export function PlayerControls() {
       // Playing
       setIsPlaying(true)
       if (player && typeof player.getDuration === "function") {
-        setDuration(player.getDuration() || 0)
+        const actualDuration = player.getDuration()
+        if (actualDuration && actualDuration > 0) {
+          setDuration(actualDuration)
+        }
       }
       startProgressTracking()
     } else if (playerState === 2) {
@@ -67,7 +75,6 @@ export function PlayerControls() {
     }
   }
 
-  // Progress tracking
   const startProgressTracking = () => {
     if (progressIntervalRef.current) return
 
@@ -77,7 +84,7 @@ export function PlayerControls() {
         setCurrentTime(time)
         setPlaybackPosition(time)
       }
-    }, 1000)
+    }, 500)
   }
 
   const stopProgressTracking = () => {
@@ -112,10 +119,9 @@ export function PlayerControls() {
     }
   }
 
-  // Next track
   const handleNext = () => {
+    // Repeat one: replay current track
     if (repeat === "one" && currentTrack) {
-      // Replay current track
       if (player && typeof player.seekTo === "function" && typeof player.playVideo === "function") {
         player.seekTo(0)
         player.playVideo()
@@ -123,22 +129,56 @@ export function PlayerControls() {
       return
     }
 
+    // If queue has tracks, play next from queue
     if (queue.length > 0) {
       const nextTrack = queue[0]
       setCurrentTrack(nextTrack)
       setQueue(queue.slice(1))
       setCurrentTime(0)
       setPlaybackPosition(0)
-    } else if (repeat === "all" && currentTrack) {
-      // Replay current track when queue is empty
-      if (player && typeof player.seekTo === "function" && typeof player.playVideo === "function") {
-        player.seekTo(0)
-        player.playVideo()
+      if (currentTrack) {
+        playedTracksRef.current.add(currentTrack.id)
+      }
+      return
+    }
+
+    // Repeat all: get next track from current playlist
+    if (repeat === "all" && currentPlaylistId) {
+      const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
+      if (currentPlaylist && currentPlaylist.tracks.length > 0) {
+        let nextTrack: typeof currentTrack = null
+
+        if (shuffle) {
+          // Smart shuffle: avoid recently played tracks
+          const availableTracks = currentPlaylist.tracks.filter((t) => !playedTracksRef.current.has(t.id))
+
+          if (availableTracks.length === 0) {
+            // All tracks played, reset and pick random
+            playedTracksRef.current.clear()
+            nextTrack = currentPlaylist.tracks[Math.floor(Math.random() * currentPlaylist.tracks.length)]
+          } else {
+            // Pick random from unplayed tracks
+            nextTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]
+          }
+        } else {
+          // Sequential play
+          const currentIndex = currentPlaylist.tracks.findIndex((t) => t.id === currentTrack?.id)
+          const nextIndex = (currentIndex + 1) % currentPlaylist.tracks.length
+          nextTrack = currentPlaylist.tracks[nextIndex]
+        }
+
+        if (nextTrack) {
+          setCurrentTrack(nextTrack)
+          setCurrentTime(0)
+          setPlaybackPosition(0)
+          if (currentTrack) {
+            playedTracksRef.current.add(currentTrack.id)
+          }
+        }
       }
     }
   }
 
-  // Previous track
   const handlePrevious = () => {
     if (currentTime > 3) {
       // If more than 3 seconds in, restart current track
@@ -147,14 +187,13 @@ export function PlayerControls() {
         setCurrentTime(0)
       }
     } else {
-      // Go to previous track (not implemented in this version)
+      // Restart current track (previous track history not implemented)
       if (player && typeof player.seekTo === "function") {
         player.seekTo(0)
       }
     }
   }
 
-  // Seek
   const handleSeek = (value: number[]) => {
     if (!player || typeof player.seekTo !== "function") return
     const newTime = value[0]
@@ -244,26 +283,26 @@ export function PlayerControls() {
 
           {/* Playback controls */}
           <div className="flex flex-col items-center gap-2 w-full md:flex-1 md:max-w-2xl">
-            <div className="flex items-center gap-3 md:gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={toggleShuffle}
-                className={`hidden md:flex ${shuffle ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                className={`h-8 w-8 md:h-10 md:w-10 ${shuffle ? "text-primary" : "text-gray-400 hover:text-white"}`}
                 disabled={!currentTrack}
                 aria-label="Toggle shuffle"
               >
-                <Shuffle size={20} />
+                <Shuffle size={18} className="md:w-5 md:h-5" />
               </Button>
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={handlePrevious}
-                className="text-gray-400 hover:text-white"
+                className="h-8 w-8 md:h-10 md:w-10 text-gray-400 hover:text-white"
                 disabled={!currentTrack}
                 aria-label="Previous track"
               >
-                <SkipBack size={20} />
+                <SkipBack size={18} className="md:w-5 md:h-5" />
               </Button>
               <Button
                 size="icon"
@@ -278,22 +317,36 @@ export function PlayerControls() {
                 size="icon"
                 variant="ghost"
                 onClick={handleNext}
-                className="text-gray-400 hover:text-white"
+                className="h-8 w-8 md:h-10 md:w-10 text-gray-400 hover:text-white"
                 disabled={!currentTrack && queue.length === 0}
                 aria-label="Next track"
               >
-                <SkipForward size={20} />
+                <SkipForward size={18} className="md:w-5 md:h-5" />
               </Button>
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={toggleRepeat}
-                className={`hidden md:flex ${repeat !== "off" ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                className={`h-8 w-8 md:h-10 md:w-10 relative ${repeat !== "off" ? "text-primary" : "text-gray-400 hover:text-white"}`}
                 disabled={!currentTrack}
                 aria-label={`Repeat: ${repeat}`}
               >
-                <Repeat size={20} />
-                {repeat === "one" && <span className="absolute text-xs font-bold">1</span>}
+                <Repeat size={18} className="md:w-5 md:h-5" />
+                {repeat === "one" && <span className="absolute text-[10px] font-bold">1</span>}
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={toggleVideoMode}
+                className={`h-8 w-8 md:h-10 md:w-10 ${videoMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                disabled={!currentTrack}
+                aria-label={videoMode ? "Switch to music mode" : "Switch to video mode"}
+              >
+                {videoMode ? (
+                  <Video size={18} className="md:w-5 md:h-5" />
+                ) : (
+                  <Music size={18} className="md:w-5 md:h-5" />
+                )}
               </Button>
             </div>
 
@@ -303,7 +356,7 @@ export function PlayerControls() {
               <Slider
                 value={[currentTime]}
                 max={duration || 100}
-                step={1}
+                step={0.1}
                 onValueChange={handleSeek}
                 className="flex-1"
                 disabled={!currentTrack}

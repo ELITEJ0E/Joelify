@@ -21,6 +21,7 @@ interface AppContextType extends AppState {
   toggleShuffle: () => void
   toggleRepeat: () => void
   setTheme: (theme: "light" | "dark") => void
+  toggleVideoMode: () => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -35,6 +36,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState<"off" | "all" | "one">("off")
   const [theme, setTheme] = useState<"light" | "dark">("dark")
+  const [videoMode, setVideoMode] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
 
   // Load state from localStorage on mount
@@ -53,6 +55,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (stored.shuffle !== undefined) setShuffle(stored.shuffle)
     if (stored.repeat) setRepeat(stored.repeat)
     if (stored.theme) setTheme(stored.theme)
+    if (stored.videoMode !== undefined) setVideoMode(stored.videoMode)
     setIsInitialized(true)
   }, [])
 
@@ -70,6 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       shuffle,
       repeat,
       theme,
+      videoMode,
     })
   }, [
     currentTrack,
@@ -81,6 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     shuffle,
     repeat,
     theme,
+    videoMode,
     isInitialized,
   ])
 
@@ -160,6 +165,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRepeat(repeat === "off" ? "all" : repeat === "all" ? "one" : "off")
   }
 
+  const toggleVideoMode = () => {
+    setVideoMode(!videoMode)
+  }
+
   return (
     <AppContext.Provider
       value={{
@@ -172,6 +181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         shuffle,
         repeat,
         theme,
+        videoMode,
         setCurrentTrack,
         setCurrentPlaylistId,
         setPlaylists,
@@ -189,6 +199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleShuffle,
         toggleRepeat,
         setTheme,
+        toggleVideoMode,
       }}
     >
       {children}

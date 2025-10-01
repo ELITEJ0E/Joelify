@@ -19,7 +19,7 @@ export function YouTubePlayer({ onPlayerReady, onStateChange }: YouTubePlayerPro
   const playerRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const isPlayerReadyRef = useRef(false)
-  const { currentTrack } = useApp()
+  const { currentTrack, videoMode } = useApp()
 
   useEffect(() => {
     // Initialize YouTube IFrame API
@@ -33,14 +33,14 @@ export function YouTubePlayer({ onPlayerReady, onStateChange }: YouTubePlayerPro
     const initPlayer = () => {
       if (window.YT && window.YT.Player && containerRef.current && !playerRef.current) {
         playerRef.current = new window.YT.Player("youtube-player", {
-          height: "0",
-          width: "0",
+          height: "360",
+          width: "640",
           videoId: "",
           playerVars: {
             autoplay: 0,
-            controls: 0,
-            disablekb: 1,
-            fs: 0,
+            controls: 1,
+            disablekb: 0,
+            fs: 1,
             modestbranding: 1,
             playsinline: 1,
           },
@@ -69,11 +69,10 @@ export function YouTubePlayer({ onPlayerReady, onStateChange }: YouTubePlayerPro
         isPlayerReadyRef.current = false
       }
     }
-  }, []) // Only initialize once, not on currentTrack change
+  }, [])
 
   useEffect(() => {
     if (playerRef.current && isPlayerReadyRef.current && currentTrack) {
-      // Check if loadVideoById exists before calling
       if (typeof playerRef.current.loadVideoById === "function") {
         console.log("[v0] Loading video:", currentTrack.id)
         playerRef.current.loadVideoById(currentTrack.id)
@@ -82,8 +81,8 @@ export function YouTubePlayer({ onPlayerReady, onStateChange }: YouTubePlayerPro
   }, [currentTrack])
 
   return (
-    <div ref={containerRef} className="hidden">
-      <div id="youtube-player"></div>
+    <div ref={containerRef} className={`${videoMode ? "flex justify-center items-center bg-black p-4" : "hidden"}`}>
+      <div id="youtube-player" className={`${videoMode ? "w-full max-w-4xl aspect-video" : ""}`}></div>
     </div>
   )
 }
