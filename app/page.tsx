@@ -55,7 +55,7 @@ export default function Home() {
         >
           <Menu size={24} />
         </Button>
-        <h1 className="text-xl font-bold">Spotify</h1>
+        <h1 className="text-xl font-bold text-primary">Joelify</h1>
       </header>
 
       <div className="flex flex-1 overflow-hidden">

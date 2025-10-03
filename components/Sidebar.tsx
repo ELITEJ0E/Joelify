@@ -95,7 +95,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       >
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-white">Spotify</h1>
+            <h1 className="text-2xl font-bold text-primary">Joelify</h1>
             <div className="flex items-center gap-2">
               <Button
                 size="icon"

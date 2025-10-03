@@ -13,9 +13,10 @@ declare global {
 interface YouTubePlayerProps {
   onPlayerReady: (player: any) => void
   onStateChange: (event: any) => void
+  onError: (event: any) => void
 }
 
-export function YouTubePlayer({ onPlayerReady, onStateChange }: YouTubePlayerProps) {
+export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const isPlayerReadyRef = useRef(false)
@@ -51,6 +52,7 @@ export function YouTubePlayer({ onPlayerReady, onStateChange }: YouTubePlayerPro
               onPlayerReady(event.target)
             },
             onStateChange: onStateChange,
+            onError: onError,
           },
         })
       }

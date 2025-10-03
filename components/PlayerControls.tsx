@@ -39,6 +39,31 @@ export function PlayerControls() {
   const playedTracksRef = useRef<Set<string>>(new Set())
   const playHistoryRef = useRef<string[]>([])
 
+  // Parse duration string to seconds
+  function parseDuration(durationStr: string): number {
+    if (!durationStr) return 0
+    const parts = durationStr.split(":").map(Number).reverse()
+    let seconds = 0
+    if (parts[0] !== undefined) seconds += parts[0]
+    if (parts[1] !== undefined) seconds += parts[1] * 60
+    if (parts[2] !== undefined) seconds += parts[2] * 3600
+    return seconds
+  }
+
+  // Set initial duration from track when currentTrack changes
+  useEffect(() => {
+    if (currentTrack) {
+      const parsedDur = parseDuration(currentTrack.duration)
+      setDuration(parsedDur)
+      setCurrentTime(0)
+      setPlaybackPosition(0)
+    } else {
+      setDuration(0)
+      setCurrentTime(0)
+      setPlaybackPosition(0)
+    }
+  }, [currentTrack, setPlaybackPosition])
+
   // Handle player ready
   const handlePlayerReady = (playerInstance: any) => {
     console.log("[Player] Player instance ready")
@@ -59,7 +84,8 @@ export function PlayerControls() {
       setIsPlaying(true)
       if (player && typeof player.getDuration === "function") {
         const actualDuration = player.getDuration()
-        if (actualDuration && actualDuration > 0) {
+        // Update only if significantly different (e.g., >1s diff) to avoid minor float discrepancies
+        if (Math.abs(actualDuration - duration) > 1) {
           setDuration(actualDuration)
         }
       }
@@ -73,11 +99,29 @@ export function PlayerControls() {
       setIsPlaying(false)
       stopProgressTracking()
       handleNext()
+    } else if (playerState === 5) {
+      // Cued - try to set duration early
+      if (player && typeof player.getDuration === "function") {
+        const actualDuration = player.getDuration()
+        if (actualDuration > 0 && Math.abs(actualDuration - duration) > 1) {
+          setDuration(actualDuration)
+        }
+      }
+    }
+  }
+
+  // Handle YouTube errors
+  const handleError = (event: any) => {
+    console.error("[Player] YouTube Error:", event.data)
+    // Error codes: 100 (video not found), 101/150 (embedding not allowed)
+    if ([100, 101, 150].includes(event.data)) {
+      // Skip to next track if video is unplayable
+      handleNext()
     }
   }
 
   const startProgressTracking = () => {
-    if (progressIntervalRef.current) return
+    if (progressIntervalRef.current || !isPlaying) return
 
     progressIntervalRef.current = setInterval(() => {
       if (player && typeof player.getCurrentTime === "function" && typeof player.getDuration === "function") {
@@ -85,11 +129,11 @@ export function PlayerControls() {
         const dur = player.getDuration()
         setCurrentTime(time)
         setPlaybackPosition(time)
-        if (dur && dur > 0 && dur !== duration) {
+        if (dur > 0 && Math.abs(dur - duration) > 1) {
           setDuration(dur)
         }
       }
-    }, 500)
+    }, 1000) // Increased to 1000ms for better performance
   }
 
   const stopProgressTracking = () => {
@@ -111,7 +155,7 @@ export function PlayerControls() {
     if (player && currentTrack && playbackPosition > 0 && typeof player.seekTo === "function") {
       player.seekTo(playbackPosition, true)
     }
-  }, [currentTrack])
+  }, [currentTrack, player]) // Added player dependency
 
   // Play/Pause
   const handlePlayPause = () => {
@@ -288,7 +332,11 @@ export function PlayerControls() {
 
   return (
     <>
-      <YouTubePlayer onPlayerReady={handlePlayerReady} onStateChange={handleStateChange} />
+      <YouTubePlayer 
+        onPlayerReady={handlePlayerReady} 
+        onStateChange={handleStateChange}
+        onError={handleError}
+      />
 
       <div className="bg-black text-white p-3 md:p-4 border-t border-border">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
