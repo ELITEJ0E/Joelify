@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { Search, Plus, ExternalLink, Loader2 } from "lucide-react"
+import { Search, Plus, ExternalLink, Loader2, Heart } from "lucide-react"
 import Image from "next/image"
 import { searchYouTube, type YouTubeVideo } from "@/lib/youtube"
 import { useApp } from "@/contexts/AppContext"
@@ -25,7 +25,7 @@ export function SearchView() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
-  const { playlists, addTrackToPlaylist, setCurrentTrack, addToQueue } = useApp()
+  const { playlists, addTrackToPlaylist, setCurrentTrack, addToQueue, toggleLikedSong, isTrackLiked } = useApp()
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -101,7 +101,7 @@ export function SearchView() {
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 md:p-6 mb-6 md:mb-8">
             <p className="text-destructive font-semibold mb-2">Oops! Something went wrong</p>
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
-            <Button onClick={handleSearch} variant="outline" size="sm">
+            <Button onClick={() => handleSearch({ preventDefault: () => {} } as React.FormEvent)} variant="outline" size="sm">
               Try Again
             </Button>
           </div>
@@ -119,6 +119,8 @@ export function SearchView() {
                   onPlayNow={handlePlayNow}
                   onAddToQueue={handleAddToQueue}
                   onAddToPlaylist={addTrackToPlaylist}
+                  onToggleLike={toggleLikedSong}
+                  isLiked={isTrackLiked(video.id)}
                 />
               ))}
             </div>
@@ -142,9 +144,11 @@ interface SearchResultCardProps {
   onPlayNow: (video: YouTubeVideo) => void
   onAddToQueue: (video: YouTubeVideo) => void
   onAddToPlaylist: (playlistId: string, track: any) => void
+  onToggleLike: (track: any) => void
+  isLiked: boolean
 }
 
-function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPlaylist }: SearchResultCardProps) {
+function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPlaylist, onToggleLike, isLiked }: SearchResultCardProps) {
   const [selectedPlaylist, setSelectedPlaylist] = useState<string>("")
   const [showSuccess, setShowSuccess] = useState(false)
 
@@ -163,6 +167,16 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
     setTimeout(() => setShowSuccess(false), 2000)
   }
 
+  const handleToggleLike = () => {
+    onToggleLike({
+      id: video.id,
+      title: video.title,
+      artist: video.artist,
+      thumbnail: video.thumbnail,
+      duration: video.duration,
+    })
+  }
+
   return (
     <div
       className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all group"
@@ -171,29 +185,77 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
     >
       <div className="relative mb-4 aspect-video rounded-md overflow-hidden">
         <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover" />
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
           <Button
             size="icon"
             className="bg-primary hover:bg-primary/90 rounded-full h-12 w-12"
             onClick={() => onPlayNow(video)}
             aria-label={`Play ${video.title}`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="w-6 h-6"
+            >
               <path d="M8 5v14l11-7z" />
             </svg>
           </Button>
         </div>
       </div>
 
-      <h3 className="font-semibold text-sm mb-1 line-clamp-2 leading-tight">{video.title}</h3>
-      <p className="text-xs text-muted-foreground mb-1 line-clamp-1">{video.artist}</p>
-      <p className="text-xs text-muted-foreground mb-3">{video.duration}</p>
+      <div className="mb-3">
+        <h3 className="font-semibold text-sm line-clamp-2 mb-1" title={video.title}>
+          {video.title}
+        </h3>
+        <p className="text-xs text-muted-foreground line-clamp-1" title={video.artist}>
+          {video.artist}
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">{video.duration}</p>
+      </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            className="flex-1 text-xs h-8"
+            onClick={() => onAddToQueue(video)}
+            aria-label="Add to queue"
+          >
+            <Plus size={14} className="mr-1" />
+            Queue
+          </Button>
+          <Button
+            size="icon"
+            variant="secondary"
+            className={`h-8 w-8 ${isLiked ? "text-primary" : ""}`}
+            onClick={handleToggleLike}
+            aria-label={isLiked ? "Unlike song" : "Like song"}
+          >
+            <Heart size={14} fill={isLiked ? "currentColor" : "none"} />
+          </Button>
+          <Button
+            size="icon"
+            variant="secondary"
+            className="h-8 w-8"
+            asChild
+          >
+            <a
+              href={`https://www.youtube.com/watch?v=${video.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open in YouTube"
+            >
+              <ExternalLink size={14} />
+            </a>
+          </Button>
+        </div>
+
+        <div className="flex gap-2">
           <Select value={selectedPlaylist} onValueChange={setSelectedPlaylist}>
-            <SelectTrigger className="flex-1 h-8 text-xs" aria-label="Select playlist">
-              <SelectValue placeholder="Add to playlist" />
+            <SelectTrigger className="flex-1 h-8 text-xs">
+              <SelectValue placeholder="Add to playlist..." />
             </SelectTrigger>
             <SelectContent>
               {playlists.map((playlist) => (
@@ -204,44 +266,22 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
             </SelectContent>
           </Select>
           <Button
-            size="icon"
-            variant="outline"
-            className="h-8 w-8 bg-transparent"
+            size="sm"
+            variant="secondary"
+            className="h-8 px-3 text-xs"
             onClick={handleAddToPlaylist}
             disabled={!selectedPlaylist}
-            aria-label="Add to selected playlist"
           >
-            <Plus size={14} />
+            Add
           </Button>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 h-8 text-xs bg-transparent"
-            onClick={() => onAddToQueue(video)}
-            aria-label={`Add ${video.title} to queue`}
-          >
-            Add to Queue
-          </Button>
-          <Button
-            size="icon"
-            variant="outline"
-            className="h-8 w-8 bg-transparent"
-            onClick={() => window.open(`https://www.youtube.com/watch?v=${video.id}`, "_blank")}
-            aria-label={`Open ${video.title} on YouTube`}
-          >
-            <ExternalLink size={14} />
-          </Button>
-        </div>
+        {showSuccess && (
+          <p className="text-xs text-primary text-center animate-in fade-in duration-200">
+            Added to playlist!
+          </p>
+        )}
       </div>
-
-      {showSuccess && (
-        <p className="text-xs text-primary mt-2 text-center font-medium" role="status" aria-live="polite">
-          Added to playlist!
-        </p>
-      )}
     </div>
   )
 }

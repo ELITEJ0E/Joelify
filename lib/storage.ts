@@ -1,7 +1,9 @@
-// localStorage utilities for state persistence
+// lib/storage.ts - Enhanced version
 export interface Playlist {
   id: string
   name: string
+  description?: string
+  coverImage?: string
   tracks: Track[]
   createdAt: number
 }
@@ -18,6 +20,7 @@ export interface AppState {
   currentTrack: Track | null
   currentPlaylistId: string | null
   playlists: Playlist[]
+  likedSongs: Track[]
   queue: Track[]
   playbackPosition: number
   volume: number
@@ -36,7 +39,7 @@ export function loadState(): Partial<AppState> {
     const stored = localStorage.getItem(STORAGE_KEY)
     return stored ? JSON.parse(stored) : {}
   } catch (error) {
-    console.error("[v0] Failed to load state:", error)
+    console.error("[Storage] Failed to load state:", error)
     return {}
   }
 }
@@ -47,7 +50,7 @@ export function saveState(state: Partial<AppState>): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   } catch (error) {
-    console.error("[v0] Failed to save state:", error)
+    console.error("[Storage] Failed to save state:", error)
   }
 }
 
@@ -55,6 +58,8 @@ export function createDefaultPlaylist(): Playlist {
   return {
     id: crypto.randomUUID(),
     name: "My Playlist",
+    description: "Your favorite songs",
+    coverImage: undefined,
     tracks: [],
     createdAt: Date.now(),
   }

@@ -7,9 +7,11 @@ interface AppContextType extends AppState {
   setCurrentTrack: (track: Track | null) => void
   setCurrentPlaylistId: (id: string | null) => void
   setPlaylists: (playlists: Playlist[]) => void
-  addPlaylist: (name: string) => void
+  addPlaylist: (name: string, description?: string) => void
   deletePlaylist: (id: string) => void
   renamePlaylist: (id: string, name: string) => void
+  updatePlaylistDescription: (id: string, description: string) => void
+  updatePlaylistCover: (id: string, coverImage: string) => void
   addTrackToPlaylist: (playlistId: string, track: Track) => void
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => void
   reorderPlaylistTracks: (playlistId: string, tracks: Track[]) => void
@@ -22,6 +24,9 @@ interface AppContextType extends AppState {
   toggleRepeat: () => void
   setTheme: (theme: "light" | "dark") => void
   toggleVideoMode: () => void
+  toggleLikedSong: (track: Track) => void
+  isTrackLiked: (trackId: string) => boolean
+  setLikedSongs: (songs: Track[]) => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -30,6 +35,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null)
   const [currentPlaylistId, setCurrentPlaylistId] = useState<string | null>(null)
   const [playlists, setPlaylists] = useState<Playlist[]>([])
+  const [likedSongs, setLikedSongs] = useState<Track[]>([])
   const [queue, setQueue] = useState<Track[]>([])
   const [playbackPosition, setPlaybackPosition] = useState(0)
   const [volume, setVolume] = useState(50)
@@ -49,6 +55,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       setPlaylists([createDefaultPlaylist()])
     }
+    if (stored.likedSongs) setLikedSongs(stored.likedSongs)
     if (stored.queue) setQueue(stored.queue)
     if (stored.playbackPosition !== undefined) setPlaybackPosition(stored.playbackPosition)
     if (stored.volume !== undefined) setVolume(stored.volume)
@@ -67,6 +74,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentTrack,
       currentPlaylistId,
       playlists,
+      likedSongs,
       queue,
       playbackPosition,
       volume,
@@ -79,6 +87,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     currentTrack,
     currentPlaylistId,
     playlists,
+    likedSongs,
     queue,
     playbackPosition,
     volume,
@@ -98,10 +107,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [theme])
 
-  const addPlaylist = (name: string) => {
+  const addPlaylist = (name: string, description?: string) => {
     const newPlaylist: Playlist = {
       id: crypto.randomUUID(),
       name,
+      description: description || "",
+      coverImage: undefined,
       tracks: [],
       createdAt: Date.now(),
     }
@@ -117,6 +128,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const renamePlaylist = (id: string, name: string) => {
     setPlaylists(playlists.map((p) => (p.id === id ? { ...p, name } : p)))
+  }
+
+  const updatePlaylistDescription = (id: string, description: string) => {
+    setPlaylists(playlists.map((p) => (p.id === id ? { ...p, description } : p)))
+  }
+
+  const updatePlaylistCover = (id: string, coverImage: string) => {
+    setPlaylists(playlists.map((p) => (p.id === id ? { ...p, coverImage } : p)))
   }
 
   const addTrackToPlaylist = (playlistId: string, track: Track) => {
@@ -169,12 +188,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setVideoMode(!videoMode)
   }
 
+  const toggleLikedSong = (track: Track) => {
+    const isLiked = likedSongs.some((t) => t.id === track.id)
+    if (isLiked) {
+      setLikedSongs(likedSongs.filter((t) => t.id !== track.id))
+    } else {
+      setLikedSongs([...likedSongs, track])
+    }
+  }
+
+  const isTrackLiked = (trackId: string): boolean => {
+    return likedSongs.some((t) => t.id === trackId)
+  }
+
   return (
     <AppContext.Provider
       value={{
         currentTrack,
         currentPlaylistId,
         playlists,
+        likedSongs,
         queue,
         playbackPosition,
         volume,
@@ -188,6 +221,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addPlaylist,
         deletePlaylist,
         renamePlaylist,
+        updatePlaylistDescription,
+        updatePlaylistCover,
         addTrackToPlaylist,
         removeTrackFromPlaylist,
         reorderPlaylistTracks,
@@ -200,6 +235,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleRepeat,
         setTheme,
         toggleVideoMode,
+        toggleLikedSong,
+        isTrackLiked,
+        setLikedSongs,
       }}
     >
       {children}

@@ -37,10 +37,11 @@ export function PlayerControls() {
   const [isMuted, setIsMuted] = useState(false)
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const playedTracksRef = useRef<Set<string>>(new Set())
+  const playHistoryRef = useRef<string[]>([])
 
   // Handle player ready
   const handlePlayerReady = (playerInstance: any) => {
-    console.log("[v0] Player instance ready")
+    console.log("[Player] Player instance ready")
     setPlayer(playerInstance)
     if (playerInstance && typeof playerInstance.setVolume === "function") {
       playerInstance.setVolume(volume)
@@ -49,7 +50,7 @@ export function PlayerControls() {
 
   // Handle player state changes
   const handleStateChange = (event: any) => {
-    console.log("[v0] Player state changed:", event.data)
+    console.log("[Player] State changed:", event.data)
     const playerState = event.data
 
     // YT.PlayerState: UNSTARTED (-1), ENDED (0), PLAYING (1), PAUSED (2), BUFFERING (3), CUED (5)
@@ -79,10 +80,14 @@ export function PlayerControls() {
     if (progressIntervalRef.current) return
 
     progressIntervalRef.current = setInterval(() => {
-      if (player && typeof player.getCurrentTime === "function") {
+      if (player && typeof player.getCurrentTime === "function" && typeof player.getDuration === "function") {
         const time = player.getCurrentTime()
+        const dur = player.getDuration()
         setCurrentTime(time)
         setPlaybackPosition(time)
+        if (dur && dur > 0 && dur !== duration) {
+          setDuration(dur)
+        }
       }
     }, 500)
   }
@@ -125,6 +130,8 @@ export function PlayerControls() {
       if (player && typeof player.seekTo === "function" && typeof player.playVideo === "function") {
         player.seekTo(0)
         player.playVideo()
+        setCurrentTime(0)
+        setPlaybackPosition(0)
       }
       return
     }
@@ -138,6 +145,7 @@ export function PlayerControls() {
       setPlaybackPosition(0)
       if (currentTrack) {
         playedTracksRef.current.add(currentTrack.id)
+        playHistoryRef.current.push(currentTrack.id)
       }
       return
     }
@@ -150,10 +158,12 @@ export function PlayerControls() {
 
         if (shuffle) {
           // Smart shuffle: avoid recently played tracks
-          const availableTracks = currentPlaylist.tracks.filter((t) => !playedTracksRef.current.has(t.id))
+          const recentlyPlayed = playHistoryRef.current.slice(-3)
+          const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id))
 
           if (availableTracks.length === 0) {
-            // All tracks played, reset and pick random
+            // All tracks recently played, reset and pick random
+            playHistoryRef.current = []
             playedTracksRef.current.clear()
             nextTrack = currentPlaylist.tracks[Math.floor(Math.random() * currentPlaylist.tracks.length)]
           } else {
@@ -173,8 +183,20 @@ export function PlayerControls() {
           setPlaybackPosition(0)
           if (currentTrack) {
             playedTracksRef.current.add(currentTrack.id)
+            playHistoryRef.current.push(currentTrack.id)
           }
         }
+      }
+      return
+    }
+
+    // If no repeat and queue is empty, stop playback
+    if (repeat === "off" && queue.length === 0) {
+      setIsPlaying(false)
+      setCurrentTime(0)
+      setPlaybackPosition(0)
+      if (player && typeof player.pauseVideo === "function") {
+        player.pauseVideo()
       }
     }
   }
@@ -185,11 +207,34 @@ export function PlayerControls() {
       if (player && typeof player.seekTo === "function") {
         player.seekTo(0)
         setCurrentTime(0)
+        setPlaybackPosition(0)
       }
     } else {
-      // Restart current track (previous track history not implemented)
+      // Go to previous track from history
+      if (playHistoryRef.current.length > 1) {
+        // Remove current track
+        playHistoryRef.current.pop()
+        const previousTrackId = playHistoryRef.current[playHistoryRef.current.length - 1]
+        
+        // Find track in current playlist
+        if (currentPlaylistId) {
+          const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
+          const previousTrack = currentPlaylist?.tracks.find((t) => t.id === previousTrackId)
+          
+          if (previousTrack) {
+            setCurrentTrack(previousTrack)
+            setCurrentTime(0)
+            setPlaybackPosition(0)
+            return
+          }
+        }
+      }
+      
+      // Fallback: restart current track
       if (player && typeof player.seekTo === "function") {
         player.seekTo(0)
+        setCurrentTime(0)
+        setPlaybackPosition(0)
       }
     }
   }
@@ -235,6 +280,7 @@ export function PlayerControls() {
 
   // Format time
   const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return "0:00"
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, "0")}`
@@ -246,7 +292,7 @@ export function PlayerControls() {
 
       <div className="bg-black text-white p-3 md:p-4 border-t border-border">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
-          {/* Current track info */}
+          {/* Current track info - Desktop */}
           <div className="hidden md:flex items-center gap-4 flex-1 min-w-0">
             {currentTrack ? (
               <>
@@ -283,6 +329,35 @@ export function PlayerControls() {
 
           {/* Playback controls */}
           <div className="flex flex-col items-center gap-2 w-full md:flex-1 md:max-w-2xl">
+            {/* Mobile track info */}
+            <div className="md:hidden w-full flex items-center gap-3 mb-2">
+              {currentTrack ? (
+                <>
+                  {currentTrack.thumbnail ? (
+                    <Image
+                      src={currentTrack.thumbnail || "/placeholder.svg"}
+                      width={48}
+                      height={48}
+                      alt={currentTrack.title || "Track thumbnail"}
+                      className="w-12 h-12 rounded object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-secondary rounded flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl text-muted-foreground">♪</span>
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
+                    <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 text-center">
+                  <p className="text-sm text-muted-foreground">No track playing</p>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center gap-2 md:gap-4">
               <Button
                 size="icon"
@@ -318,7 +393,7 @@ export function PlayerControls() {
                 variant="ghost"
                 onClick={handleNext}
                 className="h-8 w-8 md:h-10 md:w-10 text-gray-400 hover:text-white"
-                disabled={!currentTrack && queue.length === 0}
+                disabled={!currentTrack}
                 aria-label="Next track"
               >
                 <SkipForward size={18} className="md:w-5 md:h-5" />
@@ -355,11 +430,11 @@ export function PlayerControls() {
               <span className="text-xs text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
               <Slider
                 value={[currentTime]}
-                max={duration || 100}
+                max={duration > 0 ? duration : 100}
                 step={0.1}
                 onValueChange={handleSeek}
                 className="flex-1"
-                disabled={!currentTrack}
+                disabled={!currentTrack || duration === 0}
                 aria-label="Seek"
               />
               <span className="text-xs text-gray-400 w-10">{formatTime(duration)}</span>
