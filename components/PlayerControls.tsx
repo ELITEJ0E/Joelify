@@ -35,6 +35,7 @@ export function PlayerControls() {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false)
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const playedTracksRef = useRef<Set<string>>(new Set())
   const playHistoryRef = useRef<string[]>([])
@@ -322,6 +323,10 @@ export function PlayerControls() {
     }
   }
 
+  const toggleVolumeSlider = () => {
+    setShowVolumeSlider(!showVolumeSlider)
+  }
+
   // Format time
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return "0:00"
@@ -376,105 +381,68 @@ export function PlayerControls() {
           </div>
 
           {/* Playback controls */}
-          <div className="flex flex-col items-center gap-2 w-full md:flex-1 md:max-w-2xl">
-            {/* Mobile track info */}
-            <div className="md:hidden w-full flex items-center gap-3 mb-2">
-              {currentTrack ? (
-                <>
-                  {currentTrack.thumbnail ? (
-                    <Image
-                      src={currentTrack.thumbnail || "/placeholder.svg"}
-                      width={48}
-                      height={48}
-                      alt={currentTrack.title || "Track thumbnail"}
-                      className="w-12 h-12 rounded object-cover flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-secondary rounded flex items-center justify-center flex-shrink-0">
-                      <span className="text-xl text-muted-foreground">♪</span>
+          <div className="flex flex-col items-center w-full md:flex-1 md:max-w-2xl">
+            {/* Mobile layout - Track info and controls in one row */}
+            <div className="md:hidden w-full flex items-center justify-between mb-3">
+              {/* Track info on the left */}
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                {currentTrack ? (
+                  <>
+                    {currentTrack.thumbnail ? (
+                      <Image
+                        src={currentTrack.thumbnail || "/placeholder.svg"}
+                        width={48}
+                        height={48}
+                        alt={currentTrack.title || "Track thumbnail"}
+                        className="w-12 h-12 rounded object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-secondary rounded flex items-center justify-center flex-shrink-0">
+                        <span className="text-xl text-muted-foreground">♪</span>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
+                      <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
                     </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
-                    <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
-                  </div>
-                </>
-              ) : (
-                <div className="flex-1 text-center">
-                  <p className="text-sm text-muted-foreground">No track playing</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 md:gap-4">
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={toggleShuffle}
-                className={`h-8 w-8 md:h-10 md:w-10 ${shuffle ? "text-primary" : "text-gray-400 hover:text-white"}`}
-                disabled={!currentTrack}
-                aria-label="Toggle shuffle"
-              >
-                <Shuffle size={18} className="md:w-5 md:h-5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handlePrevious}
-                className="h-8 w-8 md:h-10 md:w-10 text-gray-400 hover:text-white"
-                disabled={!currentTrack}
-                aria-label="Previous track"
-              >
-                <SkipBack size={18} className="md:w-5 md:h-5" />
-              </Button>
-              <Button
-                size="icon"
-                className="bg-white text-black rounded-full h-10 w-10 hover:scale-105 transition disabled:opacity-50"
-                onClick={handlePlayPause}
-                disabled={!currentTrack}
-                aria-label={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} />}
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleNext}
-                className="h-8 w-8 md:h-10 md:w-10 text-gray-400 hover:text-white"
-                disabled={!currentTrack}
-                aria-label="Next track"
-              >
-                <SkipForward size={18} className="md:w-5 md:h-5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={toggleRepeat}
-                className={`h-8 w-8 md:h-10 md:w-10 relative ${repeat !== "off" ? "text-primary" : "text-gray-400 hover:text-white"}`}
-                disabled={!currentTrack}
-                aria-label={`Repeat: ${repeat}`}
-              >
-                <Repeat size={18} className="md:w-5 md:h-5" />
-                {repeat === "one" && <span className="absolute text-[10px] font-bold">1</span>}
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={toggleVideoMode}
-                className={`h-8 w-8 md:h-10 md:w-10 ${videoMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
-                disabled={!currentTrack}
-                aria-label={videoMode ? "Switch to music mode" : "Switch to video mode"}
-              >
-                {videoMode ? (
-                  <Video size={18} className="md:w-5 md:h-5" />
+                  </>
                 ) : (
-                  <Music size={18} className="md:w-5 md:h-5" />
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground">No track playing</p>
+                  </div>
                 )}
-              </Button>
+              </div>
+
+              {/* QueueSheet button on the right */}
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-gray-400 hover:text-white relative h-10 w-10"
+                    aria-label="Open queue"
+                  >
+                    <List size={20} />
+                    {queue.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                        {queue.length}
+                      </span>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-full sm:w-96">
+                  <SheetHeader>
+                    <SheetTitle>Queue</SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-6 h-[calc(100vh-8rem)]">
+                    <QueueSheet />
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
 
-            {/* Progress bar */}
-            <div className="flex items-center gap-2 w-full">
+            {/* Progress bar - Below track info for mobile */}
+            <div className="flex items-center gap-2 w-full mb-3 md:mb-0 md:order-2">
               <span className="text-xs text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
               <Slider
                 value={[currentTime]}
@@ -487,9 +455,88 @@ export function PlayerControls() {
               />
               <span className="text-xs text-gray-400 w-10">{formatTime(duration)}</span>
             </div>
+
+            {/* Main player controls with reduced gap */}
+            <div className="flex items-center justify-center w-full gap-3 md:gap-4">
+              {/* Shuffle button */}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={toggleShuffle}
+                className={`h-10 w-10 md:h-10 md:w-10 ${shuffle ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                disabled={!currentTrack}
+                aria-label="Toggle shuffle"
+              >
+                <Shuffle size={22} className="md:w-5 md:h-5" />
+              </Button>
+
+              {/* Previous button */}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handlePrevious}
+                className="h-10 w-10 md:h-10 md:w-10 text-gray-400 hover:text-white"
+                disabled={!currentTrack}
+                aria-label="Previous track"
+              >
+                <SkipBack size={22} className="md:w-5 md:h-5" />
+              </Button>
+
+              {/* Play/Pause button - Larger */}
+              <Button
+                size="icon"
+                className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 transition disabled:opacity-50"
+                onClick={handlePlayPause}
+                disabled={!currentTrack}
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? <Pause fill="currentColor" size={24} /> : <Play fill="currentColor" size={24} />}
+              </Button>
+
+              {/* Next button */}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleNext}
+                className="h-10 w-10 md:h-10 md:w-10 text-gray-400 hover:text-white"
+                disabled={!currentTrack}
+                aria-label="Next track"
+              >
+                <SkipForward size={22} className="md:w-5 md:h-5" />
+              </Button>
+
+              {/* Repeat button */}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={toggleRepeat}
+                className={`h-10 w-10 md:h-10 md:w-10 relative ${repeat !== "off" ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                disabled={!currentTrack}
+                aria-label={`Repeat: ${repeat}`}
+              >
+                <Repeat size={22} className="md:w-5 md:h-5" />
+                {repeat === "one" && <span className="absolute text-[10px] font-bold">1</span>}
+              </Button>
+
+              {/* Video button */}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={toggleVideoMode}
+                className={`h-10 w-10 ${videoMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                disabled={!currentTrack}
+                aria-label={videoMode ? "Switch to music mode" : "Switch to video mode"}
+              >
+                {videoMode ? (
+                  <Video size={20} />
+                ) : (
+                  <Music size={20} />
+                )}
+              </Button>
+            </div>
           </div>
 
-          {/* Volume and queue */}
+          {/* Desktop Volume and queue */}
           <div className="hidden md:flex items-center gap-4 flex-1 justify-end">
             <Sheet>
               <SheetTrigger asChild>
@@ -529,34 +576,6 @@ export function PlayerControls() {
             <div className="w-24">
               <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} aria-label="Volume" />
             </div>
-          </div>
-
-          <div className="md:hidden">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="text-gray-400 hover:text-white relative"
-                  aria-label="Open queue"
-                >
-                  <List size={20} />
-                  {queue.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {queue.length}
-                    </span>
-                  )}
-                </Button>
-              </SheetTrigger>
-              <SheetContent className="w-full sm:w-96">
-                <SheetHeader>
-                  <SheetTitle>Queue</SheetTitle>
-                </SheetHeader>
-                <div className="mt-6 h-[calc(100vh-8rem)]">
-                  <QueueSheet />
-                </div>
-              </SheetContent>
-            </Sheet>
           </div>
         </div>
       </div>
