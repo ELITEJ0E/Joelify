@@ -9,6 +9,7 @@ import { QueueSheet } from "./QueueSheet"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function PlayerControls() {
   const {
@@ -36,9 +37,13 @@ export function PlayerControls() {
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
   const [showVolumeSlider, setShowVolumeSlider] = useState(false)
+  const [isReady, setIsReady] = useState(false)
+  
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const playedTracksRef = useRef<Set<string>>(new Set())
   const playHistoryRef = useRef<string[]>([])
+  const isSeekingRef = useRef(false)
+  const hasRestoredPositionRef = useRef(false)
 
   // Parse duration string to seconds
   function parseDuration(durationStr: string): number {
@@ -57,20 +62,26 @@ export function PlayerControls() {
       const parsedDur = parseDuration(currentTrack.duration)
       setDuration(parsedDur)
       setCurrentTime(0)
-      setPlaybackPosition(0)
+      hasRestoredPositionRef.current = false
     } else {
       setDuration(0)
       setCurrentTime(0)
       setPlaybackPosition(0)
+      hasRestoredPositionRef.current = false
     }
-  }, [currentTrack, setPlaybackPosition])
+  }, [currentTrack?.id])
 
   // Handle player ready
   const handlePlayerReady = (playerInstance: any) => {
     console.log("[Player] Player instance ready")
     setPlayer(playerInstance)
+    setIsReady(true)
+    
     if (playerInstance && typeof playerInstance.setVolume === "function") {
       playerInstance.setVolume(volume)
+      if (isMuted) {
+        playerInstance.mute()
+      }
     }
   }
 
@@ -83,13 +94,23 @@ export function PlayerControls() {
     if (playerState === 1) {
       // Playing
       setIsPlaying(true)
+      
       if (player && typeof player.getDuration === "function") {
         const actualDuration = player.getDuration()
-        // Update only if significantly different (e.g., >1s diff) to avoid minor float discrepancies
-        if (Math.abs(actualDuration - duration) > 1) {
+        if (actualDuration > 0 && Math.abs(actualDuration - duration) > 1) {
           setDuration(actualDuration)
         }
       }
+      
+      // Restore playback position once when video starts playing
+      if (!hasRestoredPositionRef.current && playbackPosition > 0 && playbackPosition < duration - 5) {
+        if (player && typeof player.seekTo === "function") {
+          console.log("[Player] Restoring position:", playbackPosition)
+          player.seekTo(playbackPosition, true)
+          hasRestoredPositionRef.current = true
+        }
+      }
+      
       startProgressTracking()
     } else if (playerState === 2) {
       // Paused
@@ -97,6 +118,7 @@ export function PlayerControls() {
       stopProgressTracking()
     } else if (playerState === 0) {
       // Ended
+      console.log("[Player] Track ended, moving to next")
       setIsPlaying(false)
       stopProgressTracking()
       handleNext()
@@ -114,27 +136,30 @@ export function PlayerControls() {
   // Handle YouTube errors
   const handleError = (event: any) => {
     console.error("[Player] YouTube Error:", event.data)
-    // Error codes: 100 (video not found), 101/150 (embedding not allowed)
-    if ([100, 101, 150].includes(event.data)) {
+    // Error codes: 2 (invalid param), 5 (HTML5 error), 100 (video not found), 101/150 (embedding not allowed)
+    if ([2, 5, 100, 101, 150].includes(event.data)) {
+      console.log("[Player] Video unplayable, skipping to next")
       // Skip to next track if video is unplayable
-      handleNext()
+      setTimeout(() => handleNext(), 1000)
     }
   }
 
   const startProgressTracking = () => {
-    if (progressIntervalRef.current || !isPlaying) return
+    if (progressIntervalRef.current) return
 
     progressIntervalRef.current = setInterval(() => {
-      if (player && typeof player.getCurrentTime === "function" && typeof player.getDuration === "function") {
+      if (player && typeof player.getCurrentTime === "function" && typeof player.getDuration === "function" && !isSeekingRef.current) {
         const time = player.getCurrentTime()
         const dur = player.getDuration()
+        
         setCurrentTime(time)
         setPlaybackPosition(time)
+        
         if (dur > 0 && Math.abs(dur - duration) > 1) {
           setDuration(dur)
         }
       }
-    }, 1000) // Increased to 1000ms for better performance
+    }, 500)
   }
 
   const stopProgressTracking = () => {
@@ -151,16 +176,9 @@ export function PlayerControls() {
     }
   }, [])
 
-  // Restore playback position when track loads
-  useEffect(() => {
-    if (player && currentTrack && playbackPosition > 0 && typeof player.seekTo === "function") {
-      player.seekTo(playbackPosition, true)
-    }
-  }, [currentTrack, player]) // Added player dependency
-
   // Play/Pause
   const handlePlayPause = () => {
-    if (!player || !currentTrack) return
+    if (!player || !currentTrack || !isReady) return
 
     if (isPlaying && typeof player.pauseVideo === "function") {
       player.pauseVideo()
@@ -170,13 +188,16 @@ export function PlayerControls() {
   }
 
   const handleNext = () => {
+    console.log("[Player] handleNext called - repeat:", repeat, "queue length:", queue.length)
+    
     // Repeat one: replay current track
     if (repeat === "one" && currentTrack) {
       if (player && typeof player.seekTo === "function" && typeof player.playVideo === "function") {
-        player.seekTo(0)
+        player.seekTo(0, true)
         player.playVideo()
         setCurrentTime(0)
         setPlaybackPosition(0)
+        hasRestoredPositionRef.current = true
       }
       return
     }
@@ -184,6 +205,7 @@ export function PlayerControls() {
     // If queue has tracks, play next from queue
     if (queue.length > 0) {
       const nextTrack = queue[0]
+      console.log("[Player] Playing next from queue:", nextTrack.title)
       setCurrentTrack(nextTrack)
       setQueue(queue.slice(1))
       setCurrentTime(0)
@@ -203,14 +225,20 @@ export function PlayerControls() {
 
         if (shuffle) {
           // Smart shuffle: avoid recently played tracks
-          const recentlyPlayed = playHistoryRef.current.slice(-3)
+          const recentlyPlayed = playHistoryRef.current.slice(-Math.min(3, currentPlaylist.tracks.length - 1))
           const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id))
 
           if (availableTracks.length === 0) {
             // All tracks recently played, reset and pick random
             playHistoryRef.current = []
             playedTracksRef.current.clear()
-            nextTrack = currentPlaylist.tracks[Math.floor(Math.random() * currentPlaylist.tracks.length)]
+            const randomTracks = [...currentPlaylist.tracks]
+            // Fisher-Yates shuffle
+            for (let i = randomTracks.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [randomTracks[i], randomTracks[j]] = [randomTracks[j], randomTracks[i]]
+            }
+            nextTrack = randomTracks[0]
           } else {
             // Pick random from unplayed tracks
             nextTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]
@@ -223,6 +251,7 @@ export function PlayerControls() {
         }
 
         if (nextTrack) {
+          console.log("[Player] Playing next from playlist:", nextTrack.title)
           setCurrentTrack(nextTrack)
           setCurrentTime(0)
           setPlaybackPosition(0)
@@ -236,13 +265,12 @@ export function PlayerControls() {
     }
 
     // If no repeat and queue is empty, stop playback
-    if (repeat === "off" && queue.length === 0) {
-      setIsPlaying(false)
-      setCurrentTime(0)
-      setPlaybackPosition(0)
-      if (player && typeof player.pauseVideo === "function") {
-        player.pauseVideo()
-      }
+    console.log("[Player] End of playback, stopping")
+    setIsPlaying(false)
+    setCurrentTime(0)
+    setPlaybackPosition(0)
+    if (player && typeof player.pauseVideo === "function") {
+      player.pauseVideo()
     }
   }
 
@@ -250,7 +278,7 @@ export function PlayerControls() {
     if (currentTime > 3) {
       // If more than 3 seconds in, restart current track
       if (player && typeof player.seekTo === "function") {
-        player.seekTo(0)
+        player.seekTo(0, true)
         setCurrentTime(0)
         setPlaybackPosition(0)
       }
@@ -277,7 +305,7 @@ export function PlayerControls() {
       
       // Fallback: restart current track
       if (player && typeof player.seekTo === "function") {
-        player.seekTo(0)
+        player.seekTo(0, true)
         setCurrentTime(0)
         setPlaybackPosition(0)
       }
@@ -285,11 +313,18 @@ export function PlayerControls() {
   }
 
   const handleSeek = (value: number[]) => {
-    if (!player || typeof player.seekTo !== "function") return
+    if (!player || typeof player.seekTo !== "function" || !isReady) return
+    
     const newTime = value[0]
+    isSeekingRef.current = true
+    
     player.seekTo(newTime, true)
     setCurrentTime(newTime)
     setPlaybackPosition(newTime)
+    
+    setTimeout(() => {
+      isSeekingRef.current = false
+    }, 100)
   }
 
   // Volume
@@ -323,16 +358,19 @@ export function PlayerControls() {
     }
   }
 
-  const toggleVolumeSlider = () => {
-    setShowVolumeSlider(!showVolumeSlider)
-  }
-
   // Format time
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return "0:00"
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
+
+  // Get repeat button label
+  const getRepeatLabel = () => {
+    if (repeat === "one") return "Repeat One"
+    if (repeat === "all") return "Repeat All"
+    return "Repeat Off"
   }
 
   return (
@@ -443,101 +481,154 @@ export function PlayerControls() {
 
             {/* Progress bar - Below track info for mobile */}
             <div className="flex items-center gap-2 w-full mb-3 md:mb-0 md:order-2">
-              <span className="text-xs text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
+              <span className="text-xs text-gray-400 w-10 text-right">
+                {formatTime(currentTime)}
+              </span>
               <Slider
                 value={[currentTime]}
                 max={duration > 0 ? duration : 100}
                 step={0.1}
                 onValueChange={handleSeek}
                 className="flex-1"
-                disabled={!currentTrack || duration === 0}
+                disabled={!currentTrack || duration === 0 || !isReady}
                 aria-label="Seek"
               />
-              <span className="text-xs text-gray-400 w-10">{formatTime(duration)}</span>
+              <span className="text-xs text-gray-400 w-10">
+                {formatTime(duration)}
+              </span>
             </div>
 
-            {/* Main player controls with reduced gap */}
-            <div className="flex items-center justify-center w-full gap-3 md:gap-4">
-              {/* Shuffle button */}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={toggleShuffle}
-                className={`h-10 w-10 md:h-10 md:w-10 ${shuffle ? "text-primary" : "text-gray-400 hover:text-white"}`}
-                disabled={!currentTrack}
-                aria-label="Toggle shuffle"
-              >
-                <Shuffle size={22} className="md:w-5 md:h-5" />
-              </Button>
+            {/* Main player controls */}
+            <TooltipProvider>
+              <div className="flex flex-col items-center justify-center w-full mb-4 md:mb-0">
+                <div className="flex items-center justify-center w-full gap-3 md:gap-4">
+                  {/* Shuffle button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={toggleShuffle}
+                        className={`h-10 w-10 ${shuffle ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                        disabled={!currentTrack}
+                        aria-label="Toggle shuffle"
+                      >
+                        <Shuffle size={20} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              {/* Previous button */}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handlePrevious}
-                className="h-10 w-10 md:h-10 md:w-10 text-gray-400 hover:text-white"
-                disabled={!currentTrack}
-                aria-label="Previous track"
-              >
-                <SkipBack size={22} className="md:w-5 md:h-5" />
-              </Button>
+                  {/* Previous button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={handlePrevious}
+                        className="h-10 w-10 text-gray-400 hover:text-white"
+                        disabled={!currentTrack}
+                        aria-label="Previous track"
+                      >
+                        <SkipBack size={22} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Previous</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              {/* Play/Pause button - Larger */}
-              <Button
-                size="icon"
-                className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 transition disabled:opacity-50"
-                onClick={handlePlayPause}
-                disabled={!currentTrack}
-                aria-label={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? <Pause fill="currentColor" size={24} /> : <Play fill="currentColor" size={24} />}
-              </Button>
+                  {/* Play/Pause button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 transition disabled:opacity-50"
+                        onClick={handlePlayPause}
+                        disabled={!currentTrack || !isReady}
+                        aria-label={isPlaying ? "Pause" : "Play"}
+                      >
+                        {isPlaying ? (
+                          <Pause fill="currentColor" size={24} />
+                        ) : (
+                          <Play fill="currentColor" size={24} />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{isPlaying ? "Pause" : "Play"}</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              {/* Next button */}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleNext}
-                className="h-10 w-10 md:h-10 md:w-10 text-gray-400 hover:text-white"
-                disabled={!currentTrack}
-                aria-label="Next track"
-              >
-                <SkipForward size={22} className="md:w-5 md:h-5" />
-              </Button>
+                  {/* Next button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={handleNext}
+                        className="h-10 w-10 text-gray-400 hover:text-white"
+                        disabled={!currentTrack}
+                        aria-label="Next track"
+                      >
+                        <SkipForward size={22} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Next</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              {/* Repeat button */}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={toggleRepeat}
-                className={`h-10 w-10 md:h-10 md:w-10 relative ${repeat !== "off" ? "text-primary" : "text-gray-400 hover:text-white"}`}
-                disabled={!currentTrack}
-                aria-label={`Repeat: ${repeat}`}
-              >
-                <Repeat size={22} className="md:w-5 md:h-5" />
-                {repeat === "one" && <span className="absolute text-[10px] font-bold">1</span>}
-              </Button>
+                  {/* Repeat button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={toggleRepeat}
+                        className={`h-10 w-10 relative ${repeat !== "off" ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                        disabled={!currentTrack}
+                        aria-label={`Repeat: ${repeat}`}
+                      >
+                        <Repeat size={20} />
+                        {repeat === "one" && (
+                          <span className="absolute text-[10px] font-bold">1</span>
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{getRepeatLabel()}</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              {/* Video button */}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={toggleVideoMode}
-                className={`h-10 w-10 ${videoMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
-                disabled={!currentTrack}
-                aria-label={videoMode ? "Switch to music mode" : "Switch to video mode"}
-              >
-                {videoMode ? (
-                  <Video size={20} />
-                ) : (
-                  <Music size={20} />
-                )}
-              </Button>
-            </div>
+                  {/* Video button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={toggleVideoMode}
+                        className={`h-10 w-10 ${videoMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                        disabled={!currentTrack}
+                        aria-label={videoMode ? "Switch to music mode" : "Switch to video mode"}
+                      >
+                        {videoMode ? <Video size={20} /> : <Music size={20} />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{videoMode ? "Hide Video" : "Show Video"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            </TooltipProvider>
+
           </div>
 
           {/* Desktop Volume and queue */}
-          <div className="hidden md:flex items-center gap-4 flex-1 justify-end">
+          <div className="hidden md:flex items-center mb-4 gap-4 flex-1 justify-end">
             <Sheet>
               <SheetTrigger asChild>
                 <Button
@@ -564,15 +655,24 @@ export function PlayerControls() {
               </SheetContent>
             </Sheet>
 
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={toggleMute}
-              className="text-gray-400 hover:text-white"
-              aria-label={isMuted ? "Unmute" : "Mute"}
-            >
-              {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={toggleMute}
+                    className="text-gray-400 hover:text-white"
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                  >
+                    {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isMuted ? "Unmute" : "Mute"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <div className="w-24">
               <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} aria-label="Volume" />
             </div>

@@ -8,7 +8,7 @@ import { PlayerControls } from "../components/PlayerControls"
 import { Button } from "@/components/ui/button"
 
 export default function Home() {
-  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist">("home")
+  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   useEffect(() => {
@@ -36,6 +36,17 @@ export default function Home() {
         e.preventDefault()
         const prevButton = document.querySelector('[aria-label*="Previous"]') as HTMLButtonElement
         prevButton?.click()
+      }
+
+      // Arrow up/down for volume (optional enhancement)
+      if (e.code === "ArrowUp") {
+        e.preventDefault()
+        // Increase volume logic could be added here
+      }
+
+      if (e.code === "ArrowDown") {
+        e.preventDefault()
+        // Decrease volume logic could be added here
       }
     }
 

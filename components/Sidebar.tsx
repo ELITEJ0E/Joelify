@@ -18,7 +18,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface SidebarProps {
-  onNavigate: (view: "home" | "search" | "playlist") => void
+  onNavigate: (view: "home" | "search" | "playlist" | "liked") => void
   isOpen: boolean
   onClose: () => void
 }
@@ -33,6 +33,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     renamePlaylist,
     theme,
     setTheme,
+    likedSongs,
   } = useApp()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
@@ -79,7 +80,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme(theme === "dark" ? "light" : "dark")
   }
 
-  const handleNavigate = (view: "home" | "search" | "playlist") => {
+  const handleNavigate = (view: "home" | "search" | "playlist" | "liked") => {
     onNavigate(view)
     onClose()
   }
@@ -181,9 +182,17 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <button className="flex items-center space-x-3 hover:text-white w-full text-left transition-colors">
+            <button 
+              onClick={() => handleNavigate("liked")}
+              className="flex items-center space-x-3 hover:text-white w-full text-left transition-colors relative"
+            >
               <Heart size={24} />
               <span>Liked Songs</span>
+              {likedSongs.length > 0 && (
+                <span className="ml-auto text-xs bg-primary text-white px-2 py-0.5 rounded-full">
+                  {likedSongs.length}
+                </span>
+              )}
             </button>
           </div>
         </div>

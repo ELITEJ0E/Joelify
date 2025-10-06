@@ -23,68 +23,115 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
   const { currentTrack, videoMode } = useApp()
 
   useEffect(() => {
-    // Initialize YouTube IFrame API
-    if (!window.YT) {
-      const tag = document.createElement("script")
-      tag.src = "https://www.youtube.com/iframe_api"
-      const firstScriptTag = document.getElementsByTagName("script")[0]
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag)
+    // Load YouTube IFrame API
+    const loadYouTubeAPI = () => {
+      if (!window.YT) {
+        const tag = document.createElement("script")
+        tag.src = "https://www.youtube.com/iframe_api"
+        const firstScriptTag = document.getElementsByTagName("script")[0]
+        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag)
+      }
     }
 
+    // Initialize YouTube player
     const initPlayer = () => {
       if (window.YT && window.YT.Player && containerRef.current && !playerRef.current) {
         playerRef.current = new window.YT.Player("youtube-player", {
-          height: "360",
-          width: "640",
-          videoId: "",
+          height: "100%",
+          width: "100%",
+          videoId: currentTrack?.id || "",
           playerVars: {
             autoplay: 0,
-            controls: 1,
-            disablekb: 0,
-            fs: 1,
+            controls: 0, // Hide default YouTube controls
+            disablekb: 1, // Disable keyboard controls
+            fs: 0, // Disable fullscreen button
             modestbranding: 1,
             playsinline: 1,
+            rel: 0, // Prevent related videos
+            iv_load_policy: 3, // Disable annotations
           },
           events: {
             onReady: (event: any) => {
-              console.log("[v0] YouTube player ready")
+              console.log("[YouTubePlayer] Player ready")
               isPlayerReadyRef.current = true
               onPlayerReady(event.target)
             },
             onStateChange: onStateChange,
-            onError: onError,
+            onError: (event: any) => {
+              console.error("[YouTubePlayer] Error:", event.data)
+              onError(event)
+            },
           },
         })
       }
     }
 
+    // Initialize API and player
+    loadYouTubeAPI()
     if (window.YT && window.YT.Player) {
       initPlayer()
     } else {
       window.onYouTubeIframeAPIReady = initPlayer
     }
 
+    // Cleanup on unmount
     return () => {
-      if (playerRef.current && playerRef.current.destroy) {
+      if (playerRef.current && typeof playerRef.current.destroy === "function") {
+        console.log("[YouTubePlayer] Destroying player")
         playerRef.current.destroy()
         playerRef.current = null
         isPlayerReadyRef.current = false
       }
+      window.onYouTubeIframeAPIReady = () => {}
     }
   }, [])
 
+  // Load video and restore playback position
   useEffect(() => {
-    if (playerRef.current && isPlayerReadyRef.current && currentTrack) {
-      if (typeof playerRef.current.loadVideoById === "function") {
-        console.log("[v0] Loading video:", currentTrack.id)
-        playerRef.current.loadVideoById(currentTrack.id)
+    if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id) {
+      console.log("[YouTubePlayer] Loading video:", currentTrack.id)
+      playerRef.current.loadVideoById({
+        videoId: currentTrack.id,
+        startSeconds: 0,
+      })
+    }
+  }, [currentTrack?.id])
+
+  // Handle responsive sizing
+  useEffect(() => {
+    const updatePlayerSize = () => {
+      if (containerRef.current && videoMode) {
+        const container = containerRef.current
+        const maxWidth = 854 // Max width for 480p
+        const aspectRatio = 16 / 9
+        const containerWidth = container.clientWidth
+        const width = Math.min(containerWidth, maxWidth)
+        const height = width / aspectRatio
+        container.style.height = `${height}px`
       }
     }
-  }, [currentTrack])
+
+    updatePlayerSize()
+    window.addEventListener("resize", updatePlayerSize)
+
+    return () => {
+      window.removeEventListener("resize", updatePlayerSize)
+    }
+  }, [videoMode])
 
   return (
-    <div ref={containerRef} className={`${videoMode ? "flex justify-center items-center bg-black p-4" : "hidden"}`}>
-      <div id="youtube-player" className={`${videoMode ? "w-full max-w-4xl aspect-video" : ""}`}></div>
+    <div
+      ref={containerRef}
+      className={`${
+        videoMode ? "flex justify-center items-center bg-black p-4 w-full" : "hidden"
+      }`}
+      style={{ maxWidth: "854px", margin: "0 auto" }}
+    >
+      <div
+        id="youtube-player"
+        className="w-full"
+        style={{ aspectRatio: "16/9" }}
+      ></div>
     </div>
   )
 }
