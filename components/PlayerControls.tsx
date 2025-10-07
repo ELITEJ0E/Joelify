@@ -36,7 +36,6 @@ export function PlayerControls() {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
-  const [showVolumeSlider, setShowVolumeSlider] = useState(false)
   const [isReady, setIsReady] = useState(false)
   
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -62,6 +61,7 @@ export function PlayerControls() {
       const parsedDur = parseDuration(currentTrack.duration)
       setDuration(parsedDur)
       setCurrentTime(0)
+      setPlaybackPosition(0)
       hasRestoredPositionRef.current = false
     } else {
       setDuration(0)
@@ -69,7 +69,7 @@ export function PlayerControls() {
       setPlaybackPosition(0)
       hasRestoredPositionRef.current = false
     }
-  }, [currentTrack?.id])
+  }, [currentTrack?.id, setPlaybackPosition])
 
   // Handle player ready
   const handlePlayerReady = (playerInstance: any) => {
@@ -98,6 +98,7 @@ export function PlayerControls() {
       if (player && typeof player.getDuration === "function") {
         const actualDuration = player.getDuration()
         if (actualDuration > 0 && Math.abs(actualDuration - duration) > 1) {
+          console.log("[Player] Updating duration:", actualDuration)
           setDuration(actualDuration)
         }
       }
@@ -107,26 +108,47 @@ export function PlayerControls() {
         if (player && typeof player.seekTo === "function") {
           console.log("[Player] Restoring position:", playbackPosition)
           player.seekTo(playbackPosition, true)
+          setCurrentTime(playbackPosition)
+          setPlaybackPosition(playbackPosition)
           hasRestoredPositionRef.current = true
         }
       }
       
-      startProgressTracking()
+      // Start progress tracking after restoration
+      setTimeout(() => {
+        if (player && player.getPlayerState() === 1) {
+          startProgressTracking()
+        }
+      }, 500) // Delay to ensure seek completion
     } else if (playerState === 2) {
       // Paused
       setIsPlaying(false)
       stopProgressTracking()
+      if (player && typeof player.getCurrentTime === "function") {
+        const time = player.getCurrentTime()
+        console.log("[Player] Paused at:", time)
+        setCurrentTime(time)
+        setPlaybackPosition(time)
+      }
     } else if (playerState === 0) {
       // Ended
       console.log("[Player] Track ended, moving to next")
       setIsPlaying(false)
       stopProgressTracking()
+      setCurrentTime(0)
+      setPlaybackPosition(0)
       handleNext()
+    } else if (playerState === 3) {
+      // Buffering
+      console.log("[Player] Buffering, pausing progress tracking")
+      setIsPlaying(false)
+      stopProgressTracking()
     } else if (playerState === 5) {
-      // Cued - try to set duration early
+      // Cued
       if (player && typeof player.getDuration === "function") {
         const actualDuration = player.getDuration()
         if (actualDuration > 0 && Math.abs(actualDuration - duration) > 1) {
+          console.log("[Player] Cued duration:", actualDuration)
           setDuration(actualDuration)
         }
       }
@@ -139,19 +161,28 @@ export function PlayerControls() {
     // Error codes: 2 (invalid param), 5 (HTML5 error), 100 (video not found), 101/150 (embedding not allowed)
     if ([2, 5, 100, 101, 150].includes(event.data)) {
       console.log("[Player] Video unplayable, skipping to next")
-      // Skip to next track if video is unplayable
       setTimeout(() => handleNext(), 1000)
     }
   }
 
   const startProgressTracking = () => {
-    if (progressIntervalRef.current) return
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current)
+    }
 
     progressIntervalRef.current = setInterval(() => {
-      if (player && typeof player.getCurrentTime === "function" && typeof player.getDuration === "function" && !isSeekingRef.current) {
+      if (
+        player &&
+        isPlaying &&
+        !isSeekingRef.current &&
+        typeof player.getCurrentTime === "function" &&
+        typeof player.getDuration === "function" &&
+        player.getPlayerState() === 1
+      ) {
         const time = player.getCurrentTime()
         const dur = player.getDuration()
         
+        console.log("[Player] Progress - currentTime:", time, "duration:", dur)
         setCurrentTime(time)
         setPlaybackPosition(time)
         
@@ -159,7 +190,7 @@ export function PlayerControls() {
           setDuration(dur)
         }
       }
-    }, 500)
+    }, 200) // Update every 200ms for smoother progress
   }
 
   const stopProgressTracking = () => {
@@ -317,14 +348,19 @@ export function PlayerControls() {
     
     const newTime = value[0]
     isSeekingRef.current = true
+    stopProgressTracking()
     
+    console.log("[Player] Seeking to:", newTime)
     player.seekTo(newTime, true)
     setCurrentTime(newTime)
     setPlaybackPosition(newTime)
     
     setTimeout(() => {
       isSeekingRef.current = false
-    }, 100)
+      if (player && player.getPlayerState() === 1) {
+        startProgressTracking()
+      }
+    }, 500) // Increased timeout to account for YouTube API delay
   }
 
   // Volume
