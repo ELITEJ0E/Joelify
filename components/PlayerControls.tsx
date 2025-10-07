@@ -43,6 +43,12 @@ export function PlayerControls() {
   const playHistoryRef = useRef<string[]>([])
   const isSeekingRef = useRef(false)
   const hasRestoredPositionRef = useRef(false)
+  const lastPlayerStateRef = useRef<number>(-1)
+
+  useEffect(() => {
+  console.log("[Slider Debug] currentTime:", currentTime, "duration:", duration, "isPlaying:", isPlaying)
+}, [currentTime, duration, isPlaying])
+
 
   // Parse duration string to seconds
   function parseDuration(durationStr: string): number {
@@ -63,11 +69,13 @@ export function PlayerControls() {
       setCurrentTime(0)
       setPlaybackPosition(0)
       hasRestoredPositionRef.current = false
+      setIsPlaying(false)
     } else {
       setDuration(0)
       setCurrentTime(0)
       setPlaybackPosition(0)
       hasRestoredPositionRef.current = false
+      setIsPlaying(false)
     }
   }, [currentTrack?.id, setPlaybackPosition])
 
@@ -85,116 +93,104 @@ export function PlayerControls() {
     }
   }
 
-  // Handle player state changes
+  // SIMPLIFIED: Handle player state changes
   const handleStateChange = (event: any) => {
-    console.log("[Player] State changed:", event.data)
     const playerState = event.data
+    console.log("[Player] State changed:", playerState)
+    
+    lastPlayerStateRef.current = playerState
 
     // YT.PlayerState: UNSTARTED (-1), ENDED (0), PLAYING (1), PAUSED (2), BUFFERING (3), CUED (5)
-    if (playerState === 1) {
-      // Playing
-      setIsPlaying(true)
-      
-      if (player && typeof player.getDuration === "function") {
-        const actualDuration = player.getDuration()
-        if (actualDuration > 0 && Math.abs(actualDuration - duration) > 1) {
-          console.log("[Player] Updating duration:", actualDuration)
-          setDuration(actualDuration)
+    switch (playerState) {
+      case 1: // PLAYING
+        setIsPlaying(true)
+        startProgressTracking()
+        break
+        
+      case 2: // PAUSED
+        setIsPlaying(false)
+        stopProgressTracking()
+        updateCurrentTime()
+        break
+        
+      case 0: // ENDED
+        setIsPlaying(false)
+        stopProgressTracking()
+        setCurrentTime(0)
+        setPlaybackPosition(0)
+        handleNext()
+        break
+        
+      case 3: // BUFFERING
+        // Keep isPlaying state but stop progress tracking temporarily
+        stopProgressTracking()
+        break
+        
+      case -1: // UNSTARTED
+        setIsPlaying(false)
+        stopProgressTracking()
+        break
+        
+      case 5: // CUED
+        // Video is loaded and ready
+        if (player && typeof player.getDuration === "function") {
+          const actualDuration = player.getDuration()
+          if (actualDuration > 0) {
+            setDuration(actualDuration)
+          }
         }
-      }
-      
-      // Restore playback position once when video starts playing
-      if (!hasRestoredPositionRef.current && playbackPosition > 0 && playbackPosition < duration - 5) {
-        if (player && typeof player.seekTo === "function") {
-          console.log("[Player] Restoring position:", playbackPosition)
-          player.seekTo(playbackPosition, true)
-          setCurrentTime(playbackPosition)
-          setPlaybackPosition(playbackPosition)
-          hasRestoredPositionRef.current = true
-        }
-      }
-      
-      // Start progress tracking after restoration
-      setTimeout(() => {
-        if (player && player.getPlayerState() === 1) {
-          startProgressTracking()
-        }
-      }, 500) // Delay to ensure seek completion
-    } else if (playerState === 2) {
-      // Paused
-      setIsPlaying(false)
-      stopProgressTracking()
-      if (player && typeof player.getCurrentTime === "function") {
-        const time = player.getCurrentTime()
-        console.log("[Player] Paused at:", time)
-        setCurrentTime(time)
-        setPlaybackPosition(time)
-      }
-    } else if (playerState === 0) {
-      // Ended
-      console.log("[Player] Track ended, moving to next")
-      setIsPlaying(false)
-      stopProgressTracking()
-      setCurrentTime(0)
-      setPlaybackPosition(0)
-      handleNext()
-    } else if (playerState === 3) {
-      // Buffering
-      console.log("[Player] Buffering, pausing progress tracking")
-      setIsPlaying(false)
-      stopProgressTracking()
-    } else if (playerState === 5) {
-      // Cued
-      if (player && typeof player.getDuration === "function") {
-        const actualDuration = player.getDuration()
-        if (actualDuration > 0 && Math.abs(actualDuration - duration) > 1) {
-          console.log("[Player] Cued duration:", actualDuration)
-          setDuration(actualDuration)
-        }
-      }
+        break
     }
   }
 
   // Handle YouTube errors
   const handleError = (event: any) => {
     console.error("[Player] YouTube Error:", event.data)
-    // Error codes: 2 (invalid param), 5 (HTML5 error), 100 (video not found), 101/150 (embedding not allowed)
     if ([2, 5, 100, 101, 150].includes(event.data)) {
       console.log("[Player] Video unplayable, skipping to next")
       setTimeout(() => handleNext(), 1000)
     }
   }
 
-  const startProgressTracking = () => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current)
+  // Get current time from player
+  const updateCurrentTime = () => {
+    if (player && typeof player.getCurrentTime === "function") {
+      const time = player.getCurrentTime()
+      setCurrentTime(time)
+      setPlaybackPosition(time)
     }
+  }
 
+  const startProgressTracking = () => {
+    stopProgressTracking() // Clear any existing interval
+    
+    console.log("[Player] Starting progress tracking")
     progressIntervalRef.current = setInterval(() => {
       if (
         player &&
-        isPlaying &&
-        !isSeekingRef.current &&
         typeof player.getCurrentTime === "function" &&
         typeof player.getDuration === "function" &&
-        player.getPlayerState() === 1
+        !isSeekingRef.current
       ) {
         const time = player.getCurrentTime()
         const dur = player.getDuration()
         
-        console.log("[Player] Progress - currentTime:", time, "duration:", dur)
-        setCurrentTime(time)
-        setPlaybackPosition(time)
+        // Only update if values changed significantly
+        if (Math.abs(time - currentTime) > 0.1) {
+          setCurrentTime(time)
+          setPlaybackPosition(time)
+        }
         
         if (dur > 0 && Math.abs(dur - duration) > 1) {
           setDuration(dur)
         }
       }
-    }, 200) // Update every 200ms for smoother progress
+    }, 200)
   }
 
   const stopProgressTracking = () => {
     if (progressIntervalRef.current) {
+      console.log("[Player] Stopping progress tracking")
       clearInterval(progressIntervalRef.current)
       progressIntervalRef.current = null
     }
@@ -207,13 +203,23 @@ export function PlayerControls() {
     }
   }, [])
 
+  // Restore playback position when track changes and player is ready
+  useEffect(() => {
+    if (player && isReady && currentTrack && playbackPosition > 0 && !hasRestoredPositionRef.current) {
+      console.log("[Player] Restoring playback position:", playbackPosition)
+      player.seekTo(playbackPosition, true)
+      setCurrentTime(playbackPosition)
+      hasRestoredPositionRef.current = true
+    }
+  }, [player, isReady, currentTrack, playbackPosition])
+
   // Play/Pause
   const handlePlayPause = () => {
     if (!player || !currentTrack || !isReady) return
 
-    if (isPlaying && typeof player.pauseVideo === "function") {
+    if (isPlaying) {
       player.pauseVideo()
-    } else if (!isPlaying && typeof player.playVideo === "function") {
+    } else {
       player.playVideo()
     }
   }
@@ -223,12 +229,11 @@ export function PlayerControls() {
     
     // Repeat one: replay current track
     if (repeat === "one" && currentTrack) {
-      if (player && typeof player.seekTo === "function" && typeof player.playVideo === "function") {
+      if (player) {
         player.seekTo(0, true)
         player.playVideo()
         setCurrentTime(0)
         setPlaybackPosition(0)
-        hasRestoredPositionRef.current = true
       }
       return
     }
@@ -300,7 +305,7 @@ export function PlayerControls() {
     setIsPlaying(false)
     setCurrentTime(0)
     setPlaybackPosition(0)
-    if (player && typeof player.pauseVideo === "function") {
+    if (player) {
       player.pauseVideo()
     }
   }
@@ -308,7 +313,7 @@ export function PlayerControls() {
   const handlePrevious = () => {
     if (currentTime > 3) {
       // If more than 3 seconds in, restart current track
-      if (player && typeof player.seekTo === "function") {
+      if (player) {
         player.seekTo(0, true)
         setCurrentTime(0)
         setPlaybackPosition(0)
@@ -335,7 +340,7 @@ export function PlayerControls() {
       }
       
       // Fallback: restart current track
-      if (player && typeof player.seekTo === "function") {
+      if (player) {
         player.seekTo(0, true)
         setCurrentTime(0)
         setPlaybackPosition(0)
@@ -344,7 +349,7 @@ export function PlayerControls() {
   }
 
   const handleSeek = (value: number[]) => {
-    if (!player || typeof player.seekTo !== "function" || !isReady) return
+    if (!player || !isReady) return
     
     const newTime = value[0]
     isSeekingRef.current = true
@@ -355,19 +360,20 @@ export function PlayerControls() {
     setCurrentTime(newTime)
     setPlaybackPosition(newTime)
     
+    // Restart progress tracking after a short delay
     setTimeout(() => {
       isSeekingRef.current = false
-      if (player && player.getPlayerState() === 1) {
+      if (lastPlayerStateRef.current === 1) { // Only restart if was playing
         startProgressTracking()
       }
-    }, 500) // Increased timeout to account for YouTube API delay
+    }, 500)
   }
 
   // Volume
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0]
     setVolume(newVolume)
-    if (player && typeof player.setVolume === "function") {
+    if (player) {
       player.setVolume(newVolume)
     }
     if (newVolume === 0) {
@@ -380,16 +386,12 @@ export function PlayerControls() {
   const toggleMute = () => {
     if (player) {
       if (isMuted) {
-        if (typeof player.unMute === "function" && typeof player.setVolume === "function") {
-          player.unMute()
-          player.setVolume(volume)
-          setIsMuted(false)
-        }
+        player.unMute()
+        player.setVolume(volume)
+        setIsMuted(false)
       } else {
-        if (typeof player.mute === "function") {
-          player.mute()
-          setIsMuted(true)
-        }
+        player.mute()
+        setIsMuted(true)
       }
     }
   }
