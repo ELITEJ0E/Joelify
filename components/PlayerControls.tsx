@@ -215,22 +215,7 @@ export function PlayerControls() {
       case 1: // PLAYING
         console.log("[Player] Video is playing, starting progress tracking")
         setIsPlaying(true)
-        // Force start progress tracking with multiple attempts
-        const startTracking = () => {
-          if (lastPlayerStateRef.current === 1) { // Still playing
-            startProgressTracking()
-          } else {
-            console.log("[Player] Player state changed during startup, aborting")
-          }
-        }
-        // Try multiple times with increasing delays
-        setTimeout(startTracking, 50)
-        setTimeout(() => {
-          if (lastPlayerStateRef.current === 1 && !animationFrameRef.current) {
-            console.log("[Player] Retrying progress tracking startup")
-            startTracking()
-          }
-        }, 200)
+        startProgressTracking()
         break
         
       case 2: // PAUSED
@@ -238,6 +223,7 @@ export function PlayerControls() {
         setIsPlaying(false)
         // Update time one last time
         updateCurrentTime()
+        stopProgressTracking()
         break
         
       case 0: // ENDED
@@ -257,6 +243,7 @@ export function PlayerControls() {
       case -1: // UNSTARTED
         console.log("[Player] Video unstarted")
         setIsPlaying(false)
+        stopProgressTracking()
         break
         
       case 5: // CUED
@@ -265,9 +252,6 @@ export function PlayerControls() {
           if (actualDuration > 0) {
             setDuration(actualDuration)
           }
-        }
-        if (lastPlayerStateRef.current === 1) {
-          startProgressTracking()
         }
         break
     }

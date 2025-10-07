@@ -26,7 +26,7 @@ export interface AppState {
   volume: number
   shuffle: boolean
   repeat: "off" | "all" | "one"
-  theme: "light" | "dark"
+  theme:  "dark" | "light"
   videoMode: boolean
 }
 
