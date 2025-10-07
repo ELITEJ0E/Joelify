@@ -46,7 +46,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [likedSongs, setLikedSongs] = useState<Track[]>([])
   const [queue, setQueue] = useState<Track[]>([])
   const [playbackPosition, setPlaybackPosition] = useState(0)
-  const [volume, setVolume] = useState(50)
+  const [volume, setVolume] = useState(100)
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState<"off" | "all" | "one">("off")
   const [theme, setTheme] = useState<"light" | "dark">("dark")

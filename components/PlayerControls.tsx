@@ -39,16 +39,21 @@ export function PlayerControls() {
   const [isReady, setIsReady] = useState(false)
   
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
   const playedTracksRef = useRef<Set<string>>(new Set())
   const playHistoryRef = useRef<string[]>([])
   const isSeekingRef = useRef(false)
   const hasRestoredPositionRef = useRef(false)
   const lastPlayerStateRef = useRef<number>(-1)
 
+  // Debug effects
   useEffect(() => {
-  console.log("[Slider Debug] currentTime:", currentTime, "duration:", duration, "isPlaying:", isPlaying)
-}, [currentTime, duration, isPlaying])
+    console.log("[Player] Progress update - currentTime:", currentTime, "isPlaying:", isPlaying, "hasRAF:", !!animationFrameRef.current)
+  }, [currentTime, isPlaying])
 
+  useEffect(() => {
+    console.log("[Player State] isPlaying:", isPlaying, "hasRAF:", !!animationFrameRef.current, "currentTime:", currentTime.toFixed(1), "duration:", duration)
+  }, [isPlaying, currentTime, duration])
 
   // Parse duration string to seconds
   function parseDuration(durationStr: string): number {
@@ -70,12 +75,14 @@ export function PlayerControls() {
       setPlaybackPosition(0)
       hasRestoredPositionRef.current = false
       setIsPlaying(false)
+      stopProgressTracking() // Stop any existing tracking
     } else {
       setDuration(0)
       setCurrentTime(0)
       setPlaybackPosition(0)
       hasRestoredPositionRef.current = false
       setIsPlaying(false)
+      stopProgressTracking()
     }
   }, [currentTrack?.id, setPlaybackPosition])
 
@@ -93,51 +100,174 @@ export function PlayerControls() {
     }
   }
 
-  // SIMPLIFIED: Handle player state changes
+  // Handle initial playback when track changes
+  useEffect(() => {
+    if (player && isReady && currentTrack && !hasRestoredPositionRef.current) {
+      console.log("[Player] New track loaded, ensuring progress tracking")
+      
+      // Small delay to ensure player is ready, then start progress tracking if playing
+      const checkAndStartTracking = () => {
+        if (player && typeof player.getPlayerState === "function") {
+          const playerState = player.getPlayerState()
+          console.log("[Player] Initial player state:", playerState)
+          
+          if (playerState === 1) { // Already playing
+            setIsPlaying(true)
+            startProgressTracking()
+          }
+        }
+      }
+      
+      setTimeout(checkAndStartTracking, 500)
+    }
+  }, [player, isReady, currentTrack])
+
+  // Get current time from player
+  const updateCurrentTime = () => {
+    if (player && typeof player.getCurrentTime === "function") {
+      const time = player.getCurrentTime()
+      setCurrentTime(time)
+      setPlaybackPosition(time)
+    }
+  }
+
+  // RequestAnimationFrame based progress tracking
+  const startProgressTracking = () => {
+    stopProgressTracking() // Clear any existing tracking
+    
+    console.log("[Player] Starting RAF progress tracking")
+    
+    const updateProgress = () => {
+      if (
+        player &&
+        typeof player.getCurrentTime === "function" &&
+        !isSeekingRef.current
+      ) {
+        try {
+          const time = player.getCurrentTime()
+          const playerState = player.getPlayerState?.()
+          
+          // Always try to get duration if we don't have it
+          if ((duration === 0 || duration < 10) && typeof player.getDuration === "function") {
+            const dur = player.getDuration()
+            if (dur > 0) {
+              console.log("[Player] Updating duration from player:", dur)
+              setDuration(dur)
+            }
+          }
+          
+          // Only update time if player is actually playing (state 1)
+          if (playerState === 1) {
+            setCurrentTime(time)
+            setPlaybackPosition(time)
+            
+            // MANUAL END DETECTION: Check if we're near the end of the video
+            if (duration > 0 && time >= duration - 0.5) {
+              console.log("[Player] Manual end detection triggered")
+              setIsPlaying(false)
+              stopProgressTracking()
+              setCurrentTime(0)
+              setPlaybackPosition(0)
+              handleNext()
+              return // Stop the animation loop
+            }
+          }
+          
+          // Continue animation loop regardless of state
+          animationFrameRef.current = requestAnimationFrame(updateProgress)
+        } catch (error) {
+          console.error("[Player] Error in progress tracking:", error)
+          stopProgressTracking()
+        }
+      }
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(updateProgress)
+  }
+
+  const stopProgressTracking = () => {
+    if (animationFrameRef.current) {
+      console.log("[Player] Stopping RAF progress tracking")
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current)
+      progressIntervalRef.current = null
+    }
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopProgressTracking()
+    }
+  }, [])
+
+  // Handle player state changes
   const handleStateChange = (event: any) => {
     const playerState = event.data
-    console.log("[Player] State changed:", playerState)
+    console.log("[Player] State changed:", playerState, "currentTime:", currentTime)
     
     lastPlayerStateRef.current = playerState
 
-    // YT.PlayerState: UNSTARTED (-1), ENDED (0), PLAYING (1), PAUSED (2), BUFFERING (3), CUED (5)
     switch (playerState) {
       case 1: // PLAYING
+        console.log("[Player] Video is playing, starting progress tracking")
         setIsPlaying(true)
-        startProgressTracking()
+        // Force start progress tracking with multiple attempts
+        const startTracking = () => {
+          if (lastPlayerStateRef.current === 1) { // Still playing
+            startProgressTracking()
+          } else {
+            console.log("[Player] Player state changed during startup, aborting")
+          }
+        }
+        // Try multiple times with increasing delays
+        setTimeout(startTracking, 50)
+        setTimeout(() => {
+          if (lastPlayerStateRef.current === 1 && !animationFrameRef.current) {
+            console.log("[Player] Retrying progress tracking startup")
+            startTracking()
+          }
+        }, 200)
         break
         
       case 2: // PAUSED
+        console.log("[Player] Video is paused")
         setIsPlaying(false)
-        stopProgressTracking()
+        // Update time one last time
         updateCurrentTime()
         break
         
       case 0: // ENDED
+        console.log("[Player] Video ended via YouTube API")
         setIsPlaying(false)
         stopProgressTracking()
         setCurrentTime(0)
         setPlaybackPosition(0)
-        handleNext()
+        setTimeout(() => handleNext(), 100)
         break
         
       case 3: // BUFFERING
-        // Keep isPlaying state but stop progress tracking temporarily
-        stopProgressTracking()
+        console.log("[Player] Video buffering")
+        // Don't change state, RAF will continue
         break
         
       case -1: // UNSTARTED
+        console.log("[Player] Video unstarted")
         setIsPlaying(false)
-        stopProgressTracking()
         break
         
       case 5: // CUED
-        // Video is loaded and ready
         if (player && typeof player.getDuration === "function") {
           const actualDuration = player.getDuration()
           if (actualDuration > 0) {
             setDuration(actualDuration)
           }
+        }
+        if (lastPlayerStateRef.current === 1) {
+          startProgressTracking()
         }
         break
     }
@@ -152,57 +282,6 @@ export function PlayerControls() {
     }
   }
 
-  // Get current time from player
-  const updateCurrentTime = () => {
-    if (player && typeof player.getCurrentTime === "function") {
-      const time = player.getCurrentTime()
-      setCurrentTime(time)
-      setPlaybackPosition(time)
-    }
-  }
-
-  const startProgressTracking = () => {
-    stopProgressTracking() // Clear any existing interval
-    
-    console.log("[Player] Starting progress tracking")
-    progressIntervalRef.current = setInterval(() => {
-      if (
-        player &&
-        typeof player.getCurrentTime === "function" &&
-        typeof player.getDuration === "function" &&
-        !isSeekingRef.current
-      ) {
-        const time = player.getCurrentTime()
-        const dur = player.getDuration()
-        
-        // Only update if values changed significantly
-        if (Math.abs(time - currentTime) > 0.1) {
-          setCurrentTime(time)
-          setPlaybackPosition(time)
-        }
-        
-        if (dur > 0 && Math.abs(dur - duration) > 1) {
-          setDuration(dur)
-        }
-      }
-    }, 200)
-  }
-
-  const stopProgressTracking = () => {
-    if (progressIntervalRef.current) {
-      console.log("[Player] Stopping progress tracking")
-      clearInterval(progressIntervalRef.current)
-      progressIntervalRef.current = null
-    }
-  }
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopProgressTracking()
-    }
-  }, [])
-
   // Restore playback position when track changes and player is ready
   useEffect(() => {
     if (player && isReady && currentTrack && playbackPosition > 0 && !hasRestoredPositionRef.current) {
@@ -213,25 +292,60 @@ export function PlayerControls() {
     }
   }, [player, isReady, currentTrack, playbackPosition])
 
+  // Verify player state function
+  const verifyPlayerState = () => {
+    if (player && typeof player.getPlayerState === "function") {
+      const actualState = player.getPlayerState()
+      console.log("[Player] Verified state:", actualState, "UI state:", isPlaying)
+      
+      if (actualState === 1 && !isPlaying) {
+        console.log("[Player] State mismatch - player is playing but UI shows paused")
+        setIsPlaying(true)
+        startProgressTracking()
+      } else if (actualState !== 1 && isPlaying) {
+        console.log("[Player] State mismatch - player is not playing but UI shows playing")
+        setIsPlaying(false)
+      }
+    }
+  }
+
   // Play/Pause
   const handlePlayPause = () => {
-    if (!player || !currentTrack || !isReady) return
+    if (!player || !currentTrack || !isReady) {
+      console.log("[Player] Cannot play/pause - player:", !!player, "track:", !!currentTrack, "ready:", isReady)
+      return
+    }
 
+    console.log("[Player] Play/Pause clicked - currently playing:", isPlaying)
+    
     if (isPlaying) {
       player.pauseVideo()
     } else {
       player.playVideo()
+      console.log("[Player] Play command executed")
+      // Double-check state after play
+      setTimeout(verifyPlayerState, 300)
     }
   }
 
   const handleNext = () => {
-    console.log("[Player] handleNext called - repeat:", repeat, "queue length:", queue.length)
+    console.log("[Player] handleNext called - repeat:", repeat, "queue length:", queue.length, "currentTrack:", currentTrack?.title)
+    
+    // Stop any current playback first
+    if (player) {
+      player.pauseVideo()
+    }
+    stopProgressTracking()
+    setIsPlaying(false)
     
     // Repeat one: replay current track
     if (repeat === "one" && currentTrack) {
+      console.log("[Player] Repeat one - replaying current track")
       if (player) {
         player.seekTo(0, true)
-        player.playVideo()
+        setTimeout(() => {
+          player.playVideo()
+        }, 100)
         setCurrentTime(0)
         setPlaybackPosition(0)
       }
@@ -522,15 +636,17 @@ export function PlayerControls() {
               <span className="text-xs text-gray-400 w-10 text-right">
                 {formatTime(currentTime)}
               </span>
-              <Slider
-                value={[currentTime]}
-                max={duration > 0 ? duration : 100}
-                step={0.1}
-                onValueChange={handleSeek}
-                className="flex-1"
-                disabled={!currentTrack || duration === 0 || !isReady}
-                aria-label="Seek"
-              />
+              <div className="flex-1">
+                <Slider
+                  value={[currentTime]}
+                  max={duration > 0 ? duration : 1}
+                  step={0.1}
+                  onValueChange={handleSeek}
+                  disabled={!currentTrack || duration === 0 || !isReady}
+                  aria-label="Seek"
+                  key={`slider-${currentTrack?.id}-${Math.floor(currentTime)}`}
+                />
+              </div>
               <span className="text-xs text-gray-400 w-10">
                 {formatTime(duration)}
               </span>
