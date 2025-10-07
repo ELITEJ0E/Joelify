@@ -501,7 +501,7 @@ export function PlayerControls() {
             {/* Main player controls */}
             <TooltipProvider>
               <div className="flex flex-col items-center justify-center w-full mb-4 md:mb-0">
-                <div className="flex items-center justify-center w-full gap-3 md:gap-4">
+                <div className="flex items-center justify-center w-full gap-3 md:gap-4 mb-2">
                   {/* Shuffle button */}
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -628,7 +628,7 @@ export function PlayerControls() {
           </div>
 
           {/* Desktop Volume and queue */}
-          <div className="hidden md:flex items-center mb-4 gap-4 flex-1 justify-end">
+          <div className="hidden md:flex items-center mb-6 gap-4 flex-1 justify-end">
             <Sheet>
               <SheetTrigger asChild>
                 <Button

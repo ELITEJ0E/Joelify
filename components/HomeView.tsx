@@ -6,7 +6,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 
 export function HomeView() {
-  const { playlists, currentPlaylistId, setCurrentPlaylistId, setCurrentTrack, setQueue } = useApp()
+  const { playlists, currentPlaylistId, setCurrentPlaylistId, setCurrentTrack, setQueue, addRecentlyPlayed } = useApp()
 
   const handlePlayPlaylist = (playlistId: string) => {
     const playlist = playlists.find((p) => p.id === playlistId)
@@ -15,6 +15,7 @@ export function HomeView() {
     setCurrentPlaylistId(playlistId)
     setCurrentTrack(playlist.tracks[0])
     setQueue(playlist.tracks.slice(1))
+    addRecentlyPlayed({ type: "playlist", id: playlistId })
   }
 
   return (
@@ -28,7 +29,7 @@ export function HomeView() {
             {playlists.map((playlist) => (
               <div
                 key={playlist.id}
-                className="bg-card hover:bg-card/80 rounded-lg p-3 md:p-4 transition-all cursor-pointer group"
+                className="bg-card list-hover-green hover-scale-smaller rounded-lg p-3 md:p-4 transition-all cursor-pointer group"
                 onClick={() => setCurrentPlaylistId(playlist.id)}
                 role="button"
                 tabIndex={0}
@@ -41,9 +42,9 @@ export function HomeView() {
                 }}
               >
                 <div className="relative mb-3 md:mb-4 aspect-square rounded-md overflow-hidden bg-secondary flex items-center justify-center">
-                  {playlist.tracks.length > 0 ? (
+                  {playlist.coverImage || playlist.tracks.length > 0 ? (
                     <Image
-                      src={playlist.tracks[0].thumbnail || "/placeholder.svg"}
+                      src={playlist.coverImage || playlist.tracks[0].thumbnail || "/placeholder.svg"}
                       alt={playlist.name}
                       fill
                       className="object-cover"

@@ -1,20 +1,82 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useApp } from "@/contexts/AppContext"
-import { Play, MoreVertical, Trash2, GripVertical } from "lucide-react"
+import { Play, MoreVertical, Trash2, GripVertical, Plus, Edit } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 export function PlaylistView() {
-  const { playlists, currentPlaylistId, setCurrentTrack, setQueue, removeTrackFromPlaylist, reorderPlaylistTracks } =
-    useApp()
+  const {
+    playlists,
+    currentPlaylistId,
+    setCurrentTrack,
+    setQueue,
+    removeTrackFromPlaylist,
+    reorderPlaylistTracks,
+    addTrackToPlaylist,
+    updatePlaylistCover,
+    updatePlaylistDescription,
+    addRecentlyPlayed,
+  } = useApp()
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false)
+  const [trackToRemove, setTrackToRemove] = useState<{ playlistId: string; trackId: string } | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [newThumbnail, setNewThumbnail] = useState<File | null>(null)
+  const [newDescription, setNewDescription] = useState("")
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [base64Image, setBase64Image] = useState<string | null>(null)
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Record<string, string>>({})
 
   const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
+
+  // Handle image preview and base64 conversion
+  useEffect(() => {
+    if (newThumbnail) {
+      const url = URL.createObjectURL(newThumbnail)
+      setPreviewUrl(url)
+
+      // Convert to base64 for persistence
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setBase64Image(reader.result)
+        }
+      }
+      reader.readAsDataURL(newThumbnail)
+
+      return () => URL.revokeObjectURL(url) // Clean up blob URL
+    } else {
+      setPreviewUrl(null)
+      setBase64Image(null)
+    }
+  }, [newThumbnail])
 
   if (!currentPlaylist) {
     return (
@@ -33,11 +95,13 @@ export function PlaylistView() {
     if (currentPlaylist.tracks.length === 0) return
     setCurrentTrack(currentPlaylist.tracks[0])
     setQueue(currentPlaylist.tracks.slice(1))
+    addRecentlyPlayed({ type: "playlist", id: currentPlaylist.id })
   }
 
   const handlePlayTrack = (index: number) => {
     setCurrentTrack(currentPlaylist.tracks[index])
     setQueue(currentPlaylist.tracks.slice(index + 1))
+    addRecentlyPlayed({ type: "track", id: currentPlaylist.tracks[index].id })
   }
 
   const handleDragStart = (index: number) => {
@@ -61,26 +125,142 @@ export function PlaylistView() {
     setDraggedIndex(null)
   }
 
+  const openRemoveDialog = (playlistId: string, trackId: string) => {
+    setTrackToRemove({ playlistId, trackId })
+    setIsRemoveDialogOpen(true)
+  }
+
+  const handleRemoveTrack = () => {
+    if (trackToRemove) {
+      removeTrackFromPlaylist(trackToRemove.playlistId, trackToRemove.trackId)
+      setIsRemoveDialogOpen(false)
+      setTrackToRemove(null)
+    }
+  }
+
+  const handleAddToPlaylist = (track: any, playlistId: string) => {
+    if (playlistId) {
+      addTrackToPlaylist(playlistId, track)
+    }
+  }
+
+  const handleEditPlaylist = () => {
+    setNewDescription(currentPlaylist.description || "")
+    setNewThumbnail(null)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleSaveEdit = () => {
+    if (base64Image) {
+      updatePlaylistCover(currentPlaylist.id, base64Image)
+    }
+    if (newDescription !== currentPlaylist.description) {
+      updatePlaylistDescription(currentPlaylist.id, newDescription)
+    }
+    setIsEditDialogOpen(false)
+    setNewThumbnail(null)
+    setNewDescription("")
+    setBase64Image(null)
+  }
+
+  const handleClearImage = () => {
+    setNewThumbnail(null)
+    setPreviewUrl(null)
+    setBase64Image(null)
+    updatePlaylistCover(currentPlaylist.id, "") // Reset coverImage to empty string
+  }
+
   return (
     <div className="flex-1 bg-gradient-to-b from-purple-900/20 to-background text-foreground p-8 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-end gap-6 mb-8">
-          <div className="w-52 h-52 bg-secondary rounded-lg flex items-center justify-center shadow-lg">
-            {currentPlaylist.tracks.length > 0 ? (
-              <Image
-                src={currentPlaylist.tracks[0].thumbnail || "/placeholder.svg"}
-                alt={currentPlaylist.name}
-                width={208}
-                height={208}
-                className="rounded-lg"
-              />
-            ) : (
-              <div className="text-8xl text-muted-foreground">♪</div>
-            )}
-          </div>
-          <div>
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogTrigger asChild>
+              <div
+                className="w-64 h-64 bg-secondary rounded-lg flex items-center justify-center shadow-lg cursor-pointer hover-scale-smaller relative group"
+                onClick={handleEditPlaylist}
+              >
+                {currentPlaylist.coverImage || currentPlaylist.tracks.length > 0 ? (
+                  <Image
+                    src={currentPlaylist.coverImage || currentPlaylist.tracks[0].thumbnail || "/placeholder.svg"}
+                    alt={currentPlaylist.name}
+                    width={256}
+                    height={256}
+                    className="rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="text-8xl text-muted-foreground">♪</div>
+                )}
+                <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-80 transition-opacity">
+                  <Edit size={27} className="text-white" />
+                </div>
+              </div>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Playlist</DialogTitle>
+                <DialogDescription>Update the playlist's image and description.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Playlist Image</label>
+                  <div className="mt-2 flex items-center gap-2">
+                    {previewUrl || currentPlaylist.coverImage ? (
+                      <Image
+                        src={previewUrl || currentPlaylist.coverImage || "/placeholder.svg"}
+                        alt="Playlist preview"
+                        width={128}
+                        height={128}
+                        className="rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="w-32 h-32 bg-secondary rounded-lg flex items-center justify-center">
+                        <span className="text-4xl text-muted-foreground">♪</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setNewThumbnail(e.target.files?.[0] || null)}
+                    />
+                    {(previewUrl || currentPlaylist.coverImage) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleClearImage}
+                        className="text-destructive hover:bg-destructive"
+                      >
+                        <Trash2 size={20} />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Description</label>
+                  <Textarea
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    placeholder="Enter a description for your playlist"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveEdit}>Save</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <div className="flex-1">
             <p className="text-sm font-semibold uppercase">Playlist</p>
-            <h1 className="text-5xl font-bold mt-2 mb-4 text-balance">{currentPlaylist.name}</h1>
+            <h1 className="text-5xl font-bold mt-2 mb-2 text-balance">{currentPlaylist.name}</h1>
+            {currentPlaylist.description && (
+              <p className="text-sm text-muted-foreground mb-4">{currentPlaylist.description}</p>
+            )}
             <p className="text-sm text-muted-foreground">
               {currentPlaylist.tracks.length} {currentPlaylist.tracks.length === 1 ? "song" : "songs"}
             </p>
@@ -104,7 +284,7 @@ export function PlaylistView() {
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-4 p-3 rounded-md hover:bg-secondary/50 group cursor-move ${
+                  className={`flex items-center gap-4 p-3 rounded-md list-hover-green group cursor-move ${
                     draggedIndex === index ? "opacity-50" : ""
                   }`}
                 >
@@ -135,13 +315,57 @@ export function PlaylistView() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => removeTrackFromPlaylist(currentPlaylist.id, track.id)}
-                        className="text-destructive"
+                      <Select
+                        value={selectedPlaylist[track.id] || ""}
+                        onValueChange={(value) => {
+                          setSelectedPlaylist({ ...selectedPlaylist, [track.id]: value })
+                          handleAddToPlaylist(track, value)
+                        }}
                       >
-                        <Trash2 size={14} className="mr-2" />
-                        Remove from playlist
-                      </DropdownMenuItem>
+                        <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-secondary">
+                          <div className="flex items-center gap-2">
+                            <Plus size={14} />
+                            Add to Playlist
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {playlists
+                            .filter((p) => p.id !== currentPlaylist.id)
+                            .map((playlist) => (
+                              <SelectItem key={playlist.id} value={playlist.id} className="text-sm">
+                                {playlist.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <Dialog open={isRemoveDialogOpen} onOpenChange={setIsRemoveDialogOpen}>
+                        <DialogTrigger asChild>
+                          <DropdownMenuItem
+                            onSelect={(e) => e.preventDefault()}
+                            onClick={() => openRemoveDialog(currentPlaylist.id, track.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 size={14} className="mr-2" />
+                            Remove from playlist
+                          </DropdownMenuItem>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Remove Track</DialogTitle>
+                            <DialogDescription>
+                              Are you sure you want to remove {track.title} from {currentPlaylist.name}?
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsRemoveDialogOpen(false)}>
+                              Cancel
+                            </Button>
+                            <Button onClick={handleRemoveTrack} className="bg-destructive hover:bg-destructive/90">
+                              Remove
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>

@@ -3,11 +3,17 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { type AppState, type Playlist, type Track, loadState, saveState, createDefaultPlaylist } from "@/lib/storage"
 
+interface RecentlyPlayed {
+  type: "track" | "playlist"
+  id: string
+  timestamp: number
+}
+
 interface AppContextType extends AppState {
   setCurrentTrack: (track: Track | null) => void
   setCurrentPlaylistId: (id: string | null) => void
   setPlaylists: (playlists: Playlist[]) => void
-  addPlaylist: (name: string, description?: string) => void
+  addPlaylist: (name: string, description?: string, coverImage?: string) => void
   deletePlaylist: (id: string) => void
   renamePlaylist: (id: string, name: string) => void
   updatePlaylistDescription: (id: string, description: string) => void
@@ -15,7 +21,7 @@ interface AppContextType extends AppState {
   addTrackToPlaylist: (playlistId: string, track: Track) => void
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => void
   reorderPlaylistTracks: (playlistId: string, tracks: Track[]) => void
-  setQueue: (queue: Track[]) => void
+  setQueue: (track: Track[]) => void
   addToQueue: (track: Track) => void
   removeFromQueue: (index: number) => void
   setPlaybackPosition: (position: number) => void
@@ -27,6 +33,8 @@ interface AppContextType extends AppState {
   toggleLikedSong: (track: Track) => void
   isTrackLiked: (trackId: string) => boolean
   setLikedSongs: (songs: Track[]) => void
+  recentlyPlayed: RecentlyPlayed[]
+  addRecentlyPlayed: (item: { type: "track" | "playlist"; id: string }) => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -43,6 +51,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [repeat, setRepeat] = useState<"off" | "all" | "one">("off")
   const [theme, setTheme] = useState<"light" | "dark">("dark")
   const [videoMode, setVideoMode] = useState(false)
+  const [recentlyPlayed, setRecentlyPlayed] = useState<RecentlyPlayed[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
 
   // Load state from localStorage on mount
@@ -107,12 +116,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [theme])
 
-  const addPlaylist = (name: string, description?: string) => {
+  const addPlaylist = (name: string, description?: string, coverImage?: string) => {
     const newPlaylist: Playlist = {
       id: crypto.randomUUID(),
       name,
       description: description || "",
-      coverImage: undefined,
+      coverImage,
       tracks: [],
       createdAt: Date.now(),
     }
@@ -201,6 +210,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return likedSongs.some((t) => t.id === trackId)
   }
 
+  const addRecentlyPlayed = (item: { type: "track" | "playlist"; id: string }) => {
+    setRecentlyPlayed((prev) => {
+      const newItem = { ...item, timestamp: Date.now() }
+      const filtered = prev.filter((i) => !(i.type === item.type && i.id === item.id))
+      return [newItem, ...filtered].slice(0, 10) // Keep last 10 items
+    })
+  }
+
   return (
     <AppContext.Provider
       value={{
@@ -238,6 +255,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleLikedSong,
         isTrackLiked,
         setLikedSongs,
+        recentlyPlayed,
+        addRecentlyPlayed,
       }}
     >
       {children}

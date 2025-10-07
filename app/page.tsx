@@ -6,10 +6,12 @@ import { Sidebar } from "../components/Sidebar"
 import { MainContent } from "../components/MainContent"
 import { PlayerControls } from "../components/PlayerControls"
 import { Button } from "@/components/ui/button"
+import { useApp } from "@/contexts/AppContext"
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const { volume, setVolume } = useApp()
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -38,21 +40,23 @@ export default function Home() {
         prevButton?.click()
       }
 
-      // Arrow up/down for volume (optional enhancement)
+      // Arrow up/down for volume control
       if (e.code === "ArrowUp") {
         e.preventDefault()
-        // Increase volume logic could be added here
+        const newVolume = Math.min(100, volume + 5)
+        setVolume(newVolume)
       }
 
       if (e.code === "ArrowDown") {
         e.preventDefault()
-        // Decrease volume logic could be added here
+        const newVolume = Math.max(0, volume - 5)
+        setVolume(newVolume)
       }
     }
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [])
+  }, [volume, setVolume])
 
   return (
     <div className="flex flex-col h-screen">

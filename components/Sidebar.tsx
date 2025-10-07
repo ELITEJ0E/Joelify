@@ -37,9 +37,11 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   } = useApp()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [newPlaylistName, setNewPlaylistName] = useState("")
   const [renamePlaylistId, setRenamePlaylistId] = useState<string | null>(null)
   const [renamePlaylistName, setRenamePlaylistName] = useState("")
+  const [playlistToDelete, setPlaylistToDelete] = useState<{ id: string; name: string } | null>(null)
 
   const handleCreatePlaylist = () => {
     if (newPlaylistName.trim()) {
@@ -58,9 +60,11 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     }
   }
 
-  const handleDeletePlaylist = (id: string) => {
-    if (confirm("Are you sure you want to delete this playlist?")) {
-      deletePlaylist(id)
+  const handleDeletePlaylist = () => {
+    if (playlistToDelete) {
+      deletePlaylist(playlistToDelete.id)
+      setIsDeleteDialogOpen(false)
+      setPlaylistToDelete(null)
     }
   }
 
@@ -68,6 +72,11 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setRenamePlaylistId(id)
     setRenamePlaylistName(currentName)
     setIsRenameDialogOpen(true)
+  }
+
+  const openDeleteDialog = (id: string, name: string) => {
+    setPlaylistToDelete({ id, name })
+    setIsDeleteDialogOpen(true)
   }
 
   const handlePlaylistClick = (id: string) => {
@@ -182,7 +191,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <button 
+            <button
               onClick={() => handleNavigate("liked")}
               className="flex items-center space-x-3 hover:text-white w-full text-left transition-colors relative"
             >
@@ -228,13 +237,37 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                             <Edit2 size={14} className="mr-2" />
                             Rename
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDeletePlaylist(playlist.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 size={14} className="mr-2" />
-                            Delete
-                          </DropdownMenuItem>
+                          <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                            <DialogTrigger asChild>
+                              <DropdownMenuItem
+                                onSelect={(e) => e.preventDefault()}
+                                onClick={() => openDeleteDialog(playlist.id, playlist.name)}
+                                className="text-destructive"
+                              >
+                                <Trash2 size={14} className="mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Delete Playlist</DialogTitle>
+                                <DialogDescription>
+                                  Are you sure you want to delete {playlistToDelete?.name}? This action cannot be undone.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                                  Cancel
+                                </Button>
+                                <Button
+                                  onClick={handleDeletePlaylist}
+                                  className="bg-destructive/80 hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
