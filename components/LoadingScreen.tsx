@@ -87,7 +87,7 @@ export function LoadingScreen() {
               animate={{ opacity: 1 }}
               transition={{ duration: 1.2 }}
             >
-              JOELIFY
+              Joelify
             </motion.h1>
           </div>
 
