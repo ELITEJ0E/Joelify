@@ -19,14 +19,28 @@ export function PWAInstallPrompt() {
       e.preventDefault()
       setDeferredPrompt(e as BeforeInstallPromptEvent)
 
-      // Check if user has dismissed the prompt before
+      // Check if user has dismissed before
       const dismissedAt = localStorage.getItem("pwa-install-dismissed")
-      if (!dismissedAt || Date.now() - parseInt(dismissedAt) > 7 * 24 * 60 * 60 * 1000) {
-        setShowPrompt(true)
+      const isInstalled = localStorage.getItem("pwa-installed")
+
+      // 2 days in milliseconds
+      const TWO_DAYS = 2 * 24 * 60 * 60 * 1000
+
+      if (!isInstalled) {
+        if (!dismissedAt || Date.now() - parseInt(dismissedAt) > TWO_DAYS) {
+          setShowPrompt(true)
+        }
       }
     }
 
     window.addEventListener("beforeinstallprompt", handler)
+
+    // Optional: detect if PWA already installed
+    window.addEventListener("appinstalled", () => {
+      localStorage.setItem("pwa-installed", "true")
+      setShowPrompt(false)
+      console.log("✅ Joelify PWA installed successfully!")
+    })
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handler)
@@ -40,7 +54,10 @@ export function PWAInstallPrompt() {
     const { outcome } = await deferredPrompt.userChoice
 
     if (outcome === "accepted") {
-      console.log("User accepted the install prompt")
+      console.log("✅ User accepted the install prompt")
+      localStorage.setItem("pwa-installed", "true")
+    } else {
+      console.log("❌ User dismissed install prompt")
     }
 
     setDeferredPrompt(null)
@@ -49,19 +66,19 @@ export function PWAInstallPrompt() {
 
   const handleDismiss = () => {
     setShowPrompt(false)
-    localStorage.setItem("pwa-install-dismissed", "true")
+    localStorage.setItem("pwa-install-dismissed", Date.now().toString())
   }
 
   if (!showPrompt) return null
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 md:left-auto md:right-4 md:w-96 z-50 animate-in slide-in-from-bottom-5">
-      <Card className="bg-card border-border p-4">
+    <div className="fixed bottom-24 left-4 right-4 md:left-auto md:right-4 md:w-96 z-50 animate-in fade-in slide-in-from-bottom-5 transition-all duration-700">
+      <Card className="bg-card border-border p-4 shadow-lg backdrop-blur-md transition-all duration-500">
         <div className="flex items-start gap-3">
           <div className="flex-1">
             <h3 className="font-semibold text-sm mb-1">Install Joelify</h3>
             <p className="text-xs text-muted-foreground mb-3">
-              Add Joelify to your home screen for quick access and a better experience.
+              Add <span className="text-green-400 font-semibold">Joelify</span> to your home screen for quick access and better music vibes.
             </p>
             <div className="flex gap-2">
               <Button size="sm" onClick={handleInstall} className="flex-1">
