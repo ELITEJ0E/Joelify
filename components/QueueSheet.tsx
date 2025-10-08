@@ -9,7 +9,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-export function QueueSheet({ onClose }: { onClose: () => void }) {
+export function QueueSheet({ onClose = () => {} }: { onClose?: () => void }) {
   const { queue, setQueue, removeFromQueue, currentTrack } = useApp()
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
@@ -36,11 +36,15 @@ export function QueueSheet({ onClose }: { onClose: () => void }) {
   }
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.touches[0].clientX)
+    // Only start tracking if not dragging
+    if (draggedIndex === null) {
+      setTouchStartX(e.touches[0].clientX)
+    }
   }
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartX === null) return
+    if (touchStartX === null || draggedIndex !== null) return
+
     const touchEndX = e.touches[0].clientX
     const diffX = touchEndX - touchStartX
 
@@ -55,12 +59,17 @@ export function QueueSheet({ onClose }: { onClose: () => void }) {
     setTouchStartX(null)
   }
 
+  const handleTouchCancel = () => {
+    setTouchStartX(null)
+  }
+
   return (
     <div
       className="flex flex-col h-full"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
     >
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-muted-foreground mb-2">Now Playing</h3>
