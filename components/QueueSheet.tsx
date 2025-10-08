@@ -35,8 +35,15 @@ export function QueueSheet({ onClose = () => {} }: { onClose?: () => void }) {
   }
 
   useEffect(() => {
-    const handlePopState = () => {
-      onClose()
+    // Add a history entry when the sheet is opened
+    window.history.pushState({ queueSheet: true }, document.title)
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.queueSheet) {
+        onClose() // Close the sheet instead of quitting
+        // Remove the temporary history entry
+        window.history.back()
+      }
     }
 
     window.addEventListener("popstate", handlePopState)
