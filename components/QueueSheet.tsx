@@ -12,6 +12,9 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 export function QueueSheet({ onClose = () => {} }: { onClose?: () => void }) {
   const { queue, setQueue, removeFromQueue, currentTrack } = useApp()
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [touchStartX, setTouchStartX] = useState<number | null>(null)
+  const [touchStartY, setTouchStartY] = useState<number | null>(null)
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
 
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
@@ -34,28 +37,50 @@ export function QueueSheet({ onClose = () => {} }: { onClose?: () => void }) {
     setDraggedIndex(null)
   }
 
-  useEffect(() => {
-    // Add a history entry when the sheet is opened
-    window.history.pushState({ queueSheet: true }, document.title)
+  const startLongPress = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX)
+    setTouchStartY(e.touches[0].clientY)
+    const timer = setTimeout(() => {
+      // Long press detected (500ms)
+      // No action yet, wait for swipe
+    }, 500)
+    setLongPressTimer(timer)
+  }
 
-    const handlePopState = (event: PopStateEvent) => {
-      if (event.state?.queueSheet) {
-        onClose() // Close the sheet instead of quitting
-        // Remove the temporary history entry
-        window.history.back()
-      }
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!longPressTimer || touchStartX === null || touchStartY === null) return
+
+    const touchEndX = e.touches[0].clientX
+    const touchEndY = e.touches[0].clientY
+    const diffX = touchEndX - touchStartX
+    const diffY = touchEndY - touchStartY
+
+    // Check for right swipe after long press (50px threshold, minimal vertical movement)
+    if (diffX > 50 && Math.abs(diffY) < 20) {
+      clearTimeout(longPressTimer)
+      setLongPressTimer(null)
+      setTouchStartX(null)
+      setTouchStartY(null)
+      onClose()
     }
+  }
 
-    window.addEventListener("popstate", handlePopState)
-
-    // Cleanup the event listener
-    return () => {
-      window.removeEventListener("popstate", handlePopState)
+  const handleTouchEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      setLongPressTimer(null)
     }
-  }, [onClose])
+    setTouchStartX(null)
+    setTouchStartY(null)
+  }
 
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className="flex flex-col h-full"
+      onTouchStart={startLongPress}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-muted-foreground mb-2">Now Playing</h3>
         {currentTrack ? (
