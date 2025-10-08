@@ -20,8 +20,8 @@ export function PWAInstallPrompt() {
       setDeferredPrompt(e as BeforeInstallPromptEvent)
 
       // Check if user has dismissed the prompt before
-      const dismissed = localStorage.getItem("pwa-install-dismissed")
-      if (!dismissed) {
+      const dismissedAt = localStorage.getItem("pwa-install-dismissed")
+      if (!dismissedAt || Date.now() - parseInt(dismissedAt) > 7 * 24 * 60 * 60 * 1000) {
         setShowPrompt(true)
       }
     }

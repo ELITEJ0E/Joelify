@@ -2,19 +2,16 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useApp } from "@/contexts/AppContext"
 import { GripVertical, X } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-export function QueueSheet({ onClose = () => {} }: { onClose?: () => void }) {
+export function QueueSheet() {
   const { queue, setQueue, removeFromQueue, currentTrack } = useApp()
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [touchStartX, setTouchStartX] = useState<number | null>(null)
-  const [touchStartY, setTouchStartY] = useState<number | null>(null)
-  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
 
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
@@ -37,50 +34,8 @@ export function QueueSheet({ onClose = () => {} }: { onClose?: () => void }) {
     setDraggedIndex(null)
   }
 
-  const startLongPress = (e: React.TouchEvent) => {
-    setTouchStartX(e.touches[0].clientX)
-    setTouchStartY(e.touches[0].clientY)
-    const timer = setTimeout(() => {
-      // Long press detected (500ms)
-      // No action yet, wait for swipe
-    }, 500)
-    setLongPressTimer(timer)
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!longPressTimer || touchStartX === null || touchStartY === null) return
-
-    const touchEndX = e.touches[0].clientX
-    const touchEndY = e.touches[0].clientY
-    const diffX = touchEndX - touchStartX
-    const diffY = touchEndY - touchStartY
-
-    // Check for right swipe after long press (50px threshold, minimal vertical movement)
-    if (diffX > 50 && Math.abs(diffY) < 20) {
-      clearTimeout(longPressTimer)
-      setLongPressTimer(null)
-      setTouchStartX(null)
-      setTouchStartY(null)
-      onClose()
-    }
-  }
-
-  const handleTouchEnd = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer)
-      setLongPressTimer(null)
-    }
-    setTouchStartX(null)
-    setTouchStartY(null)
-  }
-
   return (
-    <div
-      className="flex flex-col h-full"
-      onTouchStart={startLongPress}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="flex flex-col h-full">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-muted-foreground mb-2">Now Playing</h3>
         {currentTrack ? (
