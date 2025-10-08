@@ -11,48 +11,43 @@ import { LoadingScreen } from "@/components/LoadingScreen"
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt"
 
 export default function Home() {
+  const [isLoading, setIsLoading] = useState(true)
   const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { volume, setVolume } = useApp()
 
+  // Only show homepage *after* loading screen completes
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 3500)
+    return () => clearTimeout(timer)
+  }, [])
+
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Only trigger if not typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
-      // Space bar for play/pause
       if (e.code === "Space") {
         e.preventDefault()
         const playButton = document.querySelector('[aria-label*="Play"], [aria-label*="Pause"]') as HTMLButtonElement
         playButton?.click()
       }
-
-      // Arrow keys for navigation
       if (e.code === "ArrowRight") {
         e.preventDefault()
         const nextButton = document.querySelector('[aria-label*="Next"]') as HTMLButtonElement
         nextButton?.click()
       }
-
       if (e.code === "ArrowLeft") {
         e.preventDefault()
         const prevButton = document.querySelector('[aria-label*="Previous"]') as HTMLButtonElement
         prevButton?.click()
       }
-
-      // Arrow up/down for volume control
       if (e.code === "ArrowUp") {
         e.preventDefault()
-        const newVolume = Math.min(100, volume + 5)
-        setVolume(newVolume)
+        setVolume(Math.min(100, volume + 5))
       }
-
       if (e.code === "ArrowDown") {
         e.preventDefault()
-        const newVolume = Math.max(0, volume - 5)
-        setVolume(newVolume)
+        setVolume(Math.max(0, volume - 5))
       }
     }
 
@@ -60,10 +55,13 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyPress)
   }, [volume, setVolume])
 
+  if (isLoading) {
+    // 👇 Only the loading screen shows at first — no homepage content rendered yet
+    return <LoadingScreen />
+  }
+
   return (
     <>
-      <LoadingScreen />
-
       <div className="flex flex-col h-screen">
         <header className="lg:hidden bg-black text-white p-4 border-b border-border flex items-center gap-4">
           <Button
@@ -82,6 +80,7 @@ export default function Home() {
           <Sidebar onNavigate={setCurrentView} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
           <MainContent view={currentView} />
         </div>
+
         <PlayerControls />
       </div>
 
