@@ -31,16 +31,6 @@ export default function Home() {
         const playButton = document.querySelector('[aria-label*="Play"], [aria-label*="Pause"]') as HTMLButtonElement
         playButton?.click()
       }
-      if (e.code === "ArrowRight") {
-        e.preventDefault()
-        const nextButton = document.querySelector('[aria-label*="Next"]') as HTMLButtonElement
-        nextButton?.click()
-      }
-      if (e.code === "ArrowLeft") {
-        e.preventDefault()
-        const prevButton = document.querySelector('[aria-label*="Previous"]') as HTMLButtonElement
-        prevButton?.click()
-      }
       if (e.code === "ArrowUp") {
         e.preventDefault()
         setVolume(Math.min(100, volume + 5))

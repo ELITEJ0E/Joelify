@@ -446,6 +446,19 @@ export function PlayerControls() {
     }
   }
 
+  // Handle seek forward/backward
+  const handleSeekForward = () => {
+    if (!player || !isReady || !currentTrack) return
+    const newTime = Math.min(duration, currentTime + 5)
+    handleSeek([newTime])
+  }
+
+  const handleSeekBackward = () => {
+    if (!player || !isReady || !currentTrack) return
+    const newTime = Math.max(0, currentTime - 5)
+    handleSeek([newTime])
+  }
+
   const handleSeek = (value: number[]) => {
     if (!player || !isReady) return
     
@@ -508,6 +521,25 @@ export function PlayerControls() {
     if (repeat === "all") return "Repeat All"
     return "Repeat Off"
   }
+
+  // Handle keyboard events for seeking
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+      if (e.code === "ArrowRight") {
+        e.preventDefault()
+        handleSeekForward()
+      }
+      if (e.code === "ArrowLeft") {
+        e.preventDefault()
+        handleSeekBackward()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [player, isReady, currentTrack, currentTime, duration])
 
   return (
     <>
