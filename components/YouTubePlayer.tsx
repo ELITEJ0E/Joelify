@@ -102,12 +102,16 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
     const updatePlayerSize = () => {
       if (containerRef.current && videoMode) {
         const container = containerRef.current
-        const maxWidth = 854 // Max width for 480p
+        const maxWidth = 640 // Reduced max width for 360p
+        const maxHeight = 360 // Max height to prevent oversized player
         const aspectRatio = 16 / 9
-        const containerWidth = container.clientWidth
-        const width = Math.min(containerWidth, maxWidth)
-        const height = width / aspectRatio
+        const containerWidth = container.parentElement?.clientWidth || window.innerWidth
+        const width = Math.min(containerWidth * 0.9, maxWidth) // Use 90% of parent width or maxWidth
+        const height = Math.min(width / aspectRatio, maxHeight)
+        container.style.width = `${width}px`
         container.style.height = `${height}px`
+      } else if (containerRef.current) {
+        containerRef.current.style.height = "0px" // Collapse when hidden
       }
     }
 
@@ -123,13 +127,13 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
     <div
       ref={containerRef}
       className={`${
-        videoMode ? "flex justify-center items-center bg-black p-4 w-full" : "hidden"
-      }`}
-      style={{ maxWidth: "854px", margin: "0 auto" }}
+        videoMode ? "flex justify-center items-center bg-black p-2 w-full" : "hidden"
+      } relative overflow-hidden`}
+      style={{ maxWidth: "640px", maxHeight: "360px", margin: "0 auto" }}
     >
       <div
         id="youtube-player"
-        className="w-full"
+        className="w-full h-full"
         style={{ aspectRatio: "16/9" }}
       ></div>
     </div>

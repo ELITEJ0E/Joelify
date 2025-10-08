@@ -1,7 +1,21 @@
 "use client"
 
 import { useState } from "react"
-import { Home, Search, Library, PlusSquare, Heart, MoreVertical, Edit2, Trash2, Sun, Moon, X } from "lucide-react"
+import {
+  Home,
+  Search,
+  Library,
+  PlusSquare,
+  Heart,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  Sun,
+  Moon,
+  X,
+  Download,
+  Upload,
+} from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
@@ -18,7 +32,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface SidebarProps {
-  onNavigate: (view: "home" | "search" | "playlist" | "liked") => void
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
   isOpen: boolean
   onClose: () => void
 }
@@ -34,6 +48,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     theme,
     setTheme,
     likedSongs,
+    setPlaylists,
   } = useApp()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
@@ -89,7 +104,46 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme(theme === "dark" ? "light" : "dark")
   }
 
-  const handleNavigate = (view: "home" | "search" | "playlist" | "liked") => {
+  const handleExportPlaylists = () => {
+    const dataStr = JSON.stringify(playlists, null, 2)
+    const dataBlob = new Blob([dataStr], { type: "application/json" })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `joelify-playlists-${new Date().toISOString().split("T")[0]}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportPlaylists = () => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = "application/json"
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        try {
+          const imported = JSON.parse(event.target?.result as string)
+          if (Array.isArray(imported)) {
+            setPlaylists(imported)
+            alert("Playlists imported successfully!")
+          } else {
+            alert("Invalid playlist file format")
+          }
+        } catch (error) {
+          alert("Error importing playlists")
+          console.error(error)
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
+
+  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library") => {
     onNavigate(view)
     onClose()
   }
@@ -151,7 +205,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
               </li>
               <li>
                 <button
-                  onClick={() => handleNavigate("home")}
+                  onClick={() => handleNavigate("library")}
                   className="flex items-center space-x-3 hover:text-white w-full text-left transition-colors"
                   aria-label="Go to your library"
                 >
@@ -203,6 +257,23 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                 </span>
               )}
             </button>
+            <div className="pt-4 border-t border-border space-y-2">
+              <button
+                onClick={handleExportPlaylists}
+                className="flex items-center space-x-3 hover:text-white w-full text-left transition-colors text-sm"
+                disabled={playlists.length === 0}
+              >
+                <Download size={20} />
+                <span>Export Playlists</span>
+              </button>
+              <button
+                onClick={handleImportPlaylists}
+                className="flex items-center space-x-3 hover:text-white w-full text-left transition-colors text-sm"
+              >
+                <Upload size={20} />
+                <span>Import Playlists</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -252,7 +323,8 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                               <DialogHeader>
                                 <DialogTitle>Delete Playlist</DialogTitle>
                                 <DialogDescription>
-                                  Are you sure you want to delete {playlistToDelete?.name}? This action cannot be undone.
+                                  Are you sure you want to delete {playlistToDelete?.name}? This action cannot be
+                                  undone.
                                 </DialogDescription>
                               </DialogHeader>
                               <DialogFooter>

@@ -10,7 +10,17 @@ import { Suspense } from "react"
 export const metadata: Metadata = {
   title: "Joelify",
   description: "A Spotify-like music player powered by YouTube",
-    generator: 'v0.app'
+  generator: "v0.app",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Joelify",
+  },
 }
 
 export default function RootLayout({
@@ -29,9 +39,13 @@ html {
 }
         `}</style>
         <script src="https://www.youtube.com/iframe_api" async></script>
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Joelify" />
+        <meta name="theme-color" content="#000000" />
       </head>
       <body>
-        {/* Wrapped children with AppProvider and Suspense for global state */}
         <Suspense fallback={null}>
           <AppProvider>{children}</AppProvider>
         </Suspense>
