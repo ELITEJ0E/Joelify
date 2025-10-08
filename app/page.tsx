@@ -46,7 +46,7 @@ export default function Home() {
   }, [volume, setVolume])
 
   if (isLoading) {
-    // 👇 Only the loading screen shows at first — no homepage content rendered yet
+    // Only the loading screen shows at first — no homepage content rendered yet
     return <LoadingScreen />
   }
 
@@ -68,7 +68,7 @@ export default function Home() {
 
         <div className="flex flex-1 overflow-hidden">
           <Sidebar onNavigate={setCurrentView} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-          <MainContent view={currentView} />
+          <MainContent view={currentView} onNavigate={setCurrentView} />
         </div>
 
         <PlayerControls />

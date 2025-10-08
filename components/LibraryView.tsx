@@ -6,7 +6,11 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
-export function LibraryView() {
+interface LibraryViewProps {
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
+}
+
+export function LibraryView({ onNavigate }: LibraryViewProps) {
   const { playlists, likedSongs, setCurrentPlaylistId, setCurrentTrack, setQueue, addRecentlyPlayed } = useApp()
 
   const handlePlayPlaylist = (playlistId: string) => {
@@ -25,6 +29,11 @@ export function LibraryView() {
     setQueue(likedSongs.slice(1))
   }
 
+  const handleNavigateToPlaylist = (playlistId: string) => {
+    setCurrentPlaylistId(playlistId)
+    onNavigate("playlist")
+  }
+
   const totalTracks = playlists.reduce((acc, p) => acc + p.tracks.length, 0)
 
   return (
@@ -38,7 +47,10 @@ export function LibraryView() {
 
         {/* Liked Songs Card */}
         {likedSongs.length > 0 && (
-          <Card className="bg-gradient-to-br from-purple-500/20 to-blue-500/20 border-none p-6 mb-8 hover:scale-[1.02] transition-transform cursor-pointer group">
+          <Card
+            className="bg-gradient-to-br from-purple-500/20 to-blue-500/20 border-none p-6 mb-8 hover:scale-[1.02] transition-transform cursor-pointer group"
+            onClick={() => onNavigate("liked")}
+          >
             <div className="flex items-center gap-6">
               <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Music2 size={48} className="text-white" />
@@ -52,7 +64,10 @@ export function LibraryView() {
               <Button
                 size="icon"
                 className="bg-primary hover:bg-primary/90 rounded-full h-14 w-14 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={handlePlayLikedSongs}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handlePlayLikedSongs()
+                }}
                 aria-label="Play liked songs"
               >
                 <Play fill="currentColor" size={24} />
@@ -69,7 +84,7 @@ export function LibraryView() {
               <div
                 key={playlist.id}
                 className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all cursor-pointer group hover:scale-[1.02]"
-                onClick={() => setCurrentPlaylistId(playlist.id)}
+                onClick={() => handleNavigateToPlaylist(playlist.id)}
                 role="button"
                 tabIndex={0}
                 aria-label={`Open ${playlist.name} playlist`}

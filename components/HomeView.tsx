@@ -6,7 +6,11 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
-export function HomeView() {
+interface HomeViewProps {
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
+}
+
+export function HomeView({ onNavigate }: HomeViewProps) {
   const { playlists, likedSongs, recentlyPlayed, setCurrentPlaylistId, setCurrentTrack, setQueue, addRecentlyPlayed } =
     useApp()
 
@@ -24,6 +28,11 @@ export function HomeView() {
     if (likedSongs.length === 0) return
     setCurrentTrack(likedSongs[0])
     setQueue(likedSongs.slice(1))
+  }
+
+  const handleNavigateToPlaylist = (playlistId: string) => {
+    setCurrentPlaylistId(playlistId)
+    onNavigate("playlist")
   }
 
   // Get recently played playlists
@@ -53,10 +62,7 @@ export function HomeView() {
                 <Card
                   key={playlist.id}
                   className="bg-card/50 hover:bg-card/80 border-none p-0 overflow-hidden cursor-pointer group transition-all hover:scale-[1.02]"
-                  onClick={() => {
-                    setCurrentPlaylistId(playlist.id)
-                    handlePlayPlaylist(playlist.id)
-                  }}
+                  onClick={() => handleNavigateToPlaylist(playlist.id)}
                 >
                   <div className="flex items-center gap-4 p-2">
                     <div className="relative w-20 h-20 flex-shrink-0 rounded overflow-hidden bg-secondary">
@@ -103,7 +109,7 @@ export function HomeView() {
             {likedSongs.length > 0 && (
               <div
                 className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all cursor-pointer group hover:scale-[1.02]"
-                onClick={handlePlayLikedSongs}
+                onClick={() => onNavigate("liked")}
                 role="button"
                 tabIndex={0}
                 aria-label="Play liked songs"
@@ -136,7 +142,7 @@ export function HomeView() {
               <div
                 key={playlist.id}
                 className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all cursor-pointer group hover:scale-[1.02]"
-                onClick={() => setCurrentPlaylistId(playlist.id)}
+                onClick={() => handleNavigateToPlaylist(playlist.id)}
                 role="button"
                 tabIndex={0}
                 aria-label={`Open ${playlist.name} playlist`}

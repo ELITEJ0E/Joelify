@@ -1,11 +1,17 @@
 "use client"
+
 import { SearchView } from "./SearchView"
 import { PlaylistView } from "./PlaylistView"
 import { HomeView } from "./HomeView"
 import { LikedSongsView } from "./LikedSongsView"
 import { LibraryView } from "./LibraryView"
 
-export function MainContent({ view }: { view: "home" | "search" | "playlist" | "liked" | "library" }) {
+interface MainContentProps {
+  view: "home" | "search" | "playlist" | "liked" | "library"
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
+}
+
+export function MainContent({ view, onNavigate }: MainContentProps) {
   if (view === "search") {
     return <SearchView />
   }
@@ -19,8 +25,8 @@ export function MainContent({ view }: { view: "home" | "search" | "playlist" | "
   }
 
   if (view === "library") {
-    return <LibraryView />
+    return <LibraryView onNavigate={onNavigate} />
   }
 
-  return <HomeView />
+  return <HomeView onNavigate={onNavigate} />
 }
