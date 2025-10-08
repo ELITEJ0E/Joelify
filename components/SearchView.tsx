@@ -13,11 +13,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const loadingMessages = [
   "Joelifying...",
-  "Fetching vibes...",
+  "Applying autotune...",
   "Buffering bangers...",
   "Searching the soundwaves...",
   "Finding your jam...",
   "Tuning in...",
+  "Still buffering... blame the Wi-Fi...",
+  "Joelify is currently vibing...",
+  "Still pretending to load to look cool...",
+  "Joel is typing... I mean buffering...",
 ]
 
 export function SearchView() {
@@ -130,8 +134,8 @@ export function SearchView() {
 
         {!isLoading && !error && results.length === 0 && query && (
           <div className="text-center py-20">
-            <p className="text-lg md:text-xl text-muted-foreground">No results found for "{query}"</p>
-            <p className="text-sm text-muted-foreground mt-2">Try searching with different keywords</p>
+            <p className="text-lg md:text-xl text-muted-foreground">Looking for "{query}"?</p>
+            <p className="text-sm text-muted-foreground mt-2">Enter to search</p>
           </div>
         )}
       </div>
