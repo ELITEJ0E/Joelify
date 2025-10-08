@@ -1,5 +1,3 @@
-loading 3
-
 "use client"
 
 import { useEffect, useState } from "react"
