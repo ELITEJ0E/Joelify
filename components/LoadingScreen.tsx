@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import Image from "next/image"
 
 export function LoadingScreen() {
   const [isVisible, setIsVisible] = useState(true)
@@ -21,12 +22,28 @@ export function LoadingScreen() {
           transition={{ duration: 0.8, ease: "easeInOut" }}
         >
           <div className="flex flex-col items-center gap-6">
-            {/* Futuristic Spotify-style loader */}
-            <div className="relative w-20 h-20 flex items-center justify-center">
-              <div className="absolute w-20 h-20 rounded-full border-4 border-primary/30 animate-ping" />
-              <div className="absolute w-16 h-16 border-4 border-transparent border-t-primary rounded-full animate-spin-slow" />
-              <div className="absolute w-10 h-10 border-2 border-primary/40 rounded-full animate-pulse" />
+            {/* Futuristic Joelify loader with logo */}
+            <div className="relative w-24 h-24 flex items-center justify-center">
+              {/* Outer expanding ring */}
+              <div className="absolute w-24 h-24 rounded-full border-4 border-primary/30 animate-ping" />
+              
+              {/* Middle rotating ring */}
+              <div className="absolute w-20 h-20 border-4 border-transparent border-t-primary rounded-full animate-spin-slow" />
+              
+              {/* Inner pulsing ring */}
+              <div className="absolute w-25 h-25 border-2 border-primary/50 rounded-full animate-pulse" />
+
+              {/* Center logo */}
+              <Image
+                src="/favicon.ico" // your logo file
+                alt="Joelify Logo"
+                width={80}
+                height={80}
+                className="rounded-full"
+              />
             </div>
+
+            {/* Logo text */}
             <motion.h1
               className="text-3xl font-bold text-primary tracking-wider"
               initial={{ opacity: 0, y: 10 }}
