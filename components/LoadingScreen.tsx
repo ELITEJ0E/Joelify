@@ -8,7 +8,7 @@ export function LoadingScreen() {
   const [isVisible, setIsVisible] = useState(true)
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(false), 2500) // fade out after 2.5s
+    const timer = setTimeout(() => setIsVisible(false), 3000) // fade out after 2.5s
     return () => clearTimeout(timer)
   }, [])
 
@@ -25,10 +25,10 @@ export function LoadingScreen() {
             {/* Futuristic Joelify loader with logo */}
             <div className="relative w-24 h-24 flex items-center justify-center">
               {/* Outer expanding ring */}
-              <div className="absolute w-24 h-24 rounded-full border-4 border-primary/30 animate-ping" />
+              <div className="absolute w-24 h-24 rounded-full border-2 border-primary/80 animate-ping" />
               
               {/* Middle rotating ring */}
-              <div className="absolute w-20 h-20 border-4 border-transparent border-t-primary rounded-full animate-spin-slow" />
+              <div className="absolute w-20 h-20 border-4 border-transparent border-t-primary rounded-full animate-spin-fast" />
               
               {/* Inner pulsing ring */}
               <div className="absolute w-25 h-25 border-2 border-primary/50 rounded-full animate-pulse" />
