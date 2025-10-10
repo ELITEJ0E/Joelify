@@ -9,7 +9,6 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
   const [isMounted, setIsMounted] = useState(false)
 
   useEffect(() => {
-    // Delay rendering main app until animation completes
     const mountTimer = setTimeout(() => setIsMounted(true), 300)
     const hideTimer = setTimeout(() => setIsVisible(false), 3500)
     return () => {
@@ -31,7 +30,7 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
           >
             {/* Synthwave Grid Background */}
             <motion.div
-              className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,0,0.1)_0%,transparent_70%)]"
+              className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,136,0.1)_0%,transparent_70%)]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 1.2, ease: "easeOut" }}
@@ -41,12 +40,12 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
               </div>
             </motion.div>
 
-            {/* Energy particles */}
+            {/* Floating Energy Particles */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               {[...Array(20)].map((_, i) => (
                 <motion.span
                   key={i}
-                  className="absolute w-1 h-1 bg-green-400 rounded-full opacity-60"
+                  className="absolute w-1 h-1 bg-primary rounded-full opacity-60"
                   animate={{
                     y: [-20, -200],
                     x: [0, (Math.random() - 0.5) * 200],
@@ -74,14 +73,17 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
               transition={{ duration: 0.8, ease: "easeInOut" }}
             >
               <div className="relative w-32 h-32 flex items-center justify-center">
+                {/* Soft Subtle Glow (behind logo, using bg-primary) */}
+                <div className="absolute w-32 h-32 rounded-full bg-primary/15 blur-2xl" />
+
                 {/* Glowing Pulse Aura */}
-                <div className="absolute w-32 h-32 rounded-full border-2 border-green-400/20 animate-[pulseGlow_2s_ease-in-out_infinite]" />
+                <div className="absolute w-32 h-32 rounded-full border border-primary/20 animate-[pulseGlow_2s_ease-in-out_infinite]" />
 
                 {/* Outer Expanding Ring */}
-                <div className="absolute w-40 h-40 rounded-full border-2 border-green-400/40 animate-[ping_2s_ease-in-out_infinite]" />
+                <div className="absolute w-40 h-40 rounded-full border border-primary/40 animate-[ping_2s_ease-in-out_infinite]" />
 
                 {/* Rotating Neon Halo */}
-                <div className="absolute w-28 h-28 border-2 border-transparent border-t-green-400 rounded-full animate-[spin_3s_linear_infinite]" />
+                <div className="absolute w-28 h-28 border border-transparent border-t-primary rounded-full animate-[spin_3s_linear_infinite]" />
 
                 {/* Circular Waveform Animation */}
                 {[...Array(32)].map((_, i) => {
@@ -89,11 +91,11 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
                   return (
                     <motion.div
                       key={i}
-                      className="absolute bg-green-400 rounded-full"
+                      className="absolute bg-primary rounded-full"
                       style={{
-                        width: "3px",
+                        width: "2px",
                         height: "10px",
-                        transform: `rotate(${(angle * 180) / Math.PI}deg) translateY(-70px)`,
+                        transform: `rotate(${(angle * 180) / Math.PI}deg) translateY(-75px)`,
                         transformOrigin: "center bottom",
                       }}
                       animate={{
@@ -122,17 +124,17 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
                 >
                   <Image
                     src="/favicon.ico"
-                    alt="Joelify Logo"
+                    alt="Logo"
                     width={90}
                     height={90}
-                    className="rounded-full drop-shadow-[0_0_15px_#00ff88]"
+                    className="rounded-full"
                   />
                 </motion.div>
               </div>
 
               {/* Title */}
               <motion.h1
-                className="text-4xl font-extrabold tracking-widest text-green-400 drop-shadow-[0_0_10px_#00ff88]"
+                className="text-4xl font-extrabold tracking-widest text-primary drop-shadow-[0_0_10px_var(--tw-shadow-color)] shadow-[#00ff88]"
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -154,8 +156,7 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
               }
 
               @keyframes pulseGlow {
-                0%,
-                100% {
+                0%, 100% {
                   box-shadow: 0 0 25px #00ff88, 0 0 60px #00ff88;
                   opacity: 0.6;
                 }
@@ -166,12 +167,8 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
               }
 
               @keyframes spin {
-                from {
-                  transform: rotate(0deg);
-                }
-                to {
-                  transform: rotate(360deg);
-                }
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
               }
             `}</style>
           </motion.div>
@@ -179,7 +176,11 @@ export function LoadingScreen({ children }: { children?: React.ReactNode }) {
       </AnimatePresence>
 
       {/* Delay mounting the main content */}
-      {isMounted && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}>{children}</motion.div>}
+      {isMounted && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}>
+          {children}
+        </motion.div>
+      )}
     </>
   )
 }
