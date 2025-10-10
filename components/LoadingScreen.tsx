@@ -1,4 +1,5 @@
 "use client"
+
 import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
@@ -15,111 +16,118 @@ export function LoadingScreen() {
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          className="fixed inset-0 z-[100] bg-gradient-to-br from-black via-[#0a1a0a] to-[#051505] flex items-center justify-center overflow-hidden"
+          className="fixed inset-0 z-[100] bg-gradient-to-b from-[#050505] via-[#0a0a0a] to-[#000000] flex flex-col items-center justify-center overflow-hidden"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
         >
-          {/* Synthwave background grid */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="grid grid-cols-12 grid-rows-12 w-full h-full">
-              {[...Array(144)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  className="border border-[#1DB954]/20"
-                  animate={{ opacity: [0.1, 0.3, 0.1] }}
-                  transition={{ repeat: Infinity, duration: 2 + (i % 5), ease: "easeInOut" }}
-                />
-              ))}
-            </div>
+          {/* 💿 Logo + Rings */}
+          <div className="relative w-40 h-40 flex items-center justify-center mb-16">
+            <div className="absolute w-40 h-40 rounded-full bg-green-400/15 blur-2xl" />
+
+            <motion.div
+              className="absolute w-56 h-56 rounded-full border-4 border-green-400/20"
+              animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0, 0.6] }}
+              transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+            />
+
+            <motion.div
+              className="absolute w-48 h-48 border-4 border-transparent border-t-green-500/50 rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
+            />
+
+            <motion.div
+              className="absolute w-36 h-36 rounded-full border-2 border-green-500/40"
+              animate={{ scale: [1, 1.2, 1], opacity: [1, 0.5, 1] }}
+              transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+            />
+
+            <Image
+              src="/favicon.ico"
+              alt="Joelify Logo"
+              width={96}
+              height={96}
+              className="rounded-full shadow-[0_0_40px_rgba(34,197,94,0.6)]"
+            />
           </div>
 
-          <div className="flex flex-col items-center relative z-10">
-            {/* 🔹 Logo + Rings Section */}
-            <div className="relative w-32 h-32 flex items-center justify-center mb-12">
-              {/* Outer expanding ring */}
-              <motion.div
-                className="absolute w-40 h-40 rounded-full border-4 border-[#1DB954]/40 shadow-[0_0_30px_rgba(29,185,84,0.5)]"
-                animate={{ scale: [1, 1.8, 1], opacity: [0.8, 0, 0.8] }}
-                transition={{ repeat: Infinity, duration: 2.5, ease: "easeOut" }}
-              />
+          {/* 🕹 Title + Subtext */}
+          <motion.h1
+            className="text-5xl font-bold text-green-400 uppercase tracking-[0.3em] drop-shadow-[0_0_15px_rgba(34,197,94,0.8)] mb-3"
+            style={{ fontFamily: "'VCR OSD Mono', monospace" }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          >
+            Joelify
+          </motion.h1>
 
-              {/* Rotating middle ring */}
-              <motion.div
-                className="absolute w-36 h-36 rounded-full border-4 border-transparent bg-gradient-to-r from-transparent via-[#1DB954]/60 to-transparent"
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
-              />
+          {/* Fixed text — no Y movement */}
+          <motion.p
+            className="text-sm text-green-400/80 uppercase tracking-[0.25em] mb-12"
+            style={{ fontFamily: "'VCR OSD Mono', monospace" }}
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{
+              repeat: Infinity,
+              duration: 2.2,
+              ease: "easeInOut",
+            }}
+          >
+            Initializing...
+          </motion.p>
 
-              {/* Pulsing inner ring */}
-              <motion.div
-                className="absolute w-28 h-28 rounded-full border-2 border-[#1DB954]/60 shadow-[0_0_20px_rgba(29,185,84,0.7)]"
-                animate={{ scale: [1, 1.25, 1], opacity: [1, 0.6, 1] }}
-                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-              />
-
-              {/* Logo */}
-              <Image
-                src="/favicon.ico"
-                alt="Joelify Logo"
-                width={96}
-                height={96}
-                className="rounded-full shadow-[0_0_40px_rgba(29,185,84,0.8)]"
-              />
-            </div>
-
-            {/* 🔹 Waveform Visualizer */}
-            <div className="flex items-center gap-1 mb-10">
-              {[...Array(12)].map((_, i) => (
+          {/* Synthwave waveform (fixed space) */}
+          <div className="relative w-full h-16 flex items-end justify-center mb-8 pointer-events-none">
+            <div className="absolute bottom-0 flex items-end gap-1">
+              {[...Array(10)].map((_, i) => (
                 <motion.div
                   key={i}
-                  className="w-1 bg-[#1DB954] rounded-full shadow-[0_0_8px_rgba(29,185,84,0.9)]"
-                  style={{ height: "32px" }}
+                  className="w-2 bg-green-400 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.8)]"
                   animate={{
-                    scaleY: [1, 1.5 + Math.random() * 0.8, 1, 1.8, 1][i % 5],
-                    opacity: [0.5, 1, 0.7, 1, 0.5],
+                    height: [14, 40, 20, 50, 18][i % 5],
+                    opacity: [0.6, 1, 0.8, 1, 0.6],
                   }}
                   transition={{
                     repeat: Infinity,
-                    duration: 0.6 + i * 0.05,
+                    duration: 0.8 + i * 0.1,
                     ease: "easeInOut",
+                    repeatType: "reverse",
                     delay: i * 0.05,
-                    repeatType: "loop",
                   }}
                 />
               ))}
             </div>
-
-            {/* 🔹 App Name */}
-            <motion.h1
-              className="text-4xl font-extrabold tracking-widest text-[#1DB954] drop-shadow-[0_0_12px_rgba(29,185,84,0.8)] mb-3"
-              style={{ fontFamily: "'Orbitron', sans-serif" }}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
-            >
-              Joelify
-            </motion.h1>
-
-            {/* Loading Dots */}
-            <motion.div
-              className="flex gap-2 mt-2"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              {[...Array(3)].map((_, i) => (
-                <motion.span
-                  key={i}
-                  className="text-[#1DB954]/70 text-sm"
-                  animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.2 }}
-                >
-                  •
-                </motion.span>
-              ))}
-            </motion.div>
           </div>
+
+          {/* Floating particles */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {[...Array(15)].map((_, i) => (
+              <motion.span
+                key={i}
+                className="absolute w-1 h-1 bg-green-400/60 rounded-full"
+                animate={{
+                  y: [-10, -300],
+                  x: [0, (Math.random() - 0.5) * 200],
+                  opacity: [1, 0],
+                }}
+                transition={{
+                  duration: 3 + Math.random() * 2,
+                  repeat: Infinity,
+                  delay: i * 0.2,
+                }}
+                style={{
+                  bottom: Math.random() * 100,
+                  left: Math.random() * 100 + "%",
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Import retro synthwave font */}
+          <style jsx global>{`
+            @import url("https://fonts.cdnfonts.com/css/vcr-osd-mono");
+          `}</style>
         </motion.div>
       )}
     </AnimatePresence>
