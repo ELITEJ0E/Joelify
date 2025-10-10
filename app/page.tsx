@@ -16,6 +16,9 @@ export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { volume, setVolume } = useApp()
 
+  // Track mute state separately
+  const [isMuted, setIsMuted] = useState(false)
+
   // Only show homepage *after* loading screen completes
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 3500)
@@ -26,18 +29,33 @@ export default function Home() {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
-      if (e.code === "Space") {
-        e.preventDefault()
-        const playButton = document.querySelector('[aria-label*="Play"], [aria-label*="Pause"]') as HTMLButtonElement
-        playButton?.click()
-      }
-      if (e.code === "ArrowUp") {
-        e.preventDefault()
-        setVolume(Math.min(100, volume + 5))
-      }
-      if (e.code === "ArrowDown") {
-        e.preventDefault()
-        setVolume(Math.max(0, volume - 5))
+      switch (e.code) {
+        case "Space":
+          e.preventDefault()
+          const playButton = document.querySelector(
+            '[aria-label*="Play"], [aria-label*="Pause"]'
+          ) as HTMLButtonElement
+          playButton?.click()
+          break
+
+        case "ArrowUp":
+          e.preventDefault()
+          setVolume(Math.min(100, volume + 5))
+          break
+
+        case "ArrowDown":
+          e.preventDefault()
+          setVolume(Math.max(0, volume - 5))
+          break
+
+        case "KeyM":
+          e.preventDefault()
+          setIsMuted((prev) => {
+            const newMuted = !prev
+            setVolume(newMuted ? 0 : 100)
+            return newMuted
+          })
+          break
       }
     }
 
@@ -46,7 +64,6 @@ export default function Home() {
   }, [volume, setVolume])
 
   if (isLoading) {
-    // Only the loading screen shows at first — no homepage content rendered yet
     return <LoadingScreen />
   }
 

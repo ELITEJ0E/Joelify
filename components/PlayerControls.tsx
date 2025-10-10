@@ -38,12 +38,22 @@ export function PlayerControls() {
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
   
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const playedTracksRef = useRef<Set<string>>(new Set())
   const playHistoryRef = useRef<string[]>([])
   const isSeekingRef = useRef(false)
+  const hasRestoredPositionRef = useRef(false)
   const lastPlayerStateRef = useRef<number>(-1)
-  const currentTrackIdRef = useRef<string | null>(null)
-  const shuffledQueueRef = useRef<any[]>([])
+
+  // Debug effects
+  useEffect(() => {
+    console.log("[Player] Progress update - currentTime:", currentTime, "isPlaying:", isPlaying, "hasRAF:", !!animationFrameRef.current)
+  }, [currentTime, isPlaying])
+
+  useEffect(() => {
+    console.log("[Player State] isPlaying:", isPlaying, "hasRAF:", !!animationFrameRef.current, "currentTime:", currentTime.toFixed(1), "duration:", duration)
+  }, [isPlaying, currentTime, duration])
 
   // Parse duration string to seconds
   function parseDuration(durationStr: string): number {
@@ -56,23 +66,23 @@ export function PlayerControls() {
     return seconds
   }
 
-  // Reset state when track changes
+  // Set initial duration from track when currentTrack changes
   useEffect(() => {
-    if (currentTrack?.id !== currentTrackIdRef.current) {
-      console.log("[Player] Track changed to:", currentTrack?.title)
-      currentTrackIdRef.current = currentTrack?.id || null
+    if (currentTrack) {
+      const parsedDur = parseDuration(currentTrack.duration)
+      setDuration(parsedDur)
       setCurrentTime(0)
       setPlaybackPosition(0)
+      hasRestoredPositionRef.current = false
+      setIsPlaying(false)
+      stopProgressTracking() // Stop any existing tracking
+    } else {
+      setDuration(0)
+      setCurrentTime(0)
+      setPlaybackPosition(0)
+      hasRestoredPositionRef.current = false
       setIsPlaying(false)
       stopProgressTracking()
-      
-      // Reset duration - will be updated when player is ready
-      if (currentTrack) {
-        const parsedDur = parseDuration(currentTrack.duration)
-        setDuration(parsedDur)
-      } else {
-        setDuration(0)
-      }
     }
   }, [currentTrack?.id, setPlaybackPosition])
 
@@ -88,14 +98,36 @@ export function PlayerControls() {
         playerInstance.mute()
       }
     }
+  }
 
-    // Get actual duration from player immediately
-    if (playerInstance && typeof playerInstance.getDuration === "function") {
-      const actualDuration = playerInstance.getDuration()
-      if (actualDuration > 0) {
-        console.log("[Player] Setting initial duration:", actualDuration)
-        setDuration(actualDuration)
+  // Handle initial playback when track changes
+  useEffect(() => {
+    if (player && isReady && currentTrack && !hasRestoredPositionRef.current) {
+      console.log("[Player] New track loaded, ensuring progress tracking")
+      
+      // Small delay to ensure player is ready, then start progress tracking if playing
+      const checkAndStartTracking = () => {
+        if (player && typeof player.getPlayerState === "function") {
+          const playerState = player.getPlayerState()
+          console.log("[Player] Initial player state:", playerState)
+          
+          if (playerState === 1) { // Already playing
+            setIsPlaying(true)
+            startProgressTracking()
+          }
+        }
       }
+      
+      setTimeout(checkAndStartTracking, 500)
+    }
+  }, [player, isReady, currentTrack])
+
+  // Get current time from player
+  const updateCurrentTime = () => {
+    if (player && typeof player.getCurrentTime === "function") {
+      const time = player.getCurrentTime()
+      setCurrentTime(time)
+      setPlaybackPosition(time)
     }
   }
 
@@ -109,17 +141,16 @@ export function PlayerControls() {
       if (
         player &&
         typeof player.getCurrentTime === "function" &&
-        typeof player.getPlayerState === "function" &&
         !isSeekingRef.current
       ) {
         try {
-          const playerState = player.getPlayerState()
           const time = player.getCurrentTime()
+          const playerState = player.getPlayerState?.()
           
-          // Always try to get accurate duration if we don't have it or it's low
-          if (typeof player.getDuration === "function") {
+          // Always try to get duration if we don't have it
+          if ((duration === 0 || duration < 10) && typeof player.getDuration === "function") {
             const dur = player.getDuration()
-            if (dur > 0 && (duration === 0 || Math.abs(dur - duration) > 1)) {
+            if (dur > 0) {
               console.log("[Player] Updating duration from player:", dur)
               setDuration(dur)
             }
@@ -130,11 +161,8 @@ export function PlayerControls() {
             setCurrentTime(time)
             setPlaybackPosition(time)
             
-            // Get current duration for end detection
-            const currentDur = typeof player.getDuration === "function" ? player.getDuration() : duration
-            
             // MANUAL END DETECTION: Check if we're near the end of the video
-            if (currentDur > 0 && time >= currentDur - 0.5) {
+            if (duration > 0 && time >= duration - 0.5) {
               console.log("[Player] Manual end detection triggered")
               setIsPlaying(false)
               stopProgressTracking()
@@ -143,15 +171,10 @@ export function PlayerControls() {
               handleNext()
               return // Stop the animation loop
             }
-            
-            // Continue animation loop
-            animationFrameRef.current = requestAnimationFrame(updateProgress)
-          } else {
-            // Player paused/stopped - stop tracking but don't trigger next
-            if (playerState === 2) {
-              stopProgressTracking()
-            }
           }
+          
+          // Continue animation loop regardless of state
+          animationFrameRef.current = requestAnimationFrame(updateProgress)
         } catch (error) {
           console.error("[Player] Error in progress tracking:", error)
           stopProgressTracking()
@@ -167,6 +190,10 @@ export function PlayerControls() {
       console.log("[Player] Stopping RAF progress tracking")
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current)
+      progressIntervalRef.current = null
     }
   }
 
@@ -188,26 +215,14 @@ export function PlayerControls() {
       case 1: // PLAYING
         console.log("[Player] Video is playing, starting progress tracking")
         setIsPlaying(true)
-        
-        // Ensure we have duration before starting tracking
-        if (player && typeof player.getDuration === "function") {
-          const dur = player.getDuration()
-          if (dur > 0) {
-            setDuration(dur)
-          }
-        }
-        
         startProgressTracking()
         break
         
       case 2: // PAUSED
         console.log("[Player] Video is paused")
         setIsPlaying(false)
-        if (player && typeof player.getCurrentTime === "function") {
-          const time = player.getCurrentTime()
-          setCurrentTime(time)
-          setPlaybackPosition(time)
-        }
+        // Update time one last time
+        updateCurrentTime()
         stopProgressTracking()
         break
         
@@ -222,7 +237,7 @@ export function PlayerControls() {
         
       case 3: // BUFFERING
         console.log("[Player] Video buffering")
-        // Don't change state, continue tracking
+        // Don't change state, RAF will continue
         break
         
       case -1: // UNSTARTED
@@ -232,11 +247,9 @@ export function PlayerControls() {
         break
         
       case 5: // CUED
-        console.log("[Player] Video cued")
         if (player && typeof player.getDuration === "function") {
           const actualDuration = player.getDuration()
           if (actualDuration > 0) {
-            console.log("[Player] Got duration from cued video:", actualDuration)
             setDuration(actualDuration)
           }
         }
@@ -250,6 +263,33 @@ export function PlayerControls() {
     if ([2, 5, 100, 101, 150].includes(event.data)) {
       console.log("[Player] Video unplayable, skipping to next")
       setTimeout(() => handleNext(), 1000)
+    }
+  }
+
+  // Restore playback position when track changes and player is ready
+  useEffect(() => {
+    if (player && isReady && currentTrack && playbackPosition > 0 && !hasRestoredPositionRef.current) {
+      console.log("[Player] Restoring playback position:", playbackPosition)
+      player.seekTo(playbackPosition, true)
+      setCurrentTime(playbackPosition)
+      hasRestoredPositionRef.current = true
+    }
+  }, [player, isReady, currentTrack, playbackPosition])
+
+  // Verify player state function
+  const verifyPlayerState = () => {
+    if (player && typeof player.getPlayerState === "function") {
+      const actualState = player.getPlayerState()
+      console.log("[Player] Verified state:", actualState, "UI state:", isPlaying)
+      
+      if (actualState === 1 && !isPlaying) {
+        console.log("[Player] State mismatch - player is playing but UI shows paused")
+        setIsPlaying(true)
+        startProgressTracking()
+      } else if (actualState !== 1 && isPlaying) {
+        console.log("[Player] State mismatch - player is not playing but UI shows playing")
+        setIsPlaying(false)
+      }
     }
   }
 
@@ -267,63 +307,10 @@ export function PlayerControls() {
     } else {
       player.playVideo()
       console.log("[Player] Play command executed")
-      
-      // Force progress tracking start after a short delay to ensure player state is updated
-      setTimeout(() => {
-        if (player && typeof player.getPlayerState === "function") {
-          const state = player.getPlayerState()
-          if (state === 1 && !animationFrameRef.current) {
-            console.log("[Player] Force starting progress tracking")
-            startProgressTracking()
-          }
-        }
-      }, 300)
+      // Double-check state after play
+      setTimeout(verifyPlayerState, 300)
     }
   }
-
-  // Fisher-Yates shuffle algorithm
-  const shuffleArray = <T,>(array: T[]): T[] => {
-    const shuffled = [...array]
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-    }
-    return shuffled
-  }
-
-  // Handle shuffle toggle - shuffle the queue immediately
-  useEffect(() => {
-    if (shuffle && currentPlaylistId) {
-      const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
-      if (currentPlaylist && currentPlaylist.tracks.length > 1) {
-        console.log("[Player] Shuffle enabled - shuffling queue")
-        
-        // Get all tracks except current one
-        const otherTracks = currentPlaylist.tracks.filter(t => t.id !== currentTrack?.id)
-        
-        // Shuffle them
-        const shuffledTracks = shuffleArray(otherTracks)
-        
-        // Store shuffled queue
-        shuffledQueueRef.current = shuffledTracks
-        
-        // Update actual queue
-        setQueue(shuffledTracks)
-      }
-    } else if (!shuffle && currentPlaylistId) {
-      // Restore original order
-      const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
-      if (currentPlaylist && currentTrack) {
-        console.log("[Player] Shuffle disabled - restoring original order")
-        const currentIndex = currentPlaylist.tracks.findIndex(t => t.id === currentTrack.id)
-        if (currentIndex !== -1) {
-          const remainingTracks = currentPlaylist.tracks.slice(currentIndex + 1)
-          setQueue(remainingTracks)
-          shuffledQueueRef.current = []
-        }
-      }
-    }
-  }, [shuffle])
 
   const handleNext = () => {
     console.log("[Player] handleNext called - repeat:", repeat, "queue length:", queue.length, "currentTrack:", currentTrack?.title)
@@ -334,15 +321,6 @@ export function PlayerControls() {
     }
     stopProgressTracking()
     setIsPlaying(false)
-    
-    // Add current track to history
-    if (currentTrack) {
-      playHistoryRef.current.push(currentTrack.id)
-      // Keep only last 20 tracks in history
-      if (playHistoryRef.current.length > 20) {
-        playHistoryRef.current = playHistoryRef.current.slice(-20)
-      }
-    }
     
     // Repeat one: replay current track
     if (repeat === "one" && currentTrack) {
@@ -366,49 +344,58 @@ export function PlayerControls() {
       setQueue(queue.slice(1))
       setCurrentTime(0)
       setPlaybackPosition(0)
+      if (currentTrack) {
+        playedTracksRef.current.add(currentTrack.id)
+        playHistoryRef.current.push(currentTrack.id)
+      }
       return
     }
 
-    // Repeat all: rebuild queue from playlist
+    // Repeat all: get next track from current playlist
     if (repeat === "all" && currentPlaylistId) {
       const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
       if (currentPlaylist && currentPlaylist.tracks.length > 0) {
-        console.log("[Player] Repeat all - rebuilding queue from playlist")
-        
+        let nextTrack: typeof currentTrack = null
+
         if (shuffle) {
-          // Shuffle all tracks, avoiding the one we just played
-          const availableTracks = currentPlaylist.tracks.filter(t => t.id !== currentTrack?.id)
-          const shuffledTracks = shuffleArray(availableTracks)
-          
-          if (shuffledTracks.length > 0) {
-            const nextTrack = shuffledTracks[0]
-            const newQueue = shuffledTracks.slice(1)
-            
-            setCurrentTrack(nextTrack)
-            setQueue(newQueue)
-            shuffledQueueRef.current = newQueue
-            setCurrentTime(0)
-            setPlaybackPosition(0)
+          // Smart shuffle: avoid recently played tracks
+          const recentlyPlayed = playHistoryRef.current.slice(-Math.min(3, currentPlaylist.tracks.length - 1))
+          const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id))
+
+          if (availableTracks.length === 0) {
+            // All tracks recently played, reset and pick random
+            playHistoryRef.current = []
+            playedTracksRef.current.clear()
+            const randomTracks = [...currentPlaylist.tracks]
+            // Fisher-Yates shuffle
+            for (let i = randomTracks.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [randomTracks[i], randomTracks[j]] = [randomTracks[j], randomTracks[i]]
+            }
+            nextTrack = randomTracks[0]
+          } else {
+            // Pick random from unplayed tracks
+            nextTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]
           }
         } else {
-          // Sequential play - find current index and move to next
+          // Sequential play
           const currentIndex = currentPlaylist.tracks.findIndex((t) => t.id === currentTrack?.id)
           const nextIndex = (currentIndex + 1) % currentPlaylist.tracks.length
-          const nextTrack = currentPlaylist.tracks[nextIndex]
-          
-          // Build new queue from next index
-          const newQueue = [
-            ...currentPlaylist.tracks.slice(nextIndex + 1),
-            ...currentPlaylist.tracks.slice(0, nextIndex)
-          ]
-          
+          nextTrack = currentPlaylist.tracks[nextIndex]
+        }
+
+        if (nextTrack) {
+          console.log("[Player] Playing next from playlist:", nextTrack.title)
           setCurrentTrack(nextTrack)
-          setQueue(newQueue)
           setCurrentTime(0)
           setPlaybackPosition(0)
+          if (currentTrack) {
+            playedTracksRef.current.add(currentTrack.id)
+            playHistoryRef.current.push(currentTrack.id)
+          }
         }
-        return
       }
+      return
     }
 
     // If no repeat and queue is empty, stop playback
@@ -432,7 +419,7 @@ export function PlayerControls() {
     } else {
       // Go to previous track from history
       if (playHistoryRef.current.length > 1) {
-        // Remove current track from history
+        // Remove current track
         playHistoryRef.current.pop()
         const previousTrackId = playHistoryRef.current[playHistoryRef.current.length - 1]
         
@@ -442,15 +429,9 @@ export function PlayerControls() {
           const previousTrack = currentPlaylist?.tracks.find((t) => t.id === previousTrackId)
           
           if (previousTrack) {
-            // Add current track back to beginning of queue
-            if (currentTrack) {
-              setQueue([currentTrack, ...queue])
-            }
             setCurrentTrack(previousTrack)
             setCurrentTime(0)
             setPlaybackPosition(0)
-            // Remove the previous track from history since we're going back to it
-            playHistoryRef.current.pop()
             return
           }
         }
@@ -468,13 +449,13 @@ export function PlayerControls() {
   // Handle seek forward/backward
   const handleSeekForward = () => {
     if (!player || !isReady || !currentTrack) return
-    const newTime = Math.min(duration, currentTime + 10)
+    const newTime = Math.min(duration, currentTime + 5)
     handleSeek([newTime])
   }
 
   const handleSeekBackward = () => {
     if (!player || !isReady || !currentTrack) return
-    const newTime = Math.max(0, currentTime - 10)
+    const newTime = Math.max(0, currentTime - 5)
     handleSeek([newTime])
   }
 
@@ -496,7 +477,7 @@ export function PlayerControls() {
       if (lastPlayerStateRef.current === 1) { // Only restart if was playing
         startProgressTracking()
       }
-    }, 300)
+    }, 500)
   }
 
   // Volume
