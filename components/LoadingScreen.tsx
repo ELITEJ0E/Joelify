@@ -17,7 +17,8 @@ export function LoadingScreen() {
       {isVisible && (
         <motion.div
           className="fixed inset-0 z-[100] bg-gradient-to-b from-[#050505] via-[#0a0a0a] to-[#000000] flex flex-col items-center justify-center overflow-hidden"
-          initial={{ opacity: 1 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
         >
@@ -52,23 +53,25 @@ export function LoadingScreen() {
             />
           </div>
 
-          {/* 🕹 Title + Subtext */}
+          {/* Title */}
           <motion.h1
             className="text-5xl font-bold text-green-400 uppercase tracking-[0.3em] drop-shadow-[0_0_15px_rgba(34,197,94,0.8)] mb-3"
             style={{ fontFamily: "'VCR OSD Mono', monospace" }}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             Joelify
           </motion.h1>
 
-          {/* Fixed text — no Y movement */}
+          {/* Fixed Initializing Text */}
           <motion.p
-            className="text-sm text-green-400/80 uppercase tracking-[0.25em] mb-12"
+            className="text-sm text-green-400/80 uppercase tracking-[0.25em] mb-8"
             style={{ fontFamily: "'VCR OSD Mono', monospace" }}
+            initial={{ opacity: 0 }}
             animate={{ opacity: [0.5, 1, 0.5] }}
             transition={{
+              delay: 0.4,
               repeat: Infinity,
               duration: 2.2,
               ease: "easeInOut",
@@ -77,7 +80,7 @@ export function LoadingScreen() {
             Initializing...
           </motion.p>
 
-          {/* Synthwave waveform (fixed space) */}
+          {/* Synthwave Waveform (fixed position, no push) */}
           <div className="relative w-full h-16 flex items-end justify-center mb-8 pointer-events-none">
             <div className="absolute bottom-0 flex items-end gap-1">
               {[...Array(10)].map((_, i) => (
@@ -100,7 +103,7 @@ export function LoadingScreen() {
             </div>
           </div>
 
-          {/* Floating particles */}
+          {/* Floating Particles */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {[...Array(15)].map((_, i) => (
               <motion.span
@@ -124,7 +127,7 @@ export function LoadingScreen() {
             ))}
           </div>
 
-          {/* Import retro synthwave font */}
+          {/*Retro Font Import */}
           <style jsx global>{`
             @import url("https://fonts.cdnfonts.com/css/vcr-osd-mono");
           `}</style>
