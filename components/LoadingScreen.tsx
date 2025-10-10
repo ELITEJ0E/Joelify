@@ -1,186 +1,127 @@
 "use client"
-
 import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 
-export function LoadingScreen({ children }: { children?: React.ReactNode }) {
+export function LoadingScreen() {
   const [isVisible, setIsVisible] = useState(true)
-  const [isMounted, setIsMounted] = useState(false)
 
   useEffect(() => {
-    const mountTimer = setTimeout(() => setIsMounted(true), 300)
-    const hideTimer = setTimeout(() => setIsVisible(false), 3500)
-    return () => {
-      clearTimeout(mountTimer)
-      clearTimeout(hideTimer)
-    }
+    const timer = setTimeout(() => setIsVisible(false), 3000) // Fade out after 3s
+    return () => clearTimeout(timer)
   }, [])
 
   return (
-    <>
-      <AnimatePresence mode="wait">
-        {isVisible && (
-          <motion.div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black overflow-hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1, ease: "easeInOut" }}
-          >
-            {/* Synthwave Grid Background */}
-            <motion.div
-              className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,136,0.1)_0%,transparent_70%)]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.2, ease: "easeOut" }}
-            >
-              <div className="absolute bottom-0 w-full h-1/2 overflow-hidden [perspective:800px]">
-                <div className="absolute w-full h-full bg-[linear-gradient(to_bottom,transparent_90%,#00ff8899_100%),repeating-linear-gradient(90deg,#00ff5544_0px,#00ff5544_2px,transparent_2px,transparent_40px),repeating-linear-gradient(0deg,#00ff5544_0px,#00ff5544_2px,transparent_2px,transparent_40px)] animate-[gridMove_10s_linear_infinite]" />
-              </div>
-            </motion.div>
-
-            {/* Floating Energy Particles */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {[...Array(20)].map((_, i) => (
-                <motion.span
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          className="fixed inset-0 z-[100] bg-gradient-to-br from-black via-[#0a1a0a] to-[#051505] flex items-center justify-center overflow-hidden"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
+        >
+          {/* Subtle background grid for synthwave depth */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="grid grid-cols-12 grid-rows-12 w-full h-full">
+              {[...Array(144)].map((_, i) => (
+                <motion.div
                   key={i}
-                  className="absolute w-1 h-1 bg-primary rounded-full opacity-60"
+                  className="border border-[#1DB954]/20"
+                  animate={{ opacity: [0.1, 0.3, 0.1] }}
+                  transition={{ repeat: Infinity, duration: 2 + (i % 5), ease: "easeInOut" }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-8 relative z-10">
+            {/* Enhanced Futuristic Loader with Logo */}
+            <div className="relative w-32 h-32 flex items-center justify-center">
+              {/* Outer expanding neon ring with glow */}
+              <motion.div
+                className="absolute w-40 h-40 rounded-full border-4 border-[#1DB954]/40 shadow-[0_0_30px_rgba(29,185,84,0.5)]"
+                animate={{ scale: [1, 1.8, 1], opacity: [0.8, 0, 0.8] }}
+                transition={{ repeat: Infinity, duration: 2.5, ease: "easeOut" }}
+              />
+
+              {/* Middle rotating ring with gradient */}
+              <motion.div
+                className="absolute w-36 h-36 rounded-full border-4 border-transparent bg-gradient-to-r from-transparent via-[#1DB954]/60 to-transparent"
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+              />
+
+              {/* Inner pulsing ring with beat sync */}
+              <motion.div
+                className="absolute w-28 h-28 rounded-full border-2 border-[#1DB954]/60 shadow-[0_0_20px_rgba(29,185,84,0.7)]"
+                animate={{ scale: [1, 1.25, 1], opacity: [1, 0.6, 1] }}
+                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+              />
+
+              {/* Center logo with enhanced glow */}
+              <Image
+                src="/favicon.ico"
+                alt="Joelify Logo"
+                width={96}
+                height={96}
+                className="rounded-full shadow-[0_0_40px_rgba(29,185,84,0.8)]"
+              />
+            </div>
+
+            {/* Music Waveform Visualizer */}
+            <div className="flex items-center gap-1">
+              {[...Array(12)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="w-1 bg-[#1DB954] rounded-full shadow-[0_0_8px_rgba(29,185,84,0.9)]"
+                  style={{ height: '4px' }}
                   animate={{
-                    y: [-20, -200],
-                    x: [0, (Math.random() - 0.5) * 200],
-                    opacity: [1, 0],
+                    height: [4, 32 + Math.random() * 20, 4, 48, 8][i % 5],
+                    opacity: [0.5, 1, 0.7, 1, 0.5],
                   }}
                   transition={{
-                    duration: 3 + Math.random() * 2,
                     repeat: Infinity,
-                    delay: i * 0.2,
-                  }}
-                  style={{
-                    bottom: Math.random() * 100,
-                    left: Math.random() * 100 + "%",
+                    duration: 0.6 + i * 0.05,
+                    ease: "easeInOut",
+                    delay: i * 0.05,
+                    repeatType: "loop",
                   }}
                 />
               ))}
             </div>
 
-            {/* Central Logo + Wave + Rings */}
-            <motion.div
-              className="flex flex-col items-center gap-6"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.8, ease: "easeInOut" }}
+            {/* App Name with Neon Text Effect */}
+            <motion.h1
+              className="text-4xl font-extrabold tracking-widest text-[#1DB954] drop-shadow-[0_0_12px_rgba(29,185,84,0.8)]"
+              style={{ fontFamily: "'Orbitron', sans-serif" }} // Synthwave/music-inspired font
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
             >
-              <div className="relative w-32 h-32 flex items-center justify-center">
-                {/* Soft Subtle Glow (behind logo, using bg-primary) */}
-                <div className="absolute w-32 h-32 rounded-full bg-primary/15 blur-2xl" />
+              Joelify
+            </motion.h1>
 
-                {/* Glowing Pulse Aura */}
-                <div className="absolute w-32 h-32 rounded-full border border-primary/20 animate-[pulseGlow_2s_ease-in-out_infinite]" />
-
-                {/* Outer Expanding Ring */}
-                <div className="absolute w-40 h-40 rounded-full border border-primary/40 animate-[ping_2s_ease-in-out_infinite]" />
-
-                {/* Rotating Neon Halo */}
-                <div className="absolute w-28 h-28 border border-transparent border-t-primary rounded-full animate-[spin_3s_linear_infinite]" />
-
-                {/* Circular Waveform Animation */}
-                {[...Array(32)].map((_, i) => {
-                  const angle = (i / 32) * Math.PI * 2
-                  return (
-                    <motion.div
-                      key={i}
-                      className="absolute bg-primary rounded-full"
-                      style={{
-                        width: "2px",
-                        height: "10px",
-                        transform: `rotate(${(angle * 180) / Math.PI}deg) translateY(-75px)`,
-                        transformOrigin: "center bottom",
-                      }}
-                      animate={{
-                        scaleY: [1, 2, 1],
-                        opacity: [0.6, 1, 0.6],
-                      }}
-                      transition={{
-                        duration: 1.2 + Math.random() * 0.5,
-                        repeat: Infinity,
-                        delay: i * 0.05,
-                        ease: "easeInOut",
-                      }}
-                    />
-                  )
-                })}
-
-                {/* Center Logo */}
-                <motion.div
-                  className="relative z-10"
-                  animate={{ scale: [1, 1.05, 1] }}
-                  transition={{
-                    duration: 1.5,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
+            {/* Loading Dots with Beat Pulse */}
+            <motion.div
+              className="flex gap-2 mt-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              {[...Array(3)].map((_, i) => (
+                <motion.span
+                  key={i}
+                  className="text-[#1DB954]/70 text-sm"
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.2 }}
                 >
-                  <Image
-                    src="/favicon.ico"
-                    alt="Logo"
-                    width={90}
-                    height={90}
-                    className="rounded-full"
-                  />
-                </motion.div>
-              </div>
-
-              {/* Title */}
-              <motion.h1
-                className="text-4xl font-extrabold tracking-widest text-primary drop-shadow-[0_0_10px_var(--tw-shadow-color)] shadow-[#00ff88]"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 1.2, ease: "easeOut" }}
-              >
-                Joelify
-              </motion.h1>
+                  •
+                </motion.span>
+              ))}
             </motion.div>
-
-            {/* Animation keyframes */}
-            <style jsx global>{`
-              @keyframes gridMove {
-                0% {
-                  transform: rotateX(60deg) translateY(0);
-                }
-                100% {
-                  transform: rotateX(60deg) translateY(40px);
-                }
-              }
-
-              @keyframes pulseGlow {
-                0%, 100% {
-                  box-shadow: 0 0 25px #00ff88, 0 0 60px #00ff88;
-                  opacity: 0.6;
-                }
-                50% {
-                  box-shadow: 0 0 50px #00ffaa, 0 0 100px #00ffaa;
-                  opacity: 1;
-                }
-              }
-
-              @keyframes spin {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
-              }
-            `}</style>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Delay mounting the main content */}
-      {isMounted && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}>
-          {children}
+          </div>
         </motion.div>
       )}
-    </>
+    </AnimatePresence>
   )
 }
