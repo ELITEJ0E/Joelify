@@ -5,6 +5,7 @@ import { Play, Clock, TrendingUp, Music2 } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { DiscoverMore } from "./DiscoverMore"
 
 interface HomeViewProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
@@ -245,6 +246,8 @@ export function HomeView({ onNavigate }: HomeViewProps) {
             </div>
           </section>
         )}
+
+        <DiscoverMore />
 
         {playlists.length === 0 && likedSongs.length === 0 && (
           <div className="text-center py-20">
