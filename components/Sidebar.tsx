@@ -352,7 +352,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           </div>
 
           <div className="p-3 border-border">
-            <div className="flex items-center justify-center mb-2 space-x-6">
+            <div className="flex items-center justify-center mb-2 space-x-5">
               <button
                 onClick={handleExportPlaylists}
                 className="flex items-center space-x-5 hover:text-white text-left transition-colors text-sm"
