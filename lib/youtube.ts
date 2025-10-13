@@ -1,9 +1,7 @@
+// YouTube Data API v3 integration
 const YOUTUBE_API_KEYS = process.env.YOUTUBE_API_KEYS?.split(",") || []
+const YOUTUBE_API_KEY = YOUTUBE_API_KEYS[Math.floor(Math.random() * YOUTUBE_API_KEYS.length)]
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
-
-function getRandomKey() {
-  return YOUTUBE_API_KEYS[Math.floor(Math.random() * YOUTUBE_API_KEYS.length)]
-}
 
 export interface YouTubeVideo {
   id: string
@@ -20,24 +18,33 @@ export interface YouTubeSearchResult {
 }
 
 export async function searchYouTube(query: string): Promise<YouTubeSearchResult> {
-  const apiKey = getRandomKey()
+  if (!YOUTUBE_API_KEY) {
+    console.error("[YouTube] API key is not configured.")
+    return { items: [], error: "Server configuration missing API key." }
+  }
+
   try {
-    const searchRes = await fetch(
-      `${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoCategoryId=10&maxResults=20&key=${apiKey}`
+    const searchResponse = await fetch(
+      `${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoCategoryId=10&maxResults=20&key=${YOUTUBE_API_KEY}`,
     )
 
-    if (!searchRes.ok) {
-      if (searchRes.status === 403) return { items: [], error: "API quota exceeded. Try again later." }
+    if (!searchResponse.ok) {
+      if (searchResponse.status === 403) {
+        return { items: [], error: "API quota exceeded. Please try again later." }
+      }
       throw new Error("Search failed")
     }
 
-    const searchData = await searchRes.json()
-    const videoIds = searchData.items.map((i: any) => i.id.videoId).filter(Boolean).join(",")
+    const searchData = await searchResponse.json()
 
+    const videoIds = searchData.items.map((item: any) => item.id.videoId).join(",")
     if (!videoIds) return { items: [] }
 
-    const detailsRes = await fetch(`${YOUTUBE_API_BASE}/videos?part=contentDetails&id=${videoIds}&key=${apiKey}`)
-    const detailsData = await detailsRes.json()
+    const detailsResponse = await fetch(
+      `${YOUTUBE_API_BASE}/videos?part=contentDetails&id=${videoIds}&key=${YOUTUBE_API_KEY}`,
+    )
+
+    const detailsData = await detailsResponse.json()
 
     const videos: YouTubeVideo[] = searchData.items.map((item: any, index: number) => {
       const duration = detailsData.items[index]?.contentDetails?.duration || "PT0S"
@@ -52,9 +59,9 @@ export async function searchYouTube(query: string): Promise<YouTubeSearchResult>
     })
 
     return { items: videos }
-  } catch (err) {
-    console.error("[YouTube] search error:", err)
-    return { items: [], error: "Failed to fetch from YouTube." }
+  } catch (error) {
+    console.error("[YouTube] Search error:", error)
+    return { items: [], error: "Failed to search. Please try again." }
   }
 }
 
@@ -66,7 +73,6 @@ function formatDuration(duration: string): string {
   const minutes = (match[2] || "").replace("M", "")
   const seconds = (match[3] || "").replace("S", "")
 
-  return hours
-    ? `${hours}:${minutes.padStart(2, "0")}:${seconds.padStart(2, "0")}`
-    : `${minutes || "0"}:${seconds.padStart(2, "0")}`
+  if (hours) return `${hours}:${minutes.padStart(2, "0")}:${seconds.padStart(2, "0")}`
+  return `${minutes || "0"}:${seconds.padStart(2, "0")}`
 }
