@@ -1,10 +1,9 @@
 "use client"
 
-import type React from "react"
-import { useState } from "react"
+import React, { useState } from "react"
 import { Search, Plus, ExternalLink, Loader2, Heart, Compass } from "lucide-react"
 import Image from "next/image"
-import { searchYouTube, type YouTubeVideo } from "@/lib/youtube"
+import type { YouTubeVideo } from "@/lib/youtube"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,8 +20,6 @@ const loadingMessages = [
   "Tuning in...",
   "Still buffering... blame the Wi-Fi...",
   "Joelify is currently vibing...",
-  "Still pretending to load to look cool...",
-  "Joel is typing... I mean buffering...",
 ]
 
 export function SearchView() {
@@ -39,7 +36,6 @@ export function SearchView() {
 
     const cacheKey = `searchCache_${query.trim().toLowerCase()}`
     const cached = getCachedData<YouTubeVideo[]>(cacheKey, sessionStorage)
-
     if (cached) {
       console.log(`[v0] Using cached search results for "${query}"`)
       setResults(cached)
@@ -50,37 +46,31 @@ export function SearchView() {
     setError(null)
     setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
 
-    console.log(`[v0] Fetching fresh search results for "${query}"`)
-    const { items, error: searchError } = await searchYouTube(query)
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+      const data = await res.json()
+      setIsLoading(false)
 
-    setIsLoading(false)
-
-    if (searchError) {
-      setError(searchError)
-    } else {
-      setCachedData(cacheKey, items, sessionStorage)
-      setResults(items)
+      if (data.error) {
+        console.error("[v0] API error:", data.error)
+        setError(data.error)
+      } else {
+        setCachedData(cacheKey, data.items, sessionStorage)
+        setResults(data.items)
+      }
+    } catch (err) {
+      console.error("[v0] Fetch failed:", err)
+      setIsLoading(false)
+      setError("Failed to fetch search results.")
     }
   }
 
   const handlePlayNow = (video: YouTubeVideo) => {
-    setCurrentTrack({
-      id: video.id,
-      title: video.title,
-      artist: video.artist,
-      thumbnail: video.thumbnail,
-      duration: video.duration,
-    })
+    setCurrentTrack(video)
   }
 
   const handleAddToQueue = (video: YouTubeVideo) => {
-    addToQueue({
-      id: video.id,
-      title: video.title,
-      artist: video.artist,
-      thumbnail: video.thumbnail,
-      duration: video.duration,
-    })
+    addToQueue(video)
   }
 
   return (
@@ -98,7 +88,6 @@ export function SearchView() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="pl-10 h-12 bg-secondary/50 border-none text-base"
-                aria-label="Search for music"
               />
             </div>
             <Button type="submit" size="lg" disabled={isLoading} className="bg-primary hover:bg-primary/90 h-12">
@@ -124,14 +113,10 @@ export function SearchView() {
         )}
 
         {error && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 md:p-6 mb-6 md:mb-8">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-8">
             <p className="text-destructive font-semibold mb-2">Oops! Something went wrong</p>
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
-            <Button
-              onClick={() => handleSearch({ preventDefault: () => {} } as React.FormEvent)}
-              variant="outline"
-              size="sm"
-            >
+            <Button onClick={(e) => handleSearch(e)} variant="outline" size="sm">
               Try Again
             </Button>
           </div>
@@ -156,158 +141,66 @@ export function SearchView() {
             </div>
           </div>
         )}
-
-        {!isLoading && !error && results.length === 0 && query && (
-          <div className="text-center py-20">
-            <p className="text-lg md:text-xl text-muted-foreground">Looking for "{query}"?</p>
-            <p className="text-sm text-muted-foreground mt-2">Enter to search</p>
-          </div>
-        )}
       </div>
     </div>
   )
 }
 
-interface SearchResultCardProps {
-  video: YouTubeVideo
-  playlists: any[]
-  onPlayNow: (video: YouTubeVideo) => void
-  onAddToQueue: (video: YouTubeVideo) => void
-  onAddToPlaylist: (playlistId: string, track: any) => void
-  onToggleLike: (track: any) => void
-  isLiked: boolean
-}
-
-function SearchResultCard({
-  video,
-  playlists,
-  onPlayNow,
-  onAddToQueue,
-  onAddToPlaylist,
-  onToggleLike,
-  isLiked,
-}: SearchResultCardProps) {
-  const [selectedPlaylist, setSelectedPlaylist] = useState<string>("")
+function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPlaylist, onToggleLike, isLiked }: any) {
+  const [selectedPlaylist, setSelectedPlaylist] = useState("")
   const [showSuccess, setShowSuccess] = useState(false)
 
   const handleAddToPlaylist = () => {
     if (!selectedPlaylist) return
-
-    onAddToPlaylist(selectedPlaylist, {
-      id: video.id,
-      title: video.title,
-      artist: video.artist,
-      thumbnail: video.thumbnail,
-      duration: video.duration,
-    })
-
+    onAddToPlaylist(selectedPlaylist, video)
     setShowSuccess(true)
     setTimeout(() => setShowSuccess(false), 2000)
   }
 
-  const handleToggleLike = () => {
-    onToggleLike({
-      id: video.id,
-      title: video.title,
-      artist: video.artist,
-      thumbnail: video.thumbnail,
-      duration: video.duration,
-    })
-  }
-
   return (
-    <div
-      className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all group"
-      role="article"
-      aria-label={`${video.title} by ${video.artist}`}
-    >
+    <div className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all group">
       <div className="relative mb-4 aspect-video rounded-md overflow-hidden">
-        <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover" />
+        <Image src={video.thumbnail} alt={video.title} fill className="object-cover" />
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <Button
-            size="icon"
-            className="bg-primary hover:bg-primary/90 rounded-full h-12 w-12"
-            onClick={() => onPlayNow(video)}
-            aria-label={`Play ${video.title}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-              <path d="M8 5v14l11-7z" />
-            </svg>
+          <Button size="icon" className="bg-primary hover:bg-primary/90 rounded-full h-12 w-12" onClick={() => onPlayNow(video)}>
+            ▶
           </Button>
         </div>
       </div>
-
-      <div className="mb-3">
-        <h3 className="font-semibold text-sm line-clamp-2 mb-1" title={video.title}>
-          {video.title}
-        </h3>
-        <p className="text-xs text-muted-foreground line-clamp-1" title={video.artist}>
-          {video.artist}
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">{video.duration}</p>
+      <h3 className="font-semibold text-sm line-clamp-2 mb-1">{video.title}</h3>
+      <p className="text-xs text-muted-foreground line-clamp-1">{video.artist}</p>
+      <p className="text-xs text-muted-foreground mt-1">{video.duration}</p>
+      <div className="flex gap-2 mt-3">
+        <Button size="sm" variant="secondary" className="flex-1 text-xs h-8" onClick={() => onAddToQueue(video)}>
+          <Plus size={14} className="mr-1" /> Queue
+        </Button>
+        <Button size="icon" variant="secondary" className={`h-8 w-8 ${isLiked ? "text-primary" : ""}`} onClick={() => onToggleLike(video)}>
+          <Heart size={14} fill={isLiked ? "currentColor" : "none"} />
+        </Button>
+        <Button size="icon" variant="secondary" className="h-8 w-8" asChild>
+          <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noopener noreferrer">
+            <ExternalLink size={14} />
+          </a>
+        </Button>
       </div>
-
-      <div className="flex flex-col gap-2">
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            className="flex-1 text-xs h-8"
-            onClick={() => onAddToQueue(video)}
-            aria-label="Add to queue"
-          >
-            <Plus size={14} className="mr-1" />
-            Queue
-          </Button>
-          <Button
-            size="icon"
-            variant="secondary"
-            className={`h-8 w-8 ${isLiked ? "text-primary" : ""}`}
-            onClick={handleToggleLike}
-            aria-label={isLiked ? "Unlike song" : "Like song"}
-          >
-            <Heart size={14} fill={isLiked ? "currentColor" : "none"} />
-          </Button>
-          <Button size="icon" variant="secondary" className="h-8 w-8" asChild>
-            <a
-              href={`https://www.youtube.com/watch?v=${video.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Open in YouTube"
-            >
-              <ExternalLink size={14} />
-            </a>
-          </Button>
-        </div>
-
-        <div className="flex gap-2">
-          <Select value={selectedPlaylist} onValueChange={setSelectedPlaylist}>
-            <SelectTrigger className="flex-1 h-8 text-xs">
-              <SelectValue placeholder="Add to playlist..." />
-            </SelectTrigger>
-            <SelectContent>
-              {playlists.map((playlist) => (
-                <SelectItem key={playlist.id} value={playlist.id} className="text-xs">
-                  {playlist.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-8 px-3 text-xs"
-            onClick={handleAddToPlaylist}
-            disabled={!selectedPlaylist}
-          >
-            Add
-          </Button>
-        </div>
-
-        {showSuccess && (
-          <p className="text-xs text-primary text-center animate-in fade-in duration-200">Added to playlist!</p>
-        )}
+      <div className="flex gap-2 mt-2">
+        <Select value={selectedPlaylist} onValueChange={setSelectedPlaylist}>
+          <SelectTrigger className="flex-1 h-8 text-xs">
+            <SelectValue placeholder="Add to playlist..." />
+          </SelectTrigger>
+          <SelectContent>
+            {playlists.map((playlist: any) => (
+              <SelectItem key={playlist.id} value={playlist.id} className="text-xs">
+                {playlist.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button size="sm" variant="secondary" className="h-8 px-3 text-xs" onClick={handleAddToPlaylist} disabled={!selectedPlaylist}>
+          Add
+        </Button>
       </div>
+      {showSuccess && <p className="text-xs text-primary text-center animate-in fade-in mt-2">Added to playlist!</p>}
     </div>
   )
 }
