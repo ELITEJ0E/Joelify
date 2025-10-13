@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DiscoverMore } from "./DiscoverMore"
+import { getCachedData, setCachedData } from "@/lib/cache"
 
 const loadingMessages = [
   "Joelifying...",
@@ -36,10 +37,20 @@ export function SearchView() {
     e.preventDefault()
     if (!query.trim()) return
 
+    const cacheKey = `searchCache_${query.trim().toLowerCase()}`
+    const cached = getCachedData<YouTubeVideo[]>(cacheKey, sessionStorage)
+
+    if (cached) {
+      console.log(`[v0] Using cached search results for "${query}"`)
+      setResults(cached)
+      return
+    }
+
     setIsLoading(true)
     setError(null)
     setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
 
+    console.log(`[v0] Fetching fresh search results for "${query}"`)
     const { items, error: searchError } = await searchYouTube(query)
 
     setIsLoading(false)
@@ -47,6 +58,7 @@ export function SearchView() {
     if (searchError) {
       setError(searchError)
     } else {
+      setCachedData(cacheKey, items, sessionStorage)
       setResults(items)
     }
   }
@@ -115,7 +127,11 @@ export function SearchView() {
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 md:p-6 mb-6 md:mb-8">
             <p className="text-destructive font-semibold mb-2">Oops! Something went wrong</p>
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
-            <Button onClick={() => handleSearch({ preventDefault: () => {} } as React.FormEvent)} variant="outline" size="sm">
+            <Button
+              onClick={() => handleSearch({ preventDefault: () => {} } as React.FormEvent)}
+              variant="outline"
+              size="sm"
+            >
               Try Again
             </Button>
           </div>
@@ -162,7 +178,15 @@ interface SearchResultCardProps {
   isLiked: boolean
 }
 
-function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPlaylist, onToggleLike, isLiked }: SearchResultCardProps) {
+function SearchResultCard({
+  video,
+  playlists,
+  onPlayNow,
+  onAddToQueue,
+  onAddToPlaylist,
+  onToggleLike,
+  isLiked,
+}: SearchResultCardProps) {
   const [selectedPlaylist, setSelectedPlaylist] = useState<string>("")
   const [showSuccess, setShowSuccess] = useState(false)
 
@@ -206,12 +230,7 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
             onClick={() => onPlayNow(video)}
             aria-label={`Play ${video.title}`}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="w-6 h-6"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
               <path d="M8 5v14l11-7z" />
             </svg>
           </Button>
@@ -249,12 +268,7 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
           >
             <Heart size={14} fill={isLiked ? "currentColor" : "none"} />
           </Button>
-          <Button
-            size="icon"
-            variant="secondary"
-            className="h-8 w-8"
-            asChild
-          >
+          <Button size="icon" variant="secondary" className="h-8 w-8" asChild>
             <a
               href={`https://www.youtube.com/watch?v=${video.id}`}
               target="_blank"
@@ -291,9 +305,7 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
         </div>
 
         {showSuccess && (
-          <p className="text-xs text-primary text-center animate-in fade-in duration-200">
-            Added to playlist!
-          </p>
+          <p className="text-xs text-primary text-center animate-in fade-in duration-200">Added to playlist!</p>
         )}
       </div>
     </div>

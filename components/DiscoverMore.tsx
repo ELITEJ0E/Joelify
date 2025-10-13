@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useApp } from "@/contexts/AppContext"
-import { Play, Plus } from "lucide-react"
+import { Play, Plus, Clock } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { getCachedData, setCachedData, getCacheAge, formatCacheAge } from "@/lib/cache"
 
 interface DiscoverVideo {
   id: string
@@ -15,17 +16,39 @@ interface DiscoverVideo {
   thumbnail: string
 }
 
+const DISCOVER_CACHE_KEY = "discoverCache"
+
 export function DiscoverMore() {
   const { currentTrack, setCurrentTrack, setQueue, addToQueue, playlists, addTrackToPlaylist } = useApp()
   const [videos, setVideos] = useState<DiscoverVideo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [cacheAge, setCacheAge] = useState<string>("Never")
 
   useEffect(() => {
     fetchRecommendations()
   }, [currentTrack])
 
+  useEffect(() => {
+    const updateCacheAge = () => {
+      const age = getCacheAge(DISCOVER_CACHE_KEY)
+      setCacheAge(formatCacheAge(age))
+    }
+
+    updateCacheAge()
+    const interval = setInterval(updateCacheAge, 60000) // Update every minute
+
+    return () => clearInterval(interval)
+  }, [videos])
+
   const fetchRecommendations = async () => {
+    const cached = getCachedData<DiscoverVideo[]>(DISCOVER_CACHE_KEY)
+    if (cached) {
+      console.log("[v0] Using cached discover data")
+      setVideos(cached)
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -40,6 +63,7 @@ export function DiscoverMore() {
         url = `/api/discover?${params.toString()}`
       }
 
+      console.log("[v0] Fetching fresh discover data from API")
       const response = await fetch(url)
 
       if (!response.ok) {
@@ -48,6 +72,7 @@ export function DiscoverMore() {
       }
 
       const data = await response.json()
+      setCachedData(DISCOVER_CACHE_KEY, data.videos)
       setVideos(data.videos)
     } catch (err: any) {
       console.error("[v0] Discover More error:", err)
@@ -121,6 +146,10 @@ export function DiscoverMore() {
 
   return (
     <section className="mb-12">
+      <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
+        <Clock size={12} />
+        <span>Updated {cacheAge}</span>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
         {videos.map((video) => (
           <Card
