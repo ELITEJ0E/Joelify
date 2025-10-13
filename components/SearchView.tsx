@@ -1,15 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
-import { Search, Plus, ExternalLink, Loader2, Heart } from "lucide-react"
+import { Search, Plus, ExternalLink, Loader2, Heart, Compass } from "lucide-react"
 import Image from "next/image"
 import { searchYouTube, type YouTubeVideo } from "@/lib/youtube"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DiscoverMore } from "./DiscoverMore"
 
 const loadingMessages = [
   "Joelifying...",
@@ -94,6 +94,15 @@ export function SearchView() {
             </Button>
           </div>
         </form>
+
+        {/* Discover More */}
+        <section className="mb-12">
+          <div className="flex items-center gap-2 mb-6">
+            <Compass size={24} className="text-primary" />
+            <h2 className="text-xl md:text-2xl font-bold text-white">Discover More</h2>
+          </div>
+          <DiscoverMore />
+        </section>
 
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-20">

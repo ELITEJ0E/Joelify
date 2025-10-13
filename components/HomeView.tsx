@@ -247,8 +247,6 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           </section>
         )}
 
-        <DiscoverMore />
-
         {playlists.length === 0 && likedSongs.length === 0 && (
           <div className="text-center py-20">
             <Music2 size={64} className="mx-auto mb-4 text-muted-foreground" />

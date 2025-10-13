@@ -352,10 +352,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           </div>
 
           <div className="p-3 border-border">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-center mb-2 space-x-6">
               <button
                 onClick={handleExportPlaylists}
-                className="flex items-center space-x-3 hover:text-white text-left transition-colors text-sm"
+                className="flex items-center space-x-5 hover:text-white text-left transition-colors text-sm"
                 disabled={playlists.length === 0}
               >
                 <Download size={20} />
@@ -364,7 +364,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
               <span className="text-gray-400">|</span>
               <button
                 onClick={handleImportPlaylists}
-                className="flex items-center space-x-3 hover:text-white text-left transition-colors text-sm"
+                className="flex items-center space-x-5 hover:text-white text-left transition-colors text-sm"
               >
                 <Upload size={20} />
                 <span>Import</span>

@@ -91,7 +91,6 @@ export function DiscoverMore() {
   if (loading) {
     return (
       <section className="mb-12">
-        <h2 className="text-xl md:text-2xl font-bold text-green-600 mb-6">Discover More</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => (
             <div key={i} className="bg-card rounded-lg p-4 animate-pulse">
@@ -108,7 +107,6 @@ export function DiscoverMore() {
   if (error) {
     return (
       <section className="mb-12">
-        <h2 className="text-xl md:text-2xl font-bold text-green-600 mb-6">Discover More</h2>
         <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 text-center">
           <p className="text-destructive">{error}</p>
           <Button onClick={fetchRecommendations} variant="outline" className="mt-4 bg-transparent">
@@ -123,7 +121,6 @@ export function DiscoverMore() {
 
   return (
     <section className="mb-12">
-      <h2 className="text-xl md:text-2xl font-bold text-green-600 mb-6">Discover More</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
         {videos.map((video) => (
           <Card
