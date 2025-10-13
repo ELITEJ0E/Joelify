@@ -78,6 +78,7 @@ export function SearchView() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Search</h1>
 
+        {/* Search Bar */}
         <form onSubmit={handleSearch} className="mb-6 md:mb-8">
           <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
             <div className="flex-1 relative">
@@ -96,15 +97,7 @@ export function SearchView() {
           </div>
         </form>
 
-        {/* Discover More */}
-        <section className="mb-12">
-          <div className="flex items-center gap-2 mb-6">
-            <Compass size={24} className="text-primary" />
-            <h2 className="text-xl md:text-2xl font-bold text-white">Discover More</h2>
-          </div>
-          <DiscoverMore />
-        </section>
-
+        {/* Loading State */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="animate-spin text-primary mb-4" size={48} />
@@ -112,6 +105,7 @@ export function SearchView() {
           </div>
         )}
 
+        {/* Error State */}
         {error && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-8">
             <p className="text-destructive font-semibold mb-2">Oops! Something went wrong</p>
@@ -122,8 +116,9 @@ export function SearchView() {
           </div>
         )}
 
+        {/* Results Section */}
         {!isLoading && results.length > 0 && (
-          <div>
+          <div className="mb-12">
             <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">Results</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {results.map((video) => (
@@ -141,11 +136,29 @@ export function SearchView() {
             </div>
           </div>
         )}
+
+        {/* No Results Message */}
+        {!isLoading && !error && results.length === 0 && query && (
+          <div className="text-center py-20">
+            <p className="text-lg md:text-xl text-muted-foreground">Looking for "{query}"?</p>
+            <p className="text-sm text-muted-foreground mt-2">Enter to search</p>
+          </div>
+        )}
+
+        {/* Discover More Section */}
+        <section className="mb-12">
+          <div className="flex items-center gap-2 mb-6">
+            <Compass size={24} className="text-primary" />
+            <h2 className="text-xl md:text-2xl font-bold text-white">Discover More</h2>
+          </div>
+          <DiscoverMore />
+        </section>
       </div>
     </div>
   )
 }
 
+/* ---------------- Search Result Card ---------------- */
 function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPlaylist, onToggleLike, isLiked }: any) {
   const [selectedPlaylist, setSelectedPlaylist] = useState("")
   const [showSuccess, setShowSuccess] = useState(false)
@@ -167,9 +180,11 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
           </Button>
         </div>
       </div>
+
       <h3 className="font-semibold text-sm line-clamp-2 mb-1">{video.title}</h3>
       <p className="text-xs text-muted-foreground line-clamp-1">{video.artist}</p>
       <p className="text-xs text-muted-foreground mt-1">{video.duration}</p>
+
       <div className="flex gap-2 mt-3">
         <Button size="sm" variant="secondary" className="flex-1 text-xs h-8" onClick={() => onAddToQueue(video)}>
           <Plus size={14} className="mr-1" /> Queue
@@ -183,6 +198,7 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
           </a>
         </Button>
       </div>
+
       <div className="flex gap-2 mt-2">
         <Select value={selectedPlaylist} onValueChange={setSelectedPlaylist}>
           <SelectTrigger className="flex-1 h-8 text-xs">
@@ -200,6 +216,7 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
           Add
         </Button>
       </div>
+
       {showSuccess && <p className="text-xs text-primary text-center animate-in fade-in mt-2">Added to playlist!</p>}
     </div>
   )
