@@ -42,18 +42,30 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
           videoId: currentTrack?.id || "",
           playerVars: {
             autoplay: 0,
-            controls: 0, // Hide default YouTube controls
-            disablekb: 1, // Disable keyboard controls
-            fs: 0, // Disable fullscreen button
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
             modestbranding: 1,
-            playsinline: 1,
-            rel: 0, // Prevent related videos
-            iv_load_policy: 3, // Disable annotations
+            playsinline: 1, // Important for iOS
+            rel: 0,
+            iv_load_policy: 3,
+            // Enable background playback on mobile
+            origin: window.location.origin,
+            widget_referrer: window.location.origin,
           },
           events: {
             onReady: (event: any) => {
               console.log("[YouTubePlayer] Player ready")
               isPlayerReadyRef.current = true
+              
+              // Enable background playback features
+              const iframe = event.target.getIframe()
+              if (iframe) {
+                iframe.setAttribute('playsinline', '1')
+                iframe.setAttribute('webkit-playsinline', '1')
+                iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture')
+              }
+              
               onPlayerReady(event.target)
             },
             onStateChange: onStateChange,
@@ -86,14 +98,18 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
     }
   }, [])
 
-  // Load video and restore playback position
+  // Load video when track changes
   useEffect(() => {
     if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id) {
       console.log("[YouTubePlayer] Loading video:", currentTrack.id)
-      playerRef.current.loadVideoById({
-        videoId: currentTrack.id,
-        startSeconds: 0,
-      })
+      
+      // Small delay to ensure player is ready
+      setTimeout(() => {
+        playerRef.current.loadVideoById({
+          videoId: currentTrack.id,
+          startSeconds: 0,
+        })
+      }, 100)
     }
   }, [currentTrack?.id])
 
@@ -102,16 +118,16 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
     const updatePlayerSize = () => {
       if (containerRef.current && videoMode) {
         const container = containerRef.current
-        const maxWidth = 640 // Reduced max width for 360p
-        const maxHeight = 360 // Max height to prevent oversized player
+        const maxWidth = 640
+        const maxHeight = 360
         const aspectRatio = 16 / 9
         const containerWidth = container.parentElement?.clientWidth || window.innerWidth
-        const width = Math.min(containerWidth * 0.9, maxWidth) // Use 90% of parent width or maxWidth
+        const width = Math.min(containerWidth * 0.9, maxWidth)
         const height = Math.min(width / aspectRatio, maxHeight)
         container.style.width = `${width}px`
         container.style.height = `${height}px`
       } else if (containerRef.current) {
-        containerRef.current.style.height = "0px" // Collapse when hidden
+        containerRef.current.style.height = "0px"
       }
     }
 
