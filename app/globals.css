@@ -62,5 +62,23 @@
 
   body {
     @apply bg-background text-foreground;
+    overflow-y: scroll;
+  }
+
+  /* 🧩 Completely hide scrollbar on all browsers */
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html, body {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer and Edge */
   }
 }

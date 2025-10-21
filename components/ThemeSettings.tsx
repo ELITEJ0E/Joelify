@@ -14,17 +14,31 @@ import {
 
 const THEME_PRESETS = [
   { name: "Spotify Green", hsl: "142 76% 36%" },
-  { name: "Apple Red", hsl: "0 85% 60%" },
   { name: "Tidal Blue", hsl: "200 100% 50%" },
-  { name: "Purple", hsl: "270 70% 60%" },
-  { name: "Orange", hsl: "25 95% 53%" },
+  { name: "Apple Red", hsl: "0 85% 60%" },
+  { name: "Aurora Borealis", hsl: "165 80% 55%" },
+  { name: "Royal Amethyst", hsl: "268 68% 60%" },
+  { name: "Sunset Mirage", hsl: "20 95% 55%" },
+  { name: "Emerald Dusk", hsl: "160 65% 40%" },
+  { name: "Sapphire Flame", hsl: "215 90% 55%" },
+  { name: "Crimson Nebula", hsl: "350 78% 60%" },
+  { name: "Golden Hour", hsl: "40 90% 55%" },
+  { name: "Obsidian Rose", hsl: "325 60% 48%" },
+  { name: "Midnight Luxe", hsl: "240 40% 35%" },
+  { name: "Celestial Indigo", hsl: "255 65% 50%" },
+  { name: "Neon Orchid", hsl: "300 80% 60%" },
+  { name: "Ocean Opal", hsl: "185 75% 50%" },
+  { name: "Amber Horizon", hsl: "30 85% 55%" },
+  { name: "Cyber Gold", hsl: "50 95% 50%" },
+  { name: "Mystic Teal", hsl: "170 70% 45%" },
+  { name: "Rose Quartz", hsl: "345 70% 68%" },
+  { name: "Deep Mocha", hsl: "25 25% 40%" },
 ]
 
 export function ThemeSettings() {
   const [currentTheme, setCurrentTheme] = useState(THEME_PRESETS[0].hsl)
 
   useEffect(() => {
-    // Load saved theme from localStorage
     const saved = localStorage.getItem("theme-accent")
     if (saved) {
       setCurrentTheme(saved)
@@ -52,8 +66,19 @@ export function ThemeSettings() {
           <Palette size={18} />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>Theme Color</DropdownMenuLabel>
+
+      <DropdownMenuContent
+        align="end"
+        className="w-56 max-h-64 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none]"
+      >
+        {/* hide scrollbar in WebKit */}
+        <style jsx>{`
+          div::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+
+        <DropdownMenuLabel>Theme</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {THEME_PRESETS.map((preset) => (
           <DropdownMenuItem
@@ -62,11 +87,17 @@ export function ThemeSettings() {
             className="flex items-center gap-2"
           >
             <div
-              className="w-4 h-4 rounded-full border border-border"
-              style={{ backgroundColor: `hsl(${preset.hsl})` }}
+              className="w-5 h-5 rounded-full border border-border"
+              style={{
+                background: `linear-gradient(135deg, 
+                  hsl(${preset.hsl}) 0%, 
+                  hsl(${preset.hsl.split(" ")[0]} ${preset.hsl.split(" ")[1]} 35%) 100%)`,
+              }}
             />
             <span>{preset.name}</span>
-            {currentTheme === preset.hsl && <span className="ml-auto">✓</span>}
+            {currentTheme === preset.hsl && (
+              <span className="ml-auto text-primary">✓</span>
+            )}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
