@@ -44,6 +44,23 @@ html {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Joelify" />
         <meta name="theme-color" content="#000000" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                      console.log('[App] ServiceWorker registered:', registration.scope);
+                    })
+                    .catch(err => {
+                      console.log('[App] ServiceWorker registration failed:', err);
+                    });
+                });
+              }
+            `,
+          }}
+        />
       </head>
       <body>
         <Suspense fallback={null}>

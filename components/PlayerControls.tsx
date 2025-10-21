@@ -37,36 +37,181 @@ export function PlayerControls() {
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
-  
+
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const animationFrameRef = useRef<number | null>(null)
   const playedTracksRef = useRef<Set<string>>(new Set())
   const playHistoryRef = useRef<string[]>([])
   const isSeekingRef = useRef(false)
   const hasRestoredPositionRef = useRef(false)
   const lastPlayerStateRef = useRef<number>(-1)
+  const wakeLockRef = useRef<any>(null)
 
-  // Debug effects
+  const requestWakeLock = async () => {
+    if ("wakeLock" in navigator && isPlaying) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request("screen")
+        console.log("[Player] Wake Lock acquired")
+
+        wakeLockRef.current.addEventListener("release", () => {
+          console.log("[Player] Wake Lock released")
+        })
+      } catch (err: any) {
+        console.log("[Player] Wake Lock not available:", err.message)
+      }
+    }
+  }
+
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release()
+      wakeLockRef.current = null
+    }
+  }
+
   useEffect(() => {
-    console.log("[Player] Progress update - currentTime:", currentTime, "isPlaying:", isPlaying, "hasRAF:", !!animationFrameRef.current)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log("[Player] Page hidden, maintaining playback state")
+      } else {
+        console.log("[Player] Page visible, resuming if needed")
+        if (isPlaying) {
+          requestWakeLock()
+        }
+        if (player && isPlaying && typeof player.getPlayerState === "function") {
+          const state = player.getPlayerState()
+          if (state === 2) {
+            console.log("[Player] Resuming playback after visibility change")
+            player.playVideo()
+          }
+        }
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
+  }, [player, isPlaying])
+
+  const updateMediaSession = useCallback(() => {
+    if ("mediaSession" in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        album: "Joelify",
+        artwork: currentTrack.thumbnail
+          ? [
+              { src: currentTrack.thumbnail, sizes: "96x96", type: "image/jpeg" },
+              { src: currentTrack.thumbnail, sizes: "128x128", type: "image/jpeg" },
+              { src: currentTrack.thumbnail, sizes: "192x192", type: "image/jpeg" },
+              { src: currentTrack.thumbnail, sizes: "256x256", type: "image/jpeg" },
+              { src: currentTrack.thumbnail, sizes: "384x384", type: "image/jpeg" },
+              { src: currentTrack.thumbnail, sizes: "512x512", type: "image/jpeg" },
+            ]
+          : [],
+      })
+
+      navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused"
+
+      if (duration > 0) {
+        navigator.mediaSession.setPositionState({
+          duration: duration,
+          playbackRate: 1.0,
+          position: currentTime,
+        })
+      }
+
+      navigator.mediaSession.setActionHandler("play", () => {
+        console.log("[MediaSession] Play action")
+        if (player) player.playVideo()
+      })
+
+      navigator.mediaSession.setActionHandler("pause", () => {
+        console.log("[MediaSession] Pause action")
+        if (player) player.pauseVideo()
+      })
+
+      navigator.mediaSession.setActionHandler("previoustrack", () => {
+        console.log("[MediaSession] Previous track action")
+        handlePrevious()
+      })
+
+      navigator.mediaSession.setActionHandler("nexttrack", () => {
+        console.log("[MediaSession] Next track action")
+        handleNext()
+      })
+
+      navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+        console.log("[MediaSession] Seek backward action")
+        const seekTime = details.seekOffset || 10
+        handleSeek([Math.max(0, currentTime - seekTime)])
+      })
+
+      navigator.mediaSession.setActionHandler("seekforward", (details) => {
+        console.log("[MediaSession] Seek forward action")
+        const seekTime = details.seekOffset || 10
+        handleSeek([Math.min(duration, currentTime + seekTime)])
+      })
+
+      navigator.mediaSession.setActionHandler("seekto", (details) => {
+        console.log("[MediaSession] Seek to action:", details.seekTime)
+        if (details.seekTime !== undefined) {
+          handleSeek([details.seekTime])
+        }
+      })
+    }
+  }, [currentTrack, isPlaying, currentTime, duration, player])
+
+  useEffect(() => {
+    updateMediaSession()
+  }, [updateMediaSession])
+
+  function parseDuration(durationStr: string): number {
+    if (!durationStr) return 0
+
+    if (durationStr.startsWith("PT")) {
+      let seconds = 0
+      const hoursMatch = durationStr.match(/(\d+)H/)
+      const minutesMatch = durationStr.match(/(\d+)M/)
+      const secondsMatch = durationStr.match(/(\d+)S/)
+
+      if (hoursMatch) seconds += Number.parseInt(hoursMatch[1]) * 3600
+      if (minutesMatch) seconds += Number.parseInt(minutesMatch[1]) * 60
+      if (secondsMatch) seconds += Number.parseInt(secondsMatch[1])
+
+      return seconds
+    }
+
+    const parts = durationStr.split(":").map(Number).reverse()
+    let totalSeconds = 0
+    if (parts[0] !== undefined) totalSeconds += parts[0]
+    if (parts[1] !== undefined) totalSeconds += parts[1] * 60
+    if (parts[2] !== undefined) totalSeconds += parts[2] * 3600
+    return totalSeconds
+  }
+
+  useEffect(() => {
+    console.log(
+      "[Player] Progress update - currentTime:",
+      currentTime,
+      "isPlaying:",
+      isPlaying,
+      "hasRAF:",
+      !!progressIntervalRef.current,
+    )
   }, [currentTime, isPlaying])
 
   useEffect(() => {
-    console.log("[Player State] isPlaying:", isPlaying, "hasRAF:", !!animationFrameRef.current, "currentTime:", currentTime.toFixed(1), "duration:", duration)
+    console.log(
+      "[Player State] isPlaying:",
+      isPlaying,
+      "hasRAF:",
+      !!progressIntervalRef.current,
+      "currentTime:",
+      currentTime.toFixed(1),
+      "duration:",
+      duration,
+    )
   }, [isPlaying, currentTime, duration])
 
-  // Parse duration string to seconds
-  function parseDuration(durationStr: string): number {
-    if (!durationStr) return 0
-    const parts = durationStr.split(":").map(Number).reverse()
-    let seconds = 0
-    if (parts[0] !== undefined) seconds += parts[0]
-    if (parts[1] !== undefined) seconds += parts[1] * 60
-    if (parts[2] !== undefined) seconds += parts[2] * 3600
-    return seconds
-  }
-
-  // Set initial duration from track when currentTrack changes
   useEffect(() => {
     if (currentTrack) {
       const parsedDur = parseDuration(currentTrack.duration)
@@ -75,7 +220,7 @@ export function PlayerControls() {
       setPlaybackPosition(0)
       hasRestoredPositionRef.current = false
       setIsPlaying(false)
-      stopProgressTracking() // Stop any existing tracking
+      stopProgressTracking()
     } else {
       setDuration(0)
       setCurrentTime(0)
@@ -84,14 +229,13 @@ export function PlayerControls() {
       setIsPlaying(false)
       stopProgressTracking()
     }
-  }, [currentTrack?.id, setPlaybackPosition])
+  }, [currentTrack, setPlaybackPosition])
 
-  // Handle player ready
   const handlePlayerReady = (playerInstance: any) => {
     console.log("[Player] Player instance ready")
     setPlayer(playerInstance)
     setIsReady(true)
-    
+
     if (playerInstance && typeof playerInstance.setVolume === "function") {
       playerInstance.setVolume(volume)
       if (isMuted) {
@@ -100,54 +244,37 @@ export function PlayerControls() {
     }
   }
 
-  // Handle initial playback when track changes
   useEffect(() => {
     if (player && isReady && currentTrack && !hasRestoredPositionRef.current) {
       console.log("[Player] New track loaded, ensuring progress tracking")
-      
-      // Small delay to ensure player is ready, then start progress tracking if playing
+
       const checkAndStartTracking = () => {
         if (player && typeof player.getPlayerState === "function") {
           const playerState = player.getPlayerState()
           console.log("[Player] Initial player state:", playerState)
-          
-          if (playerState === 1) { // Already playing
+
+          if (playerState === 1) {
             setIsPlaying(true)
             startProgressTracking()
           }
         }
       }
-      
+
       setTimeout(checkAndStartTracking, 500)
     }
   }, [player, isReady, currentTrack])
 
-  // Get current time from player
-  const updateCurrentTime = () => {
-    if (player && typeof player.getCurrentTime === "function") {
-      const time = player.getCurrentTime()
-      setCurrentTime(time)
-      setPlaybackPosition(time)
-    }
-  }
-
-  // RequestAnimationFrame based progress tracking
   const startProgressTracking = () => {
-    stopProgressTracking() // Clear any existing tracking
-    
-    console.log("[Player] Starting RAF progress tracking")
-    
-    const updateProgress = () => {
-      if (
-        player &&
-        typeof player.getCurrentTime === "function" &&
-        !isSeekingRef.current
-      ) {
+    stopProgressTracking()
+
+    console.log("[Player] Starting setInterval progress tracking (250ms)")
+
+    progressIntervalRef.current = setInterval(() => {
+      if (player && typeof player.getCurrentTime === "function" && !isSeekingRef.current) {
         try {
           const time = player.getCurrentTime()
           const playerState = player.getPlayerState?.()
-          
-          // Always try to get duration if we don't have it
+
           if ((duration === 0 || duration < 10) && typeof player.getDuration === "function") {
             const dur = player.getDuration()
             if (dur > 0) {
@@ -155,60 +282,60 @@ export function PlayerControls() {
               setDuration(dur)
             }
           }
-          
-          // Only update time if player is actually playing (state 1)
+
           if (playerState === 1) {
             setCurrentTime(time)
             setPlaybackPosition(time)
-            
-            // MANUAL END DETECTION: Check if we're near the end of the video
-            if (duration > 0 && time >= duration - 0.5) {
-              console.log("[Player] Manual end detection triggered")
-              setIsPlaying(false)
-              stopProgressTracking()
-              setCurrentTime(0)
-              setPlaybackPosition(0)
-              handleNext()
-              return // Stop the animation loop
+
+            if ("mediaSession" in navigator && duration > 0) {
+              try {
+                navigator.mediaSession.setPositionState({
+                  duration: duration,
+                  playbackRate: 1.0,
+                  position: time,
+                })
+              } catch (e) {
+                // Ignore position state errors
+              }
             }
           }
-          
-          // Continue animation loop regardless of state
-          animationFrameRef.current = requestAnimationFrame(updateProgress)
         } catch (error) {
           console.error("[Player] Error in progress tracking:", error)
           stopProgressTracking()
         }
       }
-    }
-    
-    animationFrameRef.current = requestAnimationFrame(updateProgress)
+    }, 250)
   }
 
   const stopProgressTracking = () => {
-    if (animationFrameRef.current) {
-      console.log("[Player] Stopping RAF progress tracking")
-      cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = null
-    }
     if (progressIntervalRef.current) {
+      console.log("[Player] Stopping setInterval progress tracking")
       clearInterval(progressIntervalRef.current)
       progressIntervalRef.current = null
     }
   }
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopProgressTracking()
+      releaseWakeLock()
+
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.setActionHandler("play", null)
+        navigator.mediaSession.setActionHandler("pause", null)
+        navigator.mediaSession.setActionHandler("previoustrack", null)
+        navigator.mediaSession.setActionHandler("nexttrack", null)
+        navigator.mediaSession.setActionHandler("seekbackward", null)
+        navigator.mediaSession.setActionHandler("seekforward", null)
+        navigator.mediaSession.setActionHandler("seekto", null)
+      }
     }
   }, [])
 
-  // Handle player state changes
   const handleStateChange = (event: any) => {
     const playerState = event.data
     console.log("[Player] State changed:", playerState, "currentTime:", currentTime)
-    
+
     lastPlayerStateRef.current = playerState
 
     switch (playerState) {
@@ -216,36 +343,41 @@ export function PlayerControls() {
         console.log("[Player] Video is playing, starting progress tracking")
         setIsPlaying(true)
         startProgressTracking()
+        requestWakeLock()
         break
-        
+
       case 2: // PAUSED
         console.log("[Player] Video is paused")
         setIsPlaying(false)
-        // Update time one last time
-        updateCurrentTime()
+        if (player && typeof player.getCurrentTime === "function") {
+          setCurrentTime(player.getCurrentTime())
+          setPlaybackPosition(player.getCurrentTime())
+        }
         stopProgressTracking()
+        releaseWakeLock()
         break
-        
+
       case 0: // ENDED
         console.log("[Player] Video ended via YouTube API")
         setIsPlaying(false)
         stopProgressTracking()
+        releaseWakeLock()
         setCurrentTime(0)
         setPlaybackPosition(0)
         setTimeout(() => handleNext(), 100)
         break
-        
+
       case 3: // BUFFERING
         console.log("[Player] Video buffering")
-        // Don't change state, RAF will continue
         break
-        
+
       case -1: // UNSTARTED
         console.log("[Player] Video unstarted")
         setIsPlaying(false)
         stopProgressTracking()
+        releaseWakeLock()
         break
-        
+
       case 5: // CUED
         if (player && typeof player.getDuration === "function") {
           const actualDuration = player.getDuration()
@@ -257,7 +389,6 @@ export function PlayerControls() {
     }
   }
 
-  // Handle YouTube errors
   const handleError = (event: any) => {
     console.error("[Player] YouTube Error:", event.data)
     if ([2, 5, 100, 101, 150].includes(event.data)) {
@@ -266,7 +397,6 @@ export function PlayerControls() {
     }
   }
 
-  // Restore playback position when track changes and player is ready
   useEffect(() => {
     if (player && isReady && currentTrack && playbackPosition > 0 && !hasRestoredPositionRef.current) {
       console.log("[Player] Restoring playback position:", playbackPosition)
@@ -276,12 +406,11 @@ export function PlayerControls() {
     }
   }, [player, isReady, currentTrack, playbackPosition])
 
-  // Verify player state function
   const verifyPlayerState = () => {
     if (player && typeof player.getPlayerState === "function") {
       const actualState = player.getPlayerState()
       console.log("[Player] Verified state:", actualState, "UI state:", isPlaying)
-      
+
       if (actualState === 1 && !isPlaying) {
         console.log("[Player] State mismatch - player is playing but UI shows paused")
         setIsPlaying(true)
@@ -293,7 +422,6 @@ export function PlayerControls() {
     }
   }
 
-  // Play/Pause
   const handlePlayPause = () => {
     if (!player || !currentTrack || !isReady) {
       console.log("[Player] Cannot play/pause - player:", !!player, "track:", !!currentTrack, "ready:", isReady)
@@ -301,28 +429,32 @@ export function PlayerControls() {
     }
 
     console.log("[Player] Play/Pause clicked - currently playing:", isPlaying)
-    
+
     if (isPlaying) {
       player.pauseVideo()
     } else {
       player.playVideo()
       console.log("[Player] Play command executed")
-      // Double-check state after play
       setTimeout(verifyPlayerState, 300)
     }
   }
 
   const handleNext = () => {
-    console.log("[Player] handleNext called - repeat:", repeat, "queue length:", queue.length, "currentTrack:", currentTrack?.title)
-    
-    // Stop any current playback first
+    console.log(
+      "[Player] handleNext called - repeat:",
+      repeat,
+      "queue length:",
+      queue.length,
+      "currentTrack:",
+      currentTrack?.title,
+    )
+
     if (player) {
       player.pauseVideo()
     }
     stopProgressTracking()
     setIsPlaying(false)
-    
-    // Repeat one: replay current track
+
     if (repeat === "one" && currentTrack) {
       console.log("[Player] Repeat one - replaying current track")
       if (player) {
@@ -336,7 +468,6 @@ export function PlayerControls() {
       return
     }
 
-    // If queue has tracks, play next from queue
     if (queue.length > 0) {
       const nextTrack = queue[0]
       console.log("[Player] Playing next from queue:", nextTrack.title)
@@ -351,34 +482,28 @@ export function PlayerControls() {
       return
     }
 
-    // Repeat all: get next track from current playlist
     if (repeat === "all" && currentPlaylistId) {
       const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
       if (currentPlaylist && currentPlaylist.tracks.length > 0) {
         let nextTrack: typeof currentTrack = null
 
         if (shuffle) {
-          // Smart shuffle: avoid recently played tracks
           const recentlyPlayed = playHistoryRef.current.slice(-Math.min(3, currentPlaylist.tracks.length - 1))
           const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id))
 
           if (availableTracks.length === 0) {
-            // All tracks recently played, reset and pick random
             playHistoryRef.current = []
             playedTracksRef.current.clear()
             const randomTracks = [...currentPlaylist.tracks]
-            // Fisher-Yates shuffle
             for (let i = randomTracks.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [randomTracks[i], randomTracks[j]] = [randomTracks[j], randomTracks[i]]
+              const j = Math.floor(Math.random() * (i + 1))
+              ;[randomTracks[i], randomTracks[j]] = [randomTracks[j], randomTracks[i]]
             }
             nextTrack = randomTracks[0]
           } else {
-            // Pick random from unplayed tracks
             nextTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]
           }
         } else {
-          // Sequential play
           const currentIndex = currentPlaylist.tracks.findIndex((t) => t.id === currentTrack?.id)
           const nextIndex = (currentIndex + 1) % currentPlaylist.tracks.length
           nextTrack = currentPlaylist.tracks[nextIndex]
@@ -398,7 +523,6 @@ export function PlayerControls() {
       return
     }
 
-    // If no repeat and queue is empty, stop playback
     console.log("[Player] End of playback, stopping")
     setIsPlaying(false)
     setCurrentTime(0)
@@ -410,24 +534,20 @@ export function PlayerControls() {
 
   const handlePrevious = () => {
     if (currentTime > 3) {
-      // If more than 3 seconds in, restart current track
       if (player) {
         player.seekTo(0, true)
         setCurrentTime(0)
         setPlaybackPosition(0)
       }
     } else {
-      // Go to previous track from history
       if (playHistoryRef.current.length > 1) {
-        // Remove current track
         playHistoryRef.current.pop()
         const previousTrackId = playHistoryRef.current[playHistoryRef.current.length - 1]
-        
-        // Find track in current playlist
+
         if (currentPlaylistId) {
           const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
           const previousTrack = currentPlaylist?.tracks.find((t) => t.id === previousTrackId)
-          
+
           if (previousTrack) {
             setCurrentTrack(previousTrack)
             setCurrentTime(0)
@@ -436,8 +556,7 @@ export function PlayerControls() {
           }
         }
       }
-      
-      // Fallback: restart current track
+
       if (player) {
         player.seekTo(0, true)
         setCurrentTime(0)
@@ -446,7 +565,6 @@ export function PlayerControls() {
     }
   }
 
-  // Handle seek forward/backward
   const handleSeekForward = () => {
     if (!player || !isReady || !currentTrack) return
     const newTime = Math.min(duration, currentTime + 5)
@@ -461,26 +579,24 @@ export function PlayerControls() {
 
   const handleSeek = (value: number[]) => {
     if (!player || !isReady) return
-    
+
     const newTime = value[0]
     isSeekingRef.current = true
     stopProgressTracking()
-    
+
     console.log("[Player] Seeking to:", newTime)
     player.seekTo(newTime, true)
     setCurrentTime(newTime)
     setPlaybackPosition(newTime)
-    
-    // Restart progress tracking after a short delay
+
     setTimeout(() => {
       isSeekingRef.current = false
-      if (lastPlayerStateRef.current === 1) { // Only restart if was playing
+      if (lastPlayerStateRef.current === 1) {
         startProgressTracking()
       }
     }, 500)
   }
 
-  // Volume
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0]
     setVolume(newVolume)
@@ -507,7 +623,6 @@ export function PlayerControls() {
     }
   }
 
-  // Format time
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return "0:00"
     const mins = Math.floor(seconds / 60)
@@ -515,33 +630,36 @@ export function PlayerControls() {
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Get repeat button label
   const getRepeatLabel = () => {
     if (repeat === "one") return "Repeat One"
     if (repeat === "all") return "Repeat All"
     return "Repeat Off"
   }
 
-  // COMPREHENSIVE KEYBOARD HANDLER - ADD THIS
+  const handlePlayPauseCallback = useCallback(handlePlayPause, [player, isReady, currentTrack])
+  const handleVolumeChangeCallback = useCallback(handleVolumeChange, [player, isReady, currentTrack])
+  const toggleMuteCallback = useCallback(toggleMute, [player, isReady, currentTrack])
+  const handleSeekForwardCallback = useCallback(handleSeekForward, [player, isReady, currentTrack])
+  const handleSeekBackwardCallback = useCallback(handleSeekBackward, [player, isReady, currentTrack])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in inputs or textareas
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
       switch (e.code) {
         case "Space":
           e.preventDefault()
-          handlePlayPause()
+          handlePlayPauseCallback()
           break
 
         case "ArrowUp":
           e.preventDefault()
-          handleVolumeChange([Math.min(100, volume + 10)])
+          handleVolumeChangeCallback([Math.min(100, volume + 10)])
           break
 
         case "ArrowDown":
           e.preventDefault()
-          handleVolumeChange([Math.max(0, volume - 10)])
+          handleVolumeChangeCallback([Math.max(0, volume - 10)])
           break
 
         case "KeyV":
@@ -551,39 +669,31 @@ export function PlayerControls() {
 
         case "KeyM":
           e.preventDefault()
-          toggleMute()
+          toggleMuteCallback()
           break
 
         case "ArrowRight":
           e.preventDefault()
-          handleSeekForward()
+          handleSeekForwardCallback()
           break
 
         case "ArrowLeft":
           e.preventDefault()
-          handleSeekBackward()
+          handleSeekBackwardCallback()
           break
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [player, isReady, currentTrack, volume, isPlaying, handlePlayPause, handleVolumeChange,toggleVideoMode, toggleMute, handleSeekForward, handleSeekBackward])
-
-  // Remove the existing keyboard handler for seek only (lines 446-458 in original)
-  // Since we now have the comprehensive handler above
+  }, [player, isReady, currentTrack, volume, isPlaying])
 
   return (
     <>
-      <YouTubePlayer 
-        onPlayerReady={handlePlayerReady} 
-        onStateChange={handleStateChange}
-        onError={handleError}
-      />
+      <YouTubePlayer onPlayerReady={handlePlayerReady} onStateChange={handleStateChange} onError={handleError} />
 
       <div className="bg-black text-white p-3 md:p-4 border-border">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
-          {/* Current track info - Desktop */}
           <div className="hidden md:flex items-center gap-4 flex-1 min-w-0">
             {currentTrack ? (
               <>
@@ -618,40 +728,33 @@ export function PlayerControls() {
             )}
           </div>
 
-          {/* Playback controls */}
           <div className="flex flex-col items-center w-full md:flex-1 md:max-w-2xl">
-            {/* Mobile layout - Track info and controls in one row */}
             <div className="md:hidden w-full flex items-center justify-between mb-3">
-              {/* Track info on the left */}
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                {currentTrack ? (
-                  <>
-                    {currentTrack.thumbnail ? (
-                      <Image
-                        src={currentTrack.thumbnail || "/placeholder.svg"}
-                        width={48}
-                        height={48}
-                        alt={currentTrack.title || "Track thumbnail"}
-                        className="w-12 h-12 rounded object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 bg-secondary rounded flex items-center justify-center flex-shrink-0">
-                        <span className="text-xl text-muted-foreground">♪</span>
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
-                      <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
+              {currentTrack ? (
+                <>
+                  {currentTrack.thumbnail ? (
+                    <Image
+                      src={currentTrack.thumbnail || "/placeholder.svg"}
+                      width={48}
+                      height={48}
+                      alt={currentTrack.title || "Track thumbnail"}
+                      className="w-12 h-12 rounded object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-secondary rounded flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl text-muted-foreground">♪</span>
                     </div>
-                  </>
-                ) : (
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground">No track playing</p>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
+                    <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
                   </div>
-                )}
-              </div>
-
-              {/* QueueSheet button on the right */}
+                </>
+              ) : (
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground">No track playing</p>
+                </div>
+              )}
               <Sheet>
                 <SheetTrigger asChild>
                   <Button
@@ -679,11 +782,8 @@ export function PlayerControls() {
               </Sheet>
             </div>
 
-            {/* Progress bar - Below track info for mobile */}
             <div className="flex items-center gap-2 w-full mb-3 md:mb-0 md:order-2">
-              <span className="text-xs text-gray-400 w-10 text-right">
-                {formatTime(currentTime)}
-              </span>
+              <span className="text-xs text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
               <div className="flex-1">
                 <Slider
                   value={[currentTime]}
@@ -695,16 +795,12 @@ export function PlayerControls() {
                   key={`slider-${currentTrack?.id}-${Math.floor(currentTime)}`}
                 />
               </div>
-              <span className="text-xs text-gray-400 w-10">
-                {formatTime(duration)}
-              </span>
+              <span className="text-xs text-gray-400 w-10">{formatTime(duration)}</span>
             </div>
 
-            {/* Main player controls */}
             <TooltipProvider>
               <div className="flex flex-col items-center justify-center w-full mb-4 md:mb-0">
                 <div className="flex items-center justify-center w-full gap-3 md:gap-4 mb-2">
-                  {/* Shuffle button */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -723,7 +819,6 @@ export function PlayerControls() {
                     </TooltipContent>
                   </Tooltip>
 
-                  {/* Previous button */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -742,21 +837,16 @@ export function PlayerControls() {
                     </TooltipContent>
                   </Tooltip>
 
-                  {/* Play/Pause button */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
                         size="icon"
                         className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 transition disabled:opacity-50"
-                        onClick={handlePlayPause}
+                        onClick={handlePlayPauseCallback}
                         disabled={!currentTrack || !isReady}
                         aria-label={isPlaying ? "Pause" : "Play"}
                       >
-                        {isPlaying ? (
-                          <Pause fill="currentColor" size={24} />
-                        ) : (
-                          <Play fill="currentColor" size={24} />
-                        )}
+                        {isPlaying ? <Pause fill="currentColor" size={24} /> : <Play fill="currentColor" size={24} />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -764,7 +854,6 @@ export function PlayerControls() {
                     </TooltipContent>
                   </Tooltip>
 
-                  {/* Next button */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -783,7 +872,6 @@ export function PlayerControls() {
                     </TooltipContent>
                   </Tooltip>
 
-                  {/* Repeat button */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -795,9 +883,7 @@ export function PlayerControls() {
                         aria-label={`Repeat: ${repeat}`}
                       >
                         <Repeat size={20} />
-                        {repeat === "one" && (
-                          <span className="absolute text-[10px] font-bold">1</span>
-                        )}
+                        {repeat === "one" && <span className="absolute text-[10px] font-bold">1</span>}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -805,7 +891,6 @@ export function PlayerControls() {
                     </TooltipContent>
                   </Tooltip>
 
-                  {/* Video button */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -826,10 +911,8 @@ export function PlayerControls() {
                 </div>
               </div>
             </TooltipProvider>
-
           </div>
 
-          {/* Desktop Volume and queue */}
           <div className="hidden md:flex items-center mb-6 gap-4 flex-1 justify-end">
             <Sheet>
               <SheetTrigger asChild>
@@ -863,7 +946,7 @@ export function PlayerControls() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={toggleMute}
+                    onClick={toggleMuteCallback}
                     className="text-gray-400 hover:text-white"
                     aria-label={isMuted ? "Unmute" : "Mute"}
                   >
@@ -876,7 +959,13 @@ export function PlayerControls() {
               </Tooltip>
             </TooltipProvider>
             <div className="w-24">
-              <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} aria-label="Volume" />
+              <Slider
+                value={[volume]}
+                max={100}
+                step={1}
+                onValueChange={handleVolumeChangeCallback}
+                aria-label="Volume"
+              />
             </div>
           </div>
         </div>

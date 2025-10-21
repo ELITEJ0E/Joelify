@@ -42,13 +42,15 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
           videoId: currentTrack?.id || "",
           playerVars: {
             autoplay: 0,
-            controls: 0, // Hide default YouTube controls
-            disablekb: 1, // Disable keyboard controls
-            fs: 0, // Disable fullscreen button
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
             modestbranding: 1,
             playsinline: 1,
-            rel: 0, // Prevent related videos
-            iv_load_policy: 3, // Disable annotations
+            rel: 0,
+            iv_load_policy: 3,
+            enablejsapi: 1,
+            origin: typeof window !== "undefined" ? window.location.origin : "",
           },
           events: {
             onReady: (event: any) => {
@@ -66,7 +68,6 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
       }
     }
 
-    // Initialize API and player
     loadYouTubeAPI()
     if (window.YT && window.YT.Player) {
       initPlayer()
@@ -74,7 +75,6 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
       window.onYouTubeIframeAPIReady = initPlayer
     }
 
-    // Cleanup on unmount
     return () => {
       if (playerRef.current && typeof playerRef.current.destroy === "function") {
         console.log("[YouTubePlayer] Destroying player")
@@ -86,7 +86,6 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
     }
   }, [])
 
-  // Load video and restore playback position
   useEffect(() => {
     if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id) {
       console.log("[YouTubePlayer] Loading video:", currentTrack.id)
@@ -97,21 +96,23 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
     }
   }, [currentTrack?.id])
 
-  // Handle responsive sizing
   useEffect(() => {
     const updatePlayerSize = () => {
       if (containerRef.current && videoMode) {
         const container = containerRef.current
-        const maxWidth = 640 // Reduced max width for 360p
-        const maxHeight = 360 // Max height to prevent oversized player
+        const maxWidth = 640
+        const maxHeight = 360
         const aspectRatio = 16 / 9
         const containerWidth = container.parentElement?.clientWidth || window.innerWidth
-        const width = Math.min(containerWidth * 0.9, maxWidth) // Use 90% of parent width or maxWidth
+        const width = Math.min(containerWidth * 0.9, maxWidth)
         const height = Math.min(width / aspectRatio, maxHeight)
         container.style.width = `${width}px`
         container.style.height = `${height}px`
       } else if (containerRef.current) {
-        containerRef.current.style.height = "0px" // Collapse when hidden
+        containerRef.current.style.height = "1px"
+        containerRef.current.style.width = "1px"
+        containerRef.current.style.opacity = "0"
+        containerRef.current.style.pointerEvents = "none"
       }
     }
 
@@ -127,15 +128,11 @@ export function YouTubePlayer({ onPlayerReady, onStateChange, onError }: YouTube
     <div
       ref={containerRef}
       className={`${
-        videoMode ? "flex justify-center items-center bg-black p-2 w-full" : "hidden"
+        videoMode ? "flex justify-center items-center bg-black p-2 w-full" : "fixed -z-10"
       } relative overflow-hidden`}
       style={{ maxWidth: "640px", maxHeight: "360px", margin: "0 auto" }}
     >
-      <div
-        id="youtube-player"
-        className="w-full h-full"
-        style={{ aspectRatio: "16/9" }}
-      ></div>
+      <div id="youtube-player" className="w-full h-full" style={{ aspectRatio: "16/9" }}></div>
     </div>
   )
 }
