@@ -26,8 +26,12 @@ export interface AppState {
   volume: number
   shuffle: boolean
   repeat: "off" | "all" | "one"
-  theme:  "dark" | "light"
+  theme: "dark" | "light"
   videoMode: boolean
+  customTheme?: {
+    primary: string
+    accent: string
+  }
 }
 
 const STORAGE_KEY = "spotify-youtube-app-state"

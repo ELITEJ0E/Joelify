@@ -30,6 +30,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ThemeSettings } from "./ThemeSettings"
 
 interface SidebarProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
@@ -165,6 +166,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
             <div className="flex items-center justify-between mb-2">
               <h1 className="text-2xl font-bold text-primary">Joelify</h1>
               <div className="flex items-center gap-2">
+                <ThemeSettings />
                 <Button
                   size="icon"
                   variant="ghost"
@@ -191,7 +193,9 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   <button
                     onClick={() => handleNavigate("home")}
                     className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
-                      activeView === "home" ? "bg-primary/10 text-primary border-l-4 border-primary" : "hover:text-white"
+                      activeView === "home"
+                        ? "bg-primary/10 text-primary border-l-4 border-primary"
+                        : "hover:text-white"
                     }`}
                     aria-label="Go to home"
                   >
@@ -203,7 +207,9 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   <button
                     onClick={() => handleNavigate("search")}
                     className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
-                      activeView === "search" ? "bg-primary/10 text-primary border-l-4 border-primary" : "hover:text-white"
+                      activeView === "search"
+                        ? "bg-primary/10 text-primary border-l-4 border-primary"
+                        : "hover:text-white"
                     }`}
                     aria-label="Go to search"
                   >
@@ -215,7 +221,9 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   <button
                     onClick={() => handleNavigate("library")}
                     className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
-                      activeView === "library" ? "bg-primary/10 text-primary border-l-4 border-primary" : "hover:text-white"
+                      activeView === "library"
+                        ? "bg-primary/10 text-primary border-l-4 border-primary"
+                        : "hover:text-white"
                     }`}
                     aria-label="Go to your library"
                   >
@@ -228,7 +236,9 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <DialogTrigger asChild>
                       <button
                         className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
-                          activeView === "create-playlist" ? "bg-primary/10 text-primary border-l-4 border-primary" : "hover:text-white"
+                          activeView === "create-playlist"
+                            ? "bg-primary/10 text-primary border-l-4 border-primary"
+                            : "hover:text-white"
                         }`}
                       >
                         <PlusSquare size={24} />
@@ -262,7 +272,9 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   <button
                     onClick={() => handleNavigate("liked")}
                     className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded relative ${
-                      activeView === "liked" ? "bg-primary/10 text-primary border-l-4 border-primary" : "hover:text-white"
+                      activeView === "liked"
+                        ? "bg-primary/10 text-primary border-l-4 border-primary"
+                        : "hover:text-white"
                     }`}
                   >
                     <Heart size={24} />
@@ -287,7 +299,9 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li key={playlist.id} className="group">
                       <div
                         className={`flex items-center justify-between py-1 px-2 rounded cursor-pointer transition-colors ${
-                          currentPlaylistId === playlist.id ? "bg-primary/10 text-primary border-l-4 border-primary" : "hover:bg-white/10"
+                          currentPlaylistId === playlist.id
+                            ? "bg-primary/10 text-primary border-l-4 border-primary"
+                            : "hover:bg-white/10"
                         }`}
                       >
                         <button onClick={() => handlePlaylistClick(playlist.id)} className="flex-1 text-left truncate">
@@ -370,9 +384,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                 <span>Import</span>
               </button>
             </div>
-            <div className="text-xs text-gray-400 text-center">
-              © 2025 Joel Tan, v1.0.0
-            </div>
+            <div className="text-xs text-gray-400 text-center">© 2025 Joel Tan, v1.0.0</div>
           </div>
 
           <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>

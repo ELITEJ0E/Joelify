@@ -35,6 +35,8 @@ interface AppContextType extends AppState {
   setLikedSongs: (songs: Track[]) => void
   recentlyPlayed: RecentlyPlayed[]
   addRecentlyPlayed: (item: { type: "track" | "playlist"; id: string }) => void
+  setCustomTheme: (colors: { primary: string; accent: string }) => void
+  customTheme?: { primary: string; accent: string }
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -52,6 +54,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark")
   const [videoMode, setVideoMode] = useState(false)
   const [recentlyPlayed, setRecentlyPlayed] = useState<RecentlyPlayed[]>([])
+  const [customTheme, setCustomThemeState] = useState<{ primary: string; accent: string } | undefined>(undefined)
   const [isInitialized, setIsInitialized] = useState(false)
 
   // Load state from localStorage on mount
@@ -72,6 +75,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (stored.repeat) setRepeat(stored.repeat)
     if (stored.theme) setTheme(stored.theme)
     if (stored.videoMode !== undefined) setVideoMode(stored.videoMode)
+    if (stored.customTheme) setCustomThemeState(stored.customTheme)
     setIsInitialized(true)
   }, [])
 
@@ -91,6 +95,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       repeat,
       theme,
       videoMode,
+      customTheme,
     })
   }, [
     currentTrack,
@@ -104,6 +109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     repeat,
     theme,
     videoMode,
+    customTheme,
     isInitialized,
   ])
 
@@ -115,6 +121,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.documentElement.classList.remove("dark")
     }
   }, [theme])
+
+  useEffect(() => {
+    if (customTheme) {
+      document.documentElement.style.setProperty("--color-primary", customTheme.primary)
+      document.documentElement.style.setProperty("--color-accent", customTheme.accent)
+    }
+  }, [customTheme])
 
   const addPlaylist = (name: string, description?: string, coverImage?: string) => {
     const newPlaylist: Playlist = {
@@ -218,6 +231,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  const setCustomTheme = (colors: { primary: string; accent: string }) => {
+    setCustomThemeState(colors)
+  }
+
   return (
     <AppContext.Provider
       value={{
@@ -257,6 +274,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLikedSongs,
         recentlyPlayed,
         addRecentlyPlayed,
+        customTheme,
+        setCustomTheme,
       }}
     >
       {children}

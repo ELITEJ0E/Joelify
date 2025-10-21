@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, List, Music, Video } from "lucide-react"
 import Image from "next/image"
 import { useApp } from "@/contexts/AppContext"
@@ -522,24 +522,56 @@ export function PlayerControls() {
     return "Repeat Off"
   }
 
-  // Handle keyboard events for seeking
+  // COMPREHENSIVE KEYBOARD HANDLER - ADD THIS
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in inputs or textareas
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
-      if (e.code === "ArrowRight") {
-        e.preventDefault()
-        handleSeekForward()
-      }
-      if (e.code === "ArrowLeft") {
-        e.preventDefault()
-        handleSeekBackward()
+      switch (e.code) {
+        case "Space":
+          e.preventDefault()
+          handlePlayPause()
+          break
+
+        case "ArrowUp":
+          e.preventDefault()
+          handleVolumeChange([Math.min(100, volume + 10)])
+          break
+
+        case "ArrowDown":
+          e.preventDefault()
+          handleVolumeChange([Math.max(0, volume - 10)])
+          break
+
+        case "KeyV":
+          e.preventDefault()
+          toggleVideoMode()
+          break
+
+        case "KeyM":
+          e.preventDefault()
+          toggleMute()
+          break
+
+        case "ArrowRight":
+          e.preventDefault()
+          handleSeekForward()
+          break
+
+        case "ArrowLeft":
+          e.preventDefault()
+          handleSeekBackward()
+          break
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [player, isReady, currentTrack, currentTime, duration])
+  }, [player, isReady, currentTrack, volume, isPlaying, handlePlayPause, handleVolumeChange,toggleVideoMode, toggleMute, handleSeekForward, handleSeekBackward])
+
+  // Remove the existing keyboard handler for seek only (lines 446-458 in original)
+  // Since we now have the comprehensive handler above
 
   return (
     <>
