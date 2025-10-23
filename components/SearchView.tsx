@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState } from "react"
+import type React from "react"
+import { useState } from "react"
 import { Search, Plus, ExternalLink, Loader2, Heart, Compass } from "lucide-react"
 import Image from "next/image"
 import type { YouTubeVideo } from "@/lib/youtube"
@@ -10,6 +11,9 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DiscoverMore } from "./DiscoverMore"
 import { getCachedData, setCachedData } from "@/lib/cache"
+import { searchTracks } from "@/lib/spotifyApi"
+import { isAuthenticated } from "@/lib/spotifyAuth"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const loadingMessages = [
   "Joelifying...",
@@ -24,52 +28,94 @@ const loadingMessages = [
 
 export function SearchView() {
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<YouTubeVideo[]>([])
+  const [youtubeResults, setYoutubeResults] = useState<YouTubeVideo[]>([])
+  const [spotifyResults, setSpotifyResults] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
-  const { playlists, addTrackToPlaylist, setCurrentTrack, addToQueue, toggleLikedSong, isTrackLiked } = useApp()
+  const [searchSource, setSearchSource] = useState<"youtube" | "spotify" | "both">("both")
+  const {
+    playlists,
+    addTrackToPlaylist,
+    setCurrentTrack,
+    addToQueue,
+    toggleLikedSong,
+    isTrackLiked,
+    playbackSource,
+    setPlaybackSource,
+  } = useApp()
+
+  const isSpotifyAuth = isAuthenticated()
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!query.trim()) return
-
-    const cacheKey = `searchCache_${query.trim().toLowerCase()}`
-    const cached = getCachedData<YouTubeVideo[]>(cacheKey, sessionStorage)
-    if (cached) {
-      console.log(`[v0] Using cached search results for "${query}"`)
-      setResults(cached)
-      return
-    }
 
     setIsLoading(true)
     setError(null)
     setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
 
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
-      const data = await res.json()
-      setIsLoading(false)
+      // Search YouTube
+      if (searchSource === "youtube" || searchSource === "both") {
+        const cacheKey = `searchCache_${query.trim().toLowerCase()}`
+        const cached = getCachedData<YouTubeVideo[]>(cacheKey, sessionStorage)
 
-      if (data.error) {
-        console.error("[v0] API error:", data.error)
-        setError(data.error)
-      } else {
-        setCachedData(cacheKey, data.items, sessionStorage)
-        setResults(data.items)
+        if (cached) {
+          console.log(`[v0] Using cached YouTube search results for "${query}"`)
+          setYoutubeResults(cached)
+        } else {
+          const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+          const data = await res.json()
+
+          if (data.error) {
+            console.error("[v0] YouTube API error:", data.error)
+            setError(data.error)
+          } else {
+            setCachedData(cacheKey, data.items, sessionStorage)
+            setYoutubeResults(data.items)
+          }
+        }
       }
+
+      // Search Spotify
+      if ((searchSource === "spotify" || searchSource === "both") && isSpotifyAuth) {
+        const cacheKey = `spotifySearchCache_${query.trim().toLowerCase()}`
+        const cached = getCachedData<any[]>(cacheKey, sessionStorage)
+
+        if (cached) {
+          console.log(`[Spotify] Using cached search results for "${query}"`)
+          setSpotifyResults(cached)
+        } else {
+          const data = await searchTracks(query, 20)
+          const tracks = data.tracks.items.map((track: any) => ({
+            id: track.id,
+            title: track.name,
+            artist: track.artists.map((a: any) => a.name).join(", "),
+            thumbnail: track.album.images[0]?.url || "",
+            duration: `${Math.floor(track.duration_ms / 60000)}:${String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, "0")}`,
+            uri: track.uri,
+            spotifyUrl: track.external_urls.spotify,
+          }))
+          setCachedData(cacheKey, tracks, sessionStorage)
+          setSpotifyResults(tracks)
+        }
+      }
+
+      setIsLoading(false)
     } catch (err) {
-      console.error("[v0] Fetch failed:", err)
+      console.error("[v0] Search failed:", err)
       setIsLoading(false)
       setError("Failed to fetch search results.")
     }
   }
 
-  const handlePlayNow = (video: YouTubeVideo) => {
+  const handlePlayNow = (video: YouTubeVideo | any, source: "youtube" | "spotify") => {
+    setPlaybackSource(source)
     setCurrentTrack(video)
   }
 
-  const handleAddToQueue = (video: YouTubeVideo) => {
+  const handleAddToQueue = (video: YouTubeVideo | any) => {
     addToQueue(video)
   }
 
@@ -80,20 +126,38 @@ export function SearchView() {
 
         {/* Search Bar */}
         <form onSubmit={handleSearch} className="mb-6 md:mb-8">
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-              <Input
-                type="text"
-                placeholder="Search for songs, artists, or albums..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-10 h-12 bg-secondary/50 border-none text-base"
-              />
+          <div className="flex flex-col gap-3 md:gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                <Input
+                  type="text"
+                  placeholder="Search for songs, artists, or albums..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="pl-10 h-12 bg-secondary/50 border-none text-base"
+                />
+              </div>
+              <Button type="submit" size="lg" disabled={isLoading} className="bg-primary hover:bg-primary/90 h-12">
+                {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Search"}
+              </Button>
             </div>
-            <Button type="submit" size="lg" disabled={isLoading} className="bg-primary hover:bg-primary/90 h-12">
-              {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Search"}
-            </Button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Search in:</span>
+              <Select value={searchSource} onValueChange={(value: any) => setSearchSource(value)}>
+                <SelectTrigger className="w-40 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="both">Both</SelectItem>
+                  <SelectItem value="youtube">YouTube</SelectItem>
+                  <SelectItem value="spotify" disabled={!isSpotifyAuth}>
+                    Spotify {!isSpotifyAuth && "(Login required)"}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </form>
 
@@ -117,28 +181,63 @@ export function SearchView() {
         )}
 
         {/* Results Section */}
-        {!isLoading && results.length > 0 && (
+        {!isLoading && (youtubeResults.length > 0 || spotifyResults.length > 0) && (
           <div className="mb-12">
-            <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">Results</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-              {results.map((video) => (
-                <SearchResultCard
-                  key={video.id}
-                  video={video}
-                  playlists={playlists}
-                  onPlayNow={handlePlayNow}
-                  onAddToQueue={handleAddToQueue}
-                  onAddToPlaylist={addTrackToPlaylist}
-                  onToggleLike={toggleLikedSong}
-                  isLiked={isTrackLiked(video.id)}
-                />
-              ))}
-            </div>
+            <Tabs defaultValue="youtube" className="w-full">
+              <TabsList className="mb-6">
+                {youtubeResults.length > 0 && (
+                  <TabsTrigger value="youtube">YouTube ({youtubeResults.length})</TabsTrigger>
+                )}
+                {spotifyResults.length > 0 && (
+                  <TabsTrigger value="spotify">Spotify ({spotifyResults.length})</TabsTrigger>
+                )}
+              </TabsList>
+
+              {youtubeResults.length > 0 && (
+                <TabsContent value="youtube">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    {youtubeResults.map((video) => (
+                      <SearchResultCard
+                        key={video.id}
+                        video={video}
+                        source="youtube"
+                        playlists={playlists}
+                        onPlayNow={handlePlayNow}
+                        onAddToQueue={handleAddToQueue}
+                        onAddToPlaylist={addTrackToPlaylist}
+                        onToggleLike={toggleLikedSong}
+                        isLiked={isTrackLiked(video.id)}
+                      />
+                    ))}
+                  </div>
+                </TabsContent>
+              )}
+
+              {spotifyResults.length > 0 && (
+                <TabsContent value="spotify">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    {spotifyResults.map((track) => (
+                      <SearchResultCard
+                        key={track.id}
+                        video={track}
+                        source="spotify"
+                        playlists={playlists}
+                        onPlayNow={handlePlayNow}
+                        onAddToQueue={handleAddToQueue}
+                        onAddToPlaylist={addTrackToPlaylist}
+                        onToggleLike={toggleLikedSong}
+                        isLiked={isTrackLiked(track.id)}
+                      />
+                    ))}
+                  </div>
+                </TabsContent>
+              )}
+            </Tabs>
           </div>
         )}
 
         {/* No Results Message */}
-        {!isLoading && !error && results.length === 0 && query && (
+        {!isLoading && !error && youtubeResults.length === 0 && spotifyResults.length === 0 && query && (
           <div className="text-center py-20">
             <p className="text-lg md:text-xl text-muted-foreground">Looking for "{query}"?</p>
             <p className="text-sm text-muted-foreground mt-2">Enter to search</p>
@@ -159,7 +258,16 @@ export function SearchView() {
 }
 
 /* ---------------- Search Result Card ---------------- */
-function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPlaylist, onToggleLike, isLiked }: any) {
+function SearchResultCard({
+  video,
+  source,
+  playlists,
+  onPlayNow,
+  onAddToQueue,
+  onAddToPlaylist,
+  onToggleLike,
+  isLiked,
+}: any) {
   const [selectedPlaylist, setSelectedPlaylist] = useState("")
   const [showSuccess, setShowSuccess] = useState(false)
 
@@ -170,14 +278,23 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
     setTimeout(() => setShowSuccess(false), 2000)
   }
 
+  const externalUrl = source === "spotify" ? video.spotifyUrl : `https://www.youtube.com/watch?v=${video.id}`
+
   return (
     <div className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all group">
       <div className="relative mb-4 aspect-video rounded-md overflow-hidden">
-        <Image src={video.thumbnail} alt={video.title} fill className="object-cover" />
+        <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover" />
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <Button size="icon" className="bg-primary hover:bg-primary/90 rounded-full h-12 w-12" onClick={() => onPlayNow(video)}>
+          <Button
+            size="icon"
+            className="bg-primary hover:bg-primary/90 rounded-full h-12 w-12"
+            onClick={() => onPlayNow(video, source)}
+          >
             ▶
           </Button>
+        </div>
+        <div className="absolute top-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
+          {source === "spotify" ? "Spotify" : "YouTube"}
         </div>
       </div>
 
@@ -189,11 +306,16 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
         <Button size="sm" variant="secondary" className="flex-1 text-xs h-8" onClick={() => onAddToQueue(video)}>
           <Plus size={14} className="mr-1" /> Queue
         </Button>
-        <Button size="icon" variant="secondary" className={`h-8 w-8 ${isLiked ? "text-primary" : ""}`} onClick={() => onToggleLike(video)}>
+        <Button
+          size="icon"
+          variant="secondary"
+          className={`h-8 w-8 ${isLiked ? "text-primary" : ""}`}
+          onClick={() => onToggleLike(video)}
+        >
           <Heart size={14} fill={isLiked ? "currentColor" : "none"} />
         </Button>
         <Button size="icon" variant="secondary" className="h-8 w-8" asChild>
-          <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noopener noreferrer">
+          <a href={externalUrl} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={14} />
           </a>
         </Button>
@@ -212,7 +334,13 @@ function SearchResultCard({ video, playlists, onPlayNow, onAddToQueue, onAddToPl
             ))}
           </SelectContent>
         </Select>
-        <Button size="sm" variant="secondary" className="h-8 px-3 text-xs" onClick={handleAddToPlaylist} disabled={!selectedPlaylist}>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-8 px-3 text-xs"
+          onClick={handleAddToPlaylist}
+          disabled={!selectedPlaylist}
+        >
           Add
         </Button>
       </div>

@@ -32,6 +32,7 @@ export interface AppState {
     primary: string
     accent: string
   }
+  playbackSource?: "youtube" | "spotify"
 }
 
 const STORAGE_KEY = "spotify-youtube-app-state"

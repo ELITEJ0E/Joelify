@@ -31,6 +31,9 @@ import {
 } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ThemeSettings } from "./ThemeSettings"
+import { SpotifyLogin } from "./SpotifyLogin"
+import { SpotifyQuota } from "./SpotifyQuota"
+import { isAuthenticated } from "@/lib/spotifyAuth"
 
 interface SidebarProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
@@ -59,6 +62,11 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   const [renamePlaylistName, setRenamePlaylistName] = useState("")
   const [playlistToDelete, setPlaylistToDelete] = useState<{ id: string; name: string } | null>(null)
   const [activeView, setActiveView] = useState<string>("")
+  const [isSpotifyAuth, setIsSpotifyAuth] = useState(false)
+
+  useState(() => {
+    setIsSpotifyAuth(isAuthenticated())
+  })
 
   const handleCreatePlaylist = () => {
     if (newPlaylistName.trim()) {
@@ -187,6 +195,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                 </Button>
               </div>
             </div>
+            <div className="mb-4">
+              <SpotifyLogin />
+            </div>
+            {isSpotifyAuth && (
+              <div className="mb-4">
+                <SpotifyQuota />
+              </div>
+            )}
             <nav>
               <ul>
                 <li>

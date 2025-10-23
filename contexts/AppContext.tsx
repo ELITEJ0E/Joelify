@@ -9,6 +9,8 @@ interface RecentlyPlayed {
   timestamp: number
 }
 
+type PlaybackSource = "youtube" | "spotify"
+
 interface AppContextType extends AppState {
   setCurrentTrack: (track: Track | null) => void
   setCurrentPlaylistId: (id: string | null) => void
@@ -37,6 +39,10 @@ interface AppContextType extends AppState {
   addRecentlyPlayed: (item: { type: "track" | "playlist"; id: string }) => void
   setCustomTheme: (colors: { primary: string; accent: string }) => void
   customTheme?: { primary: string; accent: string }
+  playbackSource: PlaybackSource
+  setPlaybackSource: (source: PlaybackSource) => void
+  spotifyPlayer: any
+  setSpotifyPlayer: (player: any) => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -56,6 +62,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [recentlyPlayed, setRecentlyPlayed] = useState<RecentlyPlayed[]>([])
   const [customTheme, setCustomThemeState] = useState<{ primary: string; accent: string } | undefined>(undefined)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [playbackSource, setPlaybackSource] = useState<PlaybackSource>("youtube")
+  const [spotifyPlayer, setSpotifyPlayer] = useState<any>(null)
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -76,6 +84,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (stored.theme) setTheme(stored.theme)
     if (stored.videoMode !== undefined) setVideoMode(stored.videoMode)
     if (stored.customTheme) setCustomThemeState(stored.customTheme)
+    if (stored.playbackSource) setPlaybackSource(stored.playbackSource as PlaybackSource)
     setIsInitialized(true)
   }, [])
 
@@ -96,6 +105,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       theme,
       videoMode,
       customTheme,
+      playbackSource,
     })
   }, [
     currentTrack,
@@ -110,6 +120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     theme,
     videoMode,
     customTheme,
+    playbackSource,
     isInitialized,
   ])
 
@@ -276,6 +287,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addRecentlyPlayed,
         customTheme,
         setCustomTheme,
+        playbackSource,
+        setPlaybackSource,
+        spotifyPlayer,
+        setSpotifyPlayer,
       }}
     >
       {children}
