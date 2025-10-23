@@ -8,30 +8,11 @@ import { PlayerControls } from "../components/PlayerControls"
 import { Button } from "@/components/ui/button"
 import { LoadingScreen } from "@/components/LoadingScreen"
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt"
-import { useRouter, useSearchParams } from "next/navigation"  // ← ADD THIS
-import { exchangeCodeForTokens } from "@/lib/spotifyAuth"     // ← ADD THIS
 
 export default function Home() {
-  const router = useRouter()              // ← ADD THIS
-  const searchParams = useSearchParams()  // ← ADD THIS
   const [isLoading, setIsLoading] = useState(true)
   const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-
-  useEffect(() => {
-    const code = searchParams.get("code")
-    if (code) {
-      exchangeCodeForTokens(code)
-        .then(() => {
-          console.log("[Spotify] Authentication successful!")
-          router.replace("/")
-        })
-        .catch((err) => {
-          console.error("[Spotify] Token exchange failed:", err)
-          router.replace(`/?spotify_error=${encodeURIComponent(err.message)}`)
-        })
-    }
-  }, [searchParams, router])
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 3500)
