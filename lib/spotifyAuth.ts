@@ -1,7 +1,10 @@
 // Spotify OAuth 2.0 with PKCE implementation
 
 const SPOTIFY_CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || ""
-const REDIRECT_URI = typeof window !== "undefined" ? `${window.location.origin}/callback` : ""
+const REDIRECT_URI = typeof window !== "undefined" 
+  ? window.location.origin 
+  : process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || "https://joelify.vercel.app"
+  
 const SCOPES = [
   "streaming",
   "user-read-email",
