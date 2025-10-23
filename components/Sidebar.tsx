@@ -7,6 +7,8 @@ import {
   Library,
   PlusSquare,
   Heart,
+  ChevronDown,
+  ChevronRight,
   MoreVertical,
   Edit2,
   Trash2,
@@ -30,6 +32,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useEffect } from "react"
 import { ThemeSettings } from "./ThemeSettings"
 import { SpotifyLogin } from "./SpotifyLogin"
 import { SpotifyQuota } from "./SpotifyQuota"
@@ -54,6 +57,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     likedSongs,
     setPlaylists,
   } = useApp()
+  
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -63,10 +67,11 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   const [playlistToDelete, setPlaylistToDelete] = useState<{ id: string; name: string } | null>(null)
   const [activeView, setActiveView] = useState<string>("")
   const [isSpotifyAuth, setIsSpotifyAuth] = useState(false)
+  const [isLibraryExpanded, setIsLibraryExpanded] = useState(true)
 
-  useState(() => {
+  useEffect(() => {
     setIsSpotifyAuth(isAuthenticated())
-  })
+  }, [])
 
   const handleCreatePlaylist = () => {
     if (newPlaylistName.trim()) {
@@ -133,7 +138,6 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
-
       const reader = new FileReader()
       reader.onload = (event) => {
         try {
@@ -170,7 +174,8 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
         }`}
       >
         <div className="flex flex-col h-full">
-          <div className="p-3">
+          {/* HEADER - STATIC */}
+          <div className="p-3 flex-shrink-0 border-b border-border">
             <div className="flex items-center justify-between mb-2">
               <h1 className="text-2xl font-bold text-primary">Joelify</h1>
               <div className="flex items-center gap-2">
@@ -180,7 +185,6 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   variant="ghost"
                   onClick={toggleTheme}
                   className="text-gray-400 hover:text-white h-8 w-8"
-                  aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
                 >
                   {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
                 </Button>
@@ -189,245 +193,262 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   variant="ghost"
                   onClick={onClose}
                   className="text-gray-400 hover:text-white h-8 w-8 lg:hidden"
-                  aria-label="Close menu"
                 >
                   <X size={18} />
                 </Button>
               </div>
             </div>
-            <div className="mb-4">
-              <SpotifyLogin />
-            </div>
-            {isSpotifyAuth && (
-              <div className="mb-4">
-                <SpotifyQuota />
-              </div>
-            )}
-            <nav>
-              <ul>
-                <li>
-                  <button
-                    onClick={() => handleNavigate("home")}
-                    className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
-                      activeView === "home"
-                        ? "bg-primary/10 text-primary border-l-4 border-primary"
-                        : "hover:text-white"
-                    }`}
-                    aria-label="Go to home"
-                  >
-                    <Home size={24} />
-                    <span>Home</span>
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => handleNavigate("search")}
-                    className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
-                      activeView === "search"
-                        ? "bg-primary/10 text-primary border-l-4 border-primary"
-                        : "hover:text-white"
-                    }`}
-                    aria-label="Go to search"
-                  >
-                    <Search size={24} />
-                    <span>Search</span>
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => handleNavigate("library")}
-                    className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
-                      activeView === "library"
-                        ? "bg-primary/10 text-primary border-l-4 border-primary"
-                        : "hover:text-white"
-                    }`}
-                    aria-label="Go to your library"
-                  >
-                    <Library size={24} />
-                    <span>Your Library</span>
-                  </button>
-                </li>
-                <li>
-                  <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                    <DialogTrigger asChild>
+          </div>
+
+          {/* MAIN CONTENT - FLEX */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* SCROLLABLE NAVIGATION */}
+            <ScrollArea className="flex-1">
+              <div className="p-3">
+                <nav>
+                  <ul>
+                    <li>
                       <button
+                        onClick={() => handleNavigate("home")}
                         className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
-                          activeView === "create-playlist"
+                          activeView === "home"
                             ? "bg-primary/10 text-primary border-l-4 border-primary"
                             : "hover:text-white"
                         }`}
                       >
-                        <PlusSquare size={24} />
-                        <span>Create Playlist</span>
+                        <Home size={24} />
+                        <span>Home</span>
                       </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Create New Playlist</DialogTitle>
-                        <DialogDescription>Give your playlist a name to get started.</DialogDescription>
-                      </DialogHeader>
-                      <Input
-                        placeholder="My Playlist"
-                        value={newPlaylistName}
-                        onChange={(e) => setNewPlaylistName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleCreatePlaylist()}
-                        aria-label="Playlist name"
-                      />
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}>
-                          Create
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </li>
-                <li>
-                  <button
-                    onClick={() => handleNavigate("liked")}
-                    className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded relative ${
-                      activeView === "liked"
-                        ? "bg-primary/10 text-primary border-l-4 border-primary"
-                        : "hover:text-white"
-                    }`}
-                  >
-                    <Heart size={24} />
-                    <span>Liked Songs</span>
-                    {likedSongs.length > 0 && (
-                      <span className="ml-auto text-xs bg-primary text-white px-2 py-0.5 rounded-full">
-                        {likedSongs.length}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              </ul>
-            </nav>
-          </div>
-
-          <div className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="px-4 pb-4">
-                <h2 className="text-xs uppercase font-semibold mb-3 text-gray-400">Playlists</h2>
-                <ul className="space-y-1">
-                  {playlists.map((playlist) => (
-                    <li key={playlist.id} className="group">
-                      <div
-                        className={`flex items-center justify-between py-1 px-2 rounded cursor-pointer transition-colors ${
-                          currentPlaylistId === playlist.id
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => handleNavigate("search")}
+                        className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded ${
+                          activeView === "search"
                             ? "bg-primary/10 text-primary border-l-4 border-primary"
-                            : "hover:bg-white/10"
+                            : "hover:text-white"
                         }`}
                       >
-                        <button onClick={() => handlePlaylistClick(playlist.id)} className="flex-1 text-left truncate">
-                          {playlist.name}
-                        </button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                              aria-label="Playlist options"
-                            >
-                              <MoreVertical size={14} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openRenameDialog(playlist.id, playlist.name)}>
-                              <Edit2 size={14} className="mr-2" />
-                              Rename
-                            </DropdownMenuItem>
-                            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                              <DialogTrigger asChild>
-                                <DropdownMenuItem
-                                  onSelect={(e) => e.preventDefault()}
-                                  onClick={() => openDeleteDialog(playlist.id, playlist.name)}
-                                  className="text-destructive"
-                                >
-                                  <Trash2 size={14} className="mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Delete Playlist</DialogTitle>
-                                  <DialogDescription>
-                                    Are you sure you want to delete {playlistToDelete?.name}? This action cannot be
-                                    undone.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <DialogFooter>
-                                  <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                                    Cancel
-                                  </Button>
-                                  <Button
-                                    onClick={handleDeletePlaylist}
-                                    className="bg-destructive/80 hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                        <Search size={24} />
+                        <span>Search</span>
+                      </button>
                     </li>
-                  ))}
-                </ul>
+                    
+                    {/* LIBRARY DROPDOWN */}
+                    <li>
+                      <button
+                        onClick={() => {
+                          setActiveView("library")
+                          setIsLibraryExpanded(!isLibraryExpanded)
+                          onNavigate("library")
+                        }}
+                        className={`flex items-center justify-between space-x-3 w-full text-left transition-colors p-2 rounded ${
+                          activeView === "library"
+                            ? "bg-primary/10 text-primary border-l-4 border-primary"
+                            : "hover:text-white"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Library size={24} />
+                          <span>Your Library</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 ml-2"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setIsLibraryExpanded(!isLibraryExpanded)
+                          }}
+                        >
+                          {isLibraryExpanded ? (
+                            <ChevronDown size={16} className="transition-transform" />
+                          ) : (
+                            <ChevronRight size={16} className="transition-transform" />
+                          )}
+                        </Button>
+                      </button>
+
+                      {isLibraryExpanded && (
+                        <div className="ml-6 mt-2 space-y-1">
+                          <ScrollArea className="w-full pr-4">
+                            <ul className="space-y-1">
+                              <li>
+                                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                                  <DialogTrigger asChild>
+                                    <button className="flex items-center space-x-3 w-full text-left transition-colors p-2 rounded hover:bg-white/10">
+                                      <PlusSquare size={24} />
+                                      <span>Create Playlist</span>
+                                    </button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Create New Playlist</DialogTitle>
+                                      <DialogDescription>Give your playlist a name to get started.</DialogDescription>
+                                    </DialogHeader>
+                                    <Input
+                                      placeholder="My Playlist"
+                                      value={newPlaylistName}
+                                      onChange={(e) => setNewPlaylistName(e.target.value)}
+                                      onKeyDown={(e) => e.key === "Enter" && handleCreatePlaylist()}
+                                    />
+                                    <DialogFooter>
+                                      <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                                        Cancel
+                                      </Button>
+                                      <Button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}>
+                                        Create
+                                      </Button>
+                                    </DialogFooter>
+                                  </DialogContent>
+                                </Dialog>
+                              </li>
+
+                              {playlists.map((playlist) => (
+                                <li key={playlist.id} className="group">
+                                  <div className="flex items-center justify-between py-2 px-2 rounded">
+                                    <button 
+                                      onClick={() => handlePlaylistClick(playlist.id)} 
+                                      className={`flex-1 text-left transition-colors ${
+                                        currentPlaylistId === playlist.id
+                                          ? "bg-primary/10 text-primary border-l-2 border-primary"
+                                          : "hover:bg-white/10"
+                                      }`}
+                                    >
+                                      {playlist.name}
+                                    </button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                        >
+                                          <MoreVertical size={16} />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => openRenameDialog(playlist.id, playlist.name)}>
+                                          <Edit2 size={16} className="mr-2" />
+                                          Rename
+                                        </DropdownMenuItem>
+                                        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                                          <DialogTrigger asChild>
+                                            <DropdownMenuItem
+                                              onSelect={(e) => e.preventDefault()}
+                                              onClick={() => openDeleteDialog(playlist.id, playlist.name)}
+                                              className="text-destructive"
+                                            >
+                                              <Trash2 size={16} className="mr-2" />
+                                              Delete
+                                            </DropdownMenuItem>
+                                          </DialogTrigger>
+                                          <DialogContent>
+                                            <DialogHeader>
+                                              <DialogTitle>Delete Playlist</DialogTitle>
+                                              <DialogDescription>
+                                                Are you sure you want to delete {playlistToDelete?.name}?
+                                              </DialogDescription>
+                                            </DialogHeader>
+                                            <DialogFooter>
+                                              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                                                Cancel
+                                              </Button>
+                                              <Button onClick={handleDeletePlaylist} className="bg-destructive">
+                                                Delete
+                                              </Button>
+                                            </DialogFooter>
+                                          </DialogContent>
+                                        </Dialog>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </ScrollArea>
+                        </div>
+                      )}
+                    </li>
+
+                    <li>
+                      <button
+                        onClick={() => handleNavigate("liked")}
+                        className={`flex items-center space-x-3 w-full text-left transition-colors p-2 rounded relative ${
+                          activeView === "liked"
+                            ? "bg-primary/10 text-primary border-l-4 border-primary"
+                            : "hover:text-white"
+                        }`}
+                      >
+                        <Heart size={24} />
+                        <span>Liked Songs</span>
+                        {likedSongs.length > 0 && (
+                          <span className="ml-auto text-xs bg-primary text-white px-2 py-0.5 rounded-full">
+                            {likedSongs.length}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+
+                    {/* SPOTIFY BELOW LIKED SONGS */}
+                    <li className="mt-4 pt-4 border-t border-border">
+                      <SpotifyLogin />
+                      {isSpotifyAuth && <div className="mt-3"><SpotifyQuota /></div>}
+                    </li>
+                  </ul>
+                </nav>
               </div>
             </ScrollArea>
-          </div>
 
-          <div className="p-3 border-border">
-            <div className="flex items-center justify-center mb-2 space-x-5">
-              <button
-                onClick={handleExportPlaylists}
-                className="flex items-center space-x-5 hover:text-white text-left transition-colors text-sm"
-                disabled={playlists.length === 0}
-              >
-                <Download size={20} />
-                <span>Export</span>
-              </button>
-              <span className="text-gray-400">|</span>
-              <button
-                onClick={handleImportPlaylists}
-                className="flex items-center space-x-5 hover:text-white text-left transition-colors text-sm"
-              >
-                <Upload size={20} />
-                <span>Import</span>
-              </button>
+            {/* ← FIX: FOOTER PUSHED TO BOTTOM */}
+            <div className="mt-auto p-3 border-t border-border flex-shrink-0 bg-black/80">
+              <div className="flex items-center justify-center mb-2 space-x-4">
+                <button
+                  onClick={handleExportPlaylists}
+                  className="flex items-center space-x-2 hover:text-white text-left transition-colors text-sm"
+                  disabled={playlists.length === 0}
+                >
+                  <Download size={16} />
+                  <span>Export</span>
+                </button>
+                <span className="text-gray-400">|</span>
+                <button
+                  onClick={handleImportPlaylists}
+                  className="flex items-center space-x-2 hover:text-white text-left transition-colors text-sm"
+                >
+                  <Upload size={16} />
+                  <span>Import</span>
+                </button>
+              </div>
+              <div className="text-xs text-gray-400 text-center">© 2025 Joel Tan, v1.0.0</div>
             </div>
-            <div className="text-xs text-gray-400 text-center">© 2025 Joel Tan, v1.0.0</div>
           </div>
-
-          <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Rename Playlist</DialogTitle>
-                <DialogDescription>Enter a new name for your playlist.</DialogDescription>
-              </DialogHeader>
-              <Input
-                placeholder="Playlist name"
-                value={renamePlaylistName}
-                onChange={(e) => setRenamePlaylistName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleRenamePlaylist()}
-                aria-label="New playlist name"
-              />
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleRenamePlaylist} disabled={!renamePlaylistName.trim()}>
-                  Rename
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
+
+      {/* DIALOGS */}
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Playlist</DialogTitle>
+            <DialogDescription>Enter a new name for your playlist.</DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Playlist name"
+            value={renamePlaylistName}
+            onChange={(e) => setRenamePlaylistName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleRenamePlaylist()}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleRenamePlaylist} disabled={!renamePlaylistName.trim()}>
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
