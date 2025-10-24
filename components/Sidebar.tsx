@@ -335,7 +335,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                           <MoreVertical size={14} />
                                         </Button>
                                       </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="bg-black/60/95 border-gray-800/50">
+                                      <DropdownMenuContent align="end" className=" border-gray-800/50">
                                         <DropdownMenuItem 
                                           onClick={() => openRenameDialog(playlist.id, playlist.name)}
                                           className="text-gray-200 hover:bg-primary/10 hover:text-primary"
