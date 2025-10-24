@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { loginWithSpotify, logout, isAuthenticated, getSpotifyProfile } from "@/lib/spotifyAuth"
+import { loginWithSpotify, logout, isAuthenticated, getSpotifyProfile, exchangeCodeForTokens } from "@/lib/spotifyAuth"
 import { LogIn, LogOut, Music } from "lucide-react"
 
 interface SpotifyProfile {
@@ -18,28 +19,45 @@ export function SpotifyLogin() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [profile, setProfile] = useState<SpotifyProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
-    checkAuthStatus()
-  }, [])
+    const checkAuthStatus = async () => {
+      setLoading(true)
 
-  const checkAuthStatus = async () => {
-    setLoading(true)
-    const authenticated = isAuthenticated()
-    setIsLoggedIn(authenticated)
-
-    if (authenticated) {
-      try {
-        const profileData = await getSpotifyProfile()
-        setProfile(profileData)
-        console.log("[Spotify] Profile loaded:", profileData.display_name)
-      } catch (error) {
-        console.error("[Spotify] Failed to load profile:", error)
-        setIsLoggedIn(false)
+      // Handle Spotify auth code exchange
+      const code = searchParams.get("code")
+      if (code) {
+        try {
+          await exchangeCodeForTokens(code)
+          console.log("[Spotify] Authentication successful!")
+          router.replace("/")
+        } catch (err) {
+          console.error("[Spotify] Token exchange failed:", err)
+          router.replace(`/?spotify_error=${encodeURIComponent(err.message)}`)
+        }
       }
+
+      // Check authentication status and load profile
+      const authenticated = isAuthenticated()
+      setIsLoggedIn(authenticated)
+
+      if (authenticated) {
+        try {
+          const profileData = await getSpotifyProfile()
+          setProfile(profileData)
+          console.log("[Spotify] Profile loaded:", profileData.display_name)
+        } catch (error) {
+          console.error("[Spotify] Failed to load profile:", error)
+          setIsLoggedIn(false)
+        }
+      }
+      setLoading(false)
     }
-    setLoading(false)
-  }
+
+    checkAuthStatus()
+  }, [searchParams, router])
 
   const handleLogin = () => {
     console.log("[Spotify] Initiating login")
@@ -105,7 +123,7 @@ export function SpotifyLogin() {
         <CardDescription className="text-xs">Login to stream music from your account</CardDescription>
       </CardHeader>
       <CardContent className="p-3 pt-0">
-        <Button onClick={handleLogin} className="w-full bg-primary hover:bg-primary h-8 text-xs">
+        <Button onClick={handleLogin} className="w-full bg-primary hover:bg-primary/80 h-8 text-xs transition-colors">
           <LogIn className="h-3 w-3 mr-2" />
           Login with Spotify
         </Button>

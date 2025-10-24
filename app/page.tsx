@@ -8,30 +8,12 @@ import { PlayerControls } from "../components/PlayerControls"
 import { Button } from "@/components/ui/button"
 import { LoadingScreen } from "@/components/LoadingScreen"
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt"
-import { useRouter, useSearchParams } from "next/navigation"  // ← ADD THIS
-import { exchangeCodeForTokens } from "@/lib/spotifyAuth"     // ← ADD THIS
+import { Suspense } from "react"
 
 export default function Home() {
-  const router = useRouter()              // ← ADD THIS
-  const searchParams = useSearchParams()  // ← ADD THIS
   const [isLoading, setIsLoading] = useState(true)
   const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-
-  useEffect(() => {
-    const code = searchParams.get("code")
-    if (code) {
-      exchangeCodeForTokens(code)
-        .then(() => {
-          console.log("[Spotify] Authentication successful!")
-          router.replace("/")
-        })
-        .catch((err) => {
-          console.error("[Spotify] Token exchange failed:", err)
-          router.replace(`/?spotify_error=${encodeURIComponent(err.message)}`)
-        })
-    }
-  }, [searchParams, router])
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 3500)
@@ -59,7 +41,15 @@ export default function Home() {
         </header>
 
         <div className="flex flex-1 overflow-hidden">
-          <Sidebar onNavigate={setCurrentView} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+          <Suspense
+            fallback={
+              <div className="w-64 bg-gradient-to-b from-gray-950 to-gray-900 flex-shrink-0 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            }
+          >
+            <Sidebar onNavigate={setCurrentView} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+          </Suspense>
           <MainContent view={currentView} onNavigate={setCurrentView} />
         </div>
 
