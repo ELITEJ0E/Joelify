@@ -56,7 +56,7 @@ export function SpotifyLogin() {
   if (loading) {
     return (
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
@@ -68,30 +68,28 @@ export function SpotifyLogin() {
   if (isLoggedIn && profile) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Music className="h-5 w-5 text-green-500" />
-            Spotify Connected
+        <CardHeader className="p-3 pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Music className="h-4 w-4 text-green-500 flex-shrink-0" />
+            <span className="truncate">Spotify Connected</span>
           </CardTitle>
-          <CardDescription>You're connected to Spotify</CardDescription>
+          <CardDescription className="text-xs">You're connected to Spotify</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Avatar>
-                <AvatarImage src={profile.images[0]?.url || "/placeholder.svg"} alt={profile.display_name} />
-                <AvatarFallback>{profile.display_name[0]}</AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-semibold">{profile.display_name}</p>
-                <p className="text-sm text-muted-foreground">{profile.email}</p>
-              </div>
+        <CardContent className="p-3 pt-0 space-y-3">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-10 w-10 flex-shrink-0">
+              <AvatarImage src={profile.images[0]?.url || "/placeholder.svg"} alt={profile.display_name} />
+              <AvatarFallback className="text-xs">{profile.display_name[0]}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold truncate">{profile.display_name}</p>
+              <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
           </div>
+          <Button variant="outline" size="sm" onClick={handleLogout} className="w-full h-8">
+            <LogOut className="h-3 w-3 mr-2" />
+            Logout
+          </Button>
         </CardContent>
       </Card>
     )
@@ -99,16 +97,16 @@ export function SpotifyLogin() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Music className="h-5 w-5" />
-          Connect Spotify
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Music className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate">Connect Spotify</span>
         </CardTitle>
-        <CardDescription>Login to stream music from your Spotify account</CardDescription>
+        <CardDescription className="text-xs">Login to stream music from your account</CardDescription>
       </CardHeader>
-      <CardContent>
-        <Button onClick={handleLogin} className="w-full bg-green-500 hover:bg-green-600">
-          <LogIn className="h-4 w-4 mr-2" />
+      <CardContent className="p-3 pt-0">
+        <Button onClick={handleLogin} className="w-full bg-green-500 hover:bg-green-600 h-8 text-xs">
+          <LogIn className="h-3 w-3 mr-2" />
           Login with Spotify
         </Button>
       </CardContent>
