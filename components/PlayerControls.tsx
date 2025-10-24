@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, List, Music, Video } from "lucide-react"
+import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, List, Music, Video, Youtube, Music2 } from "lucide-react"
 import Image from "next/image"
 import { useApp } from "@/contexts/AppContext"
 import { YouTubePlayer } from "./YouTubePlayer"
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { PlaybackSourceSwitch } from "./PlaybackSourceSwitch"
+import { isAuthenticated } from "@/lib/spotifyAuth"
 
 export function PlayerControls() {
   const {
@@ -34,6 +34,7 @@ export function PlayerControls() {
     toggleRepeat,
     setPlaybackPosition,
     toggleVideoMode,
+    setPlaybackSource,
   } = useApp()
 
   const [youtubePlayer, setYoutubePlayer] = useState<any>(null)
@@ -42,6 +43,7 @@ export function PlayerControls() {
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
+  const [isSpotifyAuth, setIsSpotifyAuth] = useState(false)
 
   const [spotifyState, setSpotifyState] = useState<any>(null)
 
@@ -90,14 +92,12 @@ export function PlayerControls() {
       console.log("[Spotify] State changed:", state)
       setSpotifyState(state)
       setIsPlaying(!state.paused)
-      setCurrentTime(state.position / 1000) // Convert ms to seconds
-      setDuration(state.duration / 1000) // Convert ms to seconds
+      setCurrentTime(state.position / 1000)
+      setDuration(state.duration / 1000)
       setPlaybackPosition(state.position / 1000)
 
-      // Update current track from Spotify state
       if (state.track_window?.current_track) {
         const track = state.track_window.current_track
-        // Only update if it's a different track
         if (currentTrack?.id !== track.id) {
           setCurrentTrack({
             id: track.id,
@@ -109,7 +109,6 @@ export function PlayerControls() {
         }
       }
 
-      // Handle track end
       if (state.paused && state.position === 0 && state.duration > 0) {
         console.log("[Spotify] Track ended")
         setTimeout(() => handleNext(), 100)
@@ -123,15 +122,6 @@ export function PlayerControls() {
   }, [])
 
   const handleNext = useCallback(() => {
-    console.log(
-      "[Player] handleNext called - repeat:",
-      repeat,
-      "queue length:",
-      queue.length,
-      "currentTrack:",
-      currentTrack?.title,
-    )
-
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.pauseVideo()
     } else if (playbackSource === "spotify" && spotifyPlayer) {
@@ -140,17 +130,12 @@ export function PlayerControls() {
     setIsPlaying(false)
 
     if (repeat === "one" && currentTrack) {
-      console.log("[Player] Repeat one - replaying current track")
       if (playbackSource === "youtube" && youtubePlayer) {
         youtubePlayer.seekTo(0, true)
-        setTimeout(() => {
-          youtubePlayer.playVideo()
-        }, 100)
+        setTimeout(() => youtubePlayer.playVideo(), 100)
       } else if (playbackSource === "spotify" && spotifyPlayer) {
         SpotifyPlayerControls.seek(spotifyPlayer, 0)
-        setTimeout(() => {
-          SpotifyPlayerControls.play(spotifyPlayer)
-        }, 100)
+        setTimeout(() => SpotifyPlayerControls.play(spotifyPlayer), 100)
       }
       setCurrentTime(0)
       setPlaybackPosition(0)
@@ -159,7 +144,6 @@ export function PlayerControls() {
 
     if (queue.length > 0) {
       const nextTrack = queue[0]
-      console.log("[Player] Playing next from queue:", nextTrack.title)
       setCurrentTrack(nextTrack)
       setQueue(queue.slice(1))
       setCurrentTime(0)
@@ -199,7 +183,6 @@ export function PlayerControls() {
         }
 
         if (nextTrack) {
-          console.log("[Player] Playing next from playlist:", nextTrack.title)
           setCurrentTrack(nextTrack)
           setCurrentTime(0)
           setPlaybackPosition(0)
@@ -212,7 +195,6 @@ export function PlayerControls() {
       return
     }
 
-    console.log("[Player] End of playback, stopping")
     setIsPlaying(false)
     setCurrentTime(0)
     setPlaybackPosition(0)
@@ -403,7 +385,7 @@ export function PlayerControls() {
       console.log("[SyncFix] Track changed:", currentTrack.title)
       setCurrentTime(0)
       setPlaybackPosition(0)
-      setDuration(0) // Reset duration, will be set by YouTubePlayer
+      setDuration(0)
       hasRestoredPositionRef.current = false
       setIsPlaying(false)
     } else {
@@ -415,6 +397,21 @@ export function PlayerControls() {
     }
   }, [currentTrack, setPlaybackPosition])
 
+  useEffect(() => {
+    setIsSpotifyAuth(isAuthenticated())
+    if (!playbackSource) {
+      setPlaybackSource("youtube")
+    }
+  }, [])
+
+  const handleSwitch = () => {
+    if (playbackSource === "youtube" && !isSpotifyAuth) {
+      alert("Please login to Spotify first")
+      return
+    }
+    setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
+  }
+
   const handleYouTubeStateChange = useCallback(
     (event: any) => {
       if (playbackSource !== "youtube") return
@@ -425,13 +422,10 @@ export function PlayerControls() {
       lastPlayerStateRef.current = playerState
 
       switch (playerState) {
-        case 1: // PLAYING
-          console.log("[SyncFix] Video is playing")
+        case 1:
           setIsPlaying(true)
           break
-
-        case 2: // PAUSED
-          console.log("[SyncFix] Video is paused")
+        case 2:
           setIsPlaying(false)
           if (youtubePlayer && typeof youtubePlayer.getCurrentTime === "function") {
             const time = youtubePlayer.getCurrentTime()
@@ -439,17 +433,13 @@ export function PlayerControls() {
             setPlaybackPosition(time)
           }
           break
-
-        case 0: // ENDED
-          console.log("[SyncFix] Video ended")
+        case 0:
           setIsPlaying(false)
           setCurrentTime(0)
           setPlaybackPosition(0)
           setTimeout(() => handleNext(), 100)
           break
-
-        case -1: // UNSTARTED
-          console.log("[SyncFix] Video unstarted")
+        case -1:
           setIsPlaying(false)
           break
       }
@@ -458,12 +448,7 @@ export function PlayerControls() {
   )
 
   const handlePlayPause = useCallback(() => {
-    if (!currentTrack || !isReady) {
-      console.log("[Player] Cannot play/pause - track:", !!currentTrack, "ready:", isReady)
-      return
-    }
-
-    console.log("[Player] Play/Pause clicked - currently playing:", isPlaying, "source:", playbackSource)
+    if (!currentTrack || !isReady) return
 
     if (playbackSource === "youtube") {
       if (!youtubePlayer) return
@@ -487,32 +472,26 @@ export function PlayerControls() {
           e.preventDefault()
           handlePlayPause()
           break
-
         case "ArrowUp":
           e.preventDefault()
           handleVolumeChange([Math.min(100, volume + 10)])
           break
-
         case "ArrowDown":
           e.preventDefault()
           handleVolumeChange([Math.max(0, volume - 10)])
           break
-
         case "KeyV":
           e.preventDefault()
           toggleVideoMode()
           break
-
         case "KeyM":
           e.preventDefault()
           toggleMute()
           break
-
         case "ArrowRight":
           e.preventDefault()
           handleSeekForward()
           break
-
         case "ArrowLeft":
           e.preventDefault()
           handleSeekBackward()
@@ -553,12 +532,9 @@ export function PlayerControls() {
         onError={handleSpotifyError}
       />
 
-      <div className="bg-black text-white p-3 md:p-4 border-border">
-        <div className="flex justify-center mb-3">
-          <PlaybackSourceSwitch />
-        </div>
-
+      <div className="bg-black text-white p-3 md:p-4 border-t border-border w-full">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+          {/* DESKTOP: Track Info */}
           <div className="hidden md:flex items-center gap-4 flex-1 min-w-0">
             {currentTrack ? (
               <>
@@ -593,33 +569,34 @@ export function PlayerControls() {
             )}
           </div>
 
-          <div className="flex flex-col items-center w-full md:flex-1 md:max-w-2xl">
-            <div className="md:hidden w-full flex items-center justify-between mb-3">
-              {currentTrack ? (
-                <>
-                  {currentTrack.thumbnail ? (
-                    <Image
-                      src={currentTrack.thumbnail || "/placeholder.svg"}
-                      width={48}
-                      height={48}
-                      alt={currentTrack.title || "Track thumbnail"}
-                      className="w-12 h-12 rounded object-cover flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-secondary rounded flex items-center justify-center flex-shrink-0">
-                      <span className="text-xl text-muted-foreground">♪</span>
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
-                    <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
+          {/* MOBILE: Track Info + Queue + Toggle */}
+          <div className="md:hidden w-full flex items-center justify-between mb-3">
+            {currentTrack ? (
+              <>
+                {currentTrack.thumbnail ? (
+                  <Image
+                    src={currentTrack.thumbnail || "/placeholder.svg"}
+                    width={48}
+                    height={48}
+                    alt={currentTrack.title || "Track thumbnail"}
+                    className="w-12 h-12 rounded object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-secondary rounded flex items-center justify-center flex-shrink-0">
+                    <span className="text-xl text-muted-foreground">♪</span>
                   </div>
-                </>
-              ) : (
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground">No track playing</p>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
+                  <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
                 </div>
-              )}
+              </>
+            ) : (
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground">No track playing</p>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
               <Sheet>
                 <SheetTrigger asChild>
                   <Button
@@ -645,8 +622,30 @@ export function PlayerControls() {
                   </div>
                 </SheetContent>
               </Sheet>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleSwitch}
+                      className={`h-10 w-10 ${!isSpotifyAuth && playbackSource === "youtube" ? "text-gray-400" : playbackSource === "youtube" ? "text-primary" : "hover:text-white"}`}
+                      disabled={!currentTrack || (!isSpotifyAuth && playbackSource === "youtube")}
+                      aria-label={playbackSource === "youtube" ? "Switch to Spotify" : "Switch to YouTube"}
+                    >
+                      {playbackSource === "youtube" ? <Music2 size={20} /> : <Youtube size={20} />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{playbackSource === "youtube" ? "Switch to Spotify" : "Switch to YouTube"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
+          </div>
 
+          {/* PLAYBACK CONTROLS */}
+          <div className="flex flex-col items-center w-full md:flex-1 md:max-w-2xl">
             <div className="flex items-center gap-2 w-full mb-3 md:mb-0 md:order-2">
               <span className="text-xs text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
               <div className="flex-1">
@@ -778,7 +777,8 @@ export function PlayerControls() {
             </TooltipProvider>
           </div>
 
-          <div className="hidden md:flex items-center mb-6 gap-4 flex-1 justify-end">
+          {/* DESKTOP: Queue, Toggle, Volume */}
+          <div className="hidden md:flex items-center gap-4 flex-1 justify-end">
             <Sheet>
               <SheetTrigger asChild>
                 <Button
@@ -804,6 +804,26 @@ export function PlayerControls() {
                 </div>
               </SheetContent>
             </Sheet>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={handleSwitch}
+                    className={`h-10 w-10 ${!isSpotifyAuth && playbackSource === "youtube" ? "text-gray-400" : playbackSource === "youtube" ? "text-primary" : "hover:text-white"}`}
+                    disabled={!currentTrack || (!isSpotifyAuth && playbackSource === "youtube")}
+                    aria-label={playbackSource === "youtube" ? "Switch to Spotify" : "Switch to YouTube"}
+                  >
+                    {playbackSource === "youtube" ? <Music2 size={20} /> : <Youtube size={20} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{playbackSource === "youtube" ? "Switch to Spotify" : "Switch to YouTube"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             <TooltipProvider>
               <Tooltip>
