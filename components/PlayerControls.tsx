@@ -53,6 +53,39 @@ export function PlayerControls() {
   const playedTracksRef = useRef(new Set<string>())
   const playHistoryRef = useRef<string[]>([])
 
+  // **NEW: Auto-play Spotify tracks when they change**
+  useEffect(() => {
+    if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady) return
+
+    const playSpotifyTrack = async () => {
+      try {
+        console.log("[Spotify] Auto-playing track:", currentTrack.title)
+        
+        // Ensure track ID is in correct format
+        let trackUri = currentTrack.id
+        if (!trackUri.startsWith('spotify:track:')) {
+          trackUri = `spotify:track:${trackUri}`
+        }
+
+        console.log("[Spotify] Playing URI:", trackUri)
+
+        // Play the track
+        await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
+        setIsPlaying(true)
+        
+      } catch (error) {
+        console.error("[Spotify] Failed to auto-play track:", error)
+      }
+    }
+
+    // Small delay to ensure player is ready
+    const timer = setTimeout(() => {
+      playSpotifyTrack()
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [currentTrack?.id, spotifyPlayer, playbackSource, isReady])
+
   const handleYouTubeDurationReady = useCallback((validDuration: number) => {
     console.log("[SyncFix] Duration ready in PlayerControls:", validDuration)
     setDuration(validDuration)
@@ -296,37 +329,56 @@ export function PlayerControls() {
     currentPlaylistId,
     playlists,
     playbackSource,
+    currentTime,
   ])
 
   const handleSeekForward = useCallback(() => {
-    if (!youtubePlayer || !isReady || !currentTrack || playbackSource !== "youtube") return
-    const newTime = Math.min(duration, currentTime + 5)
-    if (youtubePlayer) {
+    if (!currentTrack || !isReady) return
+    
+    if (playbackSource === "youtube" && youtubePlayer) {
+      const newTime = Math.min(duration, currentTime + 5)
       youtubePlayer.seekTo(newTime, true)
       setCurrentTime(newTime)
       setPlaybackPosition(newTime)
+    } else if (playbackSource === "spotify" && spotifyPlayer) {
+      const newTime = Math.min(duration, currentTime + 5)
+      SpotifyPlayerControls.seek(spotifyPlayer, newTime * 1000)
+      setCurrentTime(newTime)
+      setPlaybackPosition(newTime)
     }
-  }, [youtubePlayer, isReady, currentTrack, duration, currentTime, playbackSource])
+  }, [youtubePlayer, spotifyPlayer, isReady, currentTrack, duration, currentTime, playbackSource, setPlaybackPosition])
 
   const handleSeekBackward = useCallback(() => {
-    if (!youtubePlayer || !isReady || !currentTrack || playbackSource !== "youtube") return
-    const newTime = Math.max(0, currentTime - 5)
-    if (youtubePlayer) {
+    if (!currentTrack || !isReady) return
+    
+    if (playbackSource === "youtube" && youtubePlayer) {
+      const newTime = Math.max(0, currentTime - 5)
       youtubePlayer.seekTo(newTime, true)
       setCurrentTime(newTime)
       setPlaybackPosition(newTime)
+    } else if (playbackSource === "spotify" && spotifyPlayer) {
+      const newTime = Math.max(0, currentTime - 5)
+      SpotifyPlayerControls.seek(spotifyPlayer, newTime * 1000)
+      setCurrentTime(newTime)
+      setPlaybackPosition(newTime)
     }
-  }, [youtubePlayer, isReady, currentTrack, duration, currentTime, playbackSource])
+  }, [youtubePlayer, spotifyPlayer, isReady, currentTrack, currentTime, playbackSource, setPlaybackPosition])
 
   const handleSeek = useCallback(
     (value: number[]) => {
-      if (!youtubePlayer || !isReady || playbackSource !== "youtube") return
+      if (!isReady) return
 
       const newTime = value[0]
       isSeekingRef.current = true
 
-      console.log("[SyncFix] Seeking to:", newTime)
-      youtubePlayer.seekTo(newTime, true)
+      if (playbackSource === "youtube" && youtubePlayer) {
+        console.log("[SyncFix] Seeking to:", newTime)
+        youtubePlayer.seekTo(newTime, true)
+      } else if (playbackSource === "spotify" && spotifyPlayer) {
+        console.log("[Spotify] Seeking to:", newTime)
+        SpotifyPlayerControls.seek(spotifyPlayer, newTime * 1000)
+      }
+
       setCurrentTime(newTime)
       setPlaybackPosition(newTime)
 
@@ -335,27 +387,31 @@ export function PlayerControls() {
         console.log("[SyncFix] Seek complete")
       }, 300)
     },
-    [youtubePlayer, isReady, setPlaybackPosition, playbackSource],
+    [youtubePlayer, spotifyPlayer, isReady, setPlaybackPosition, playbackSource],
   )
 
   const handleVolumeChange = useCallback(
     (value: number[]) => {
       const newVolume = value[0]
       setVolume(newVolume)
-      if (youtubePlayer) {
+      
+      if (playbackSource === "youtube" && youtubePlayer) {
         youtubePlayer.setVolume(newVolume)
+      } else if (playbackSource === "spotify" && spotifyPlayer) {
+        SpotifyPlayerControls.setVolume(spotifyPlayer, newVolume)
       }
+      
       if (newVolume === 0) {
         setIsMuted(true)
       } else {
         setIsMuted(false)
       }
     },
-    [youtubePlayer, setVolume, setIsMuted],
+    [youtubePlayer, spotifyPlayer, setVolume, setIsMuted, playbackSource],
   )
 
   const toggleMute = useCallback(() => {
-    if (youtubePlayer) {
+    if (playbackSource === "youtube" && youtubePlayer) {
       if (isMuted) {
         youtubePlayer.unMute()
         youtubePlayer.setVolume(volume)
@@ -364,8 +420,16 @@ export function PlayerControls() {
         youtubePlayer.mute()
         setIsMuted(true)
       }
+    } else if (playbackSource === "spotify" && spotifyPlayer) {
+      if (isMuted) {
+        SpotifyPlayerControls.setVolume(spotifyPlayer, volume)
+        setIsMuted(false)
+      } else {
+        SpotifyPlayerControls.setVolume(spotifyPlayer, 0)
+        setIsMuted(true)
+      }
     }
-  }, [youtubePlayer, isMuted, volume, setIsMuted])
+  }, [youtubePlayer, spotifyPlayer, isMuted, volume, setIsMuted, playbackSource])
 
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return "0:00"
@@ -402,13 +466,22 @@ export function PlayerControls() {
     if (!playbackSource) {
       setPlaybackSource("youtube")
     }
-  }, [])
+  }, [playbackSource, setPlaybackSource])
 
   const handleSwitch = () => {
     if (playbackSource === "youtube" && !isSpotifyAuth) {
       alert("Please login to Spotify first")
       return
     }
+    
+    // Pause current player before switching
+    if (playbackSource === "youtube" && youtubePlayer) {
+      youtubePlayer.pauseVideo()
+    } else if (playbackSource === "spotify" && spotifyPlayer) {
+      SpotifyPlayerControls.pause(spotifyPlayer)
+    }
+    
+    setIsPlaying(false)
     setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
   }
 
