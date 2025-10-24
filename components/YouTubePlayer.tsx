@@ -1,3 +1,4 @@
+// components/YouTubePlayer.tsx
 "use client"
 
 import { useEffect, useRef } from "react"
@@ -156,6 +157,8 @@ export function YouTubePlayer({
             onReady: (event: any) => {
               console.log("[SyncFix] Player ready event fired")
               isPlayerReadyRef.current = true
+              // Set volume to maximum (100)
+              event.target.setVolume(100)
               startDurationPolling(event.target)
               onPlayerReady(event.target)
             },
@@ -166,12 +169,10 @@ export function YouTubePlayer({
               if (playerState === 1) {
                 // PLAYING
                 console.log("[SyncFix] Video is playing - starting sync")
-
                 // Ensure we have duration
                 if (!durationPollIntervalRef.current) {
                   startDurationPolling(event.target)
                 }
-
                 // Start progress tracking
                 startProgressTracking(event.target)
               } else if (playerState === 3) {
@@ -185,7 +186,6 @@ export function YouTubePlayer({
                 console.log("[SyncFix] Video paused/ended - stopping progress tracking")
                 stopProgressTracking()
               }
-
               onStateChange(event)
             },
             onError: (event: any) => {
@@ -214,9 +214,7 @@ export function YouTubePlayer({
         clearInterval(durationPollIntervalRef.current)
         durationPollIntervalRef.current = null
       }
-
       stopProgressTracking()
-
       if (playerRef.current && typeof playerRef.current.destroy === "function") {
         console.log("[SyncFix] Destroying player")
         playerRef.current.destroy()
@@ -230,20 +228,17 @@ export function YouTubePlayer({
   useEffect(() => {
     if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id) {
       console.log("[SyncFix] Loading new video:", currentTrack.id)
-
       // Stop any existing polling/tracking
       if (durationPollIntervalRef.current) {
         clearInterval(durationPollIntervalRef.current)
         durationPollIntervalRef.current = null
       }
       stopProgressTracking()
-
       // Load the new video
       playerRef.current.loadVideoById({
         videoId: currentTrack.id,
         startSeconds: 0,
       })
-
       // Start duration polling after a small delay
       setTimeout(() => {
         startDurationPolling(playerRef.current)
