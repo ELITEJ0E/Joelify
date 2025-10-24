@@ -65,7 +65,7 @@
     overflow-y: scroll;
   }
 
-  /* 🧩 Completely hide scrollbar on all browsers */
+  /* Completely hide scrollbar on all browsers */
   ::-webkit-scrollbar {
     width: 0;
     height: 0;
@@ -80,5 +80,21 @@
   html, body {
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* Internet Explorer and Edge */
+  }
+}
+
+@layer utilities {
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-slideDown {
+    animation: slideDown 0.4s ease-out;
   }
 }

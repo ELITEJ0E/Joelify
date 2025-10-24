@@ -186,7 +186,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   size="icon"
                   variant="ghost"
                   onClick={toggleTheme}
-                  className="text-gray-400 hover:text-white hover:bg-primary h-8 w-8  transition-all duration-300 ease-in-out"
+                  className="text-gray-400 hover:text-white hover:bg-primary h-8 w-8 transition-all duration-300 ease-in-out"
                 >
                   {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
                 </Button>
@@ -194,7 +194,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   size="icon"
                   variant="ghost"
                   onClick={onClose}
-                  className="text-gray-400 hover:text-white hover:bg-primary h-8 w-8 transition-all duration-300 ease-in-out"
+                  className="text-gray-400 hover:text-white hover:bg-primary h-8 w-8 transition-all duration-300 ease-in-out lg:hidden"
                 >
                   <X size={18} />
                 </Button>
@@ -280,7 +280,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                       <span className="font-medium text-sm">Create Playlist</span>
                                     </button>
                                   </DialogTrigger>
-                                  <DialogContent className="bg-gray-900 border-gray-800/50">
+                                  <DialogContent>
                                     <DialogHeader>
                                       <DialogTitle className="text-primary">Create New Playlist</DialogTitle>
                                       <DialogDescription className="text-gray-300">Give your playlist a name to get started.</DialogDescription>
@@ -290,13 +290,13 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                       value={newPlaylistName}
                                       onChange={(e) => setNewPlaylistName(e.target.value)}
                                       onKeyDown={(e) => e.key === "Enter" && handleCreatePlaylist()}
-                                      className="border-gray-700 bg-gray-800/50 text-gray-100 focus:ring-2 focus:ring-primary transition-all duration-200"
+                                      className="border-primary bg-gray-800/50 text-gray-100 focus:ring-2 focus:ring-primary transition-all duration-200"
                                     />
                                     <DialogFooter>
                                       <Button 
                                         variant="outline" 
                                         onClick={() => setIsCreateDialogOpen(false)}
-                                        className="border-gray-700 text-gray-300 hover:bg-gray-800/50"
+                                        className="border-primary text-gray-300 hover:bg-gray-800/50"
                                       >
                                         Cancel
                                       </Button>
@@ -335,7 +335,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                           <MoreVertical size={14} />
                                         </Button>
                                       </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="bg-gray-900/95 border-gray-800/50">
+                                      <DropdownMenuContent align="end" className="bg-black/60/95 border-gray-800/50">
                                         <DropdownMenuItem 
                                           onClick={() => openRenameDialog(playlist.id, playlist.name)}
                                           className="text-gray-200 hover:bg-primary/10 hover:text-primary"
@@ -354,7 +354,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                               Delete
                                             </DropdownMenuItem>
                                           </DialogTrigger>
-                                          <DialogContent className="bg-gray-900 border-gray-800/50">
+                                          <DialogContent>
                                             <DialogHeader>
                                               <DialogTitle className="text-primary">Delete Playlist</DialogTitle>
                                               <DialogDescription className="text-gray-300">
@@ -365,7 +365,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                               <Button 
                                                 variant="outline" 
                                                 onClick={() => setIsDeleteDialogOpen(false)}
-                                                className="border-gray-700 text-gray-300 hover:bg-gray-800/50"
+                                                className="border-primary text-gray-300 hover:bg-gray-800/50"
                                               >
                                                 Cancel
                                               </Button>
@@ -443,7 +443,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
 
       {/* DIALOGS */}
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800/50">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-primary">Rename Playlist</DialogTitle>
             <DialogDescription className="text-gray-300">Enter a new name for your playlist.</DialogDescription>
@@ -453,13 +453,13 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
             value={renamePlaylistName}
             onChange={(e) => setRenamePlaylistName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleRenamePlaylist()}
-            className="border-gray-700 bg-gray-800/50 text-gray-100 focus:ring-2 focus:ring-primary transition-all duration-200"
+            className="border-primary bg-gray-800/50 text-gray-100 focus:ring-2 focus:ring-primary transition-all duration-200"
           />
           <DialogFooter>
             <Button 
               variant="outline" 
               onClick={() => setIsRenameDialogOpen(false)}
-              className="border-gray-700 text-gray-300 hover:bg-gray-800/50"
+              className="border-primary text-gray-300 hover:bg-gray-800/50"
             >
               Cancel
             </Button>
@@ -473,22 +473,6 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <style jsx>{`
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-slideDown {
-          animation: slideDown 0.4s ease-out;
-        }
-      `}</style>
     </>
   )
 }
