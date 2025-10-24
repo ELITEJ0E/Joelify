@@ -532,7 +532,7 @@ export function PlayerControls() {
         onError={handleSpotifyError}
       />
 
-      <div className="bg-black text-white p-3 md:p-4 border-t border-border w-full">
+      <div className="bg-black text-white p-3 md:p-4 border-border w-full">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
           {/* DESKTOP: Track Info */}
           <div className="hidden md:flex items-center gap-4 flex-1 min-w-0">

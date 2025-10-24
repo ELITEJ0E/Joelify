@@ -99,13 +99,13 @@ export function SpotifyLogin() {
     <Card>
       <CardHeader className="p-3 pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <Music className="h-4 w-4 flex-shrink-0" />
+          <Music className="h-4 w-4 flex-shrink-0 text-primary" />
           <span className="truncate">Connect Spotify</span>
         </CardTitle>
         <CardDescription className="text-xs">Login to stream music from your account</CardDescription>
       </CardHeader>
       <CardContent className="p-3 pt-0">
-        <Button onClick={handleLogin} className="w-full bg-green-500 hover:bg-green-600 h-8 text-xs">
+        <Button onClick={handleLogin} className="w-full bg-primary hover:bg-primary h-8 text-xs">
           <LogIn className="h-3 w-3 mr-2" />
           Login with Spotify
         </Button>
