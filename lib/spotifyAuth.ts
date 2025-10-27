@@ -28,6 +28,7 @@ interface SpotifyProfile {
   display_name: string
   email: string
   images: { url: string }[]
+  product: string // "premium" or "free"
 }
 
 // Generate random string for PKCE

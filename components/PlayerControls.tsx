@@ -12,6 +12,8 @@ import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { isAuthenticated } from "@/lib/spotifyAuth"
+import { getValidAccessToken } from "@/lib/spotifyAuth"
+
 
 export function PlayerControls() {
   const {
@@ -144,7 +146,14 @@ export function PlayerControls() {
 
   const handleSpotifyError = useCallback((error: any) => {
     console.error("[Spotify] Player error:", error)
-  }, [])
+    
+    // If it's a premium error, switch back to YouTube
+    if (error.type === "account_error" || error.type === "premium_required") {
+        console.log("[Spotify] Premium required - switching to YouTube")
+        setPlaybackSource("youtube")
+        alert("⚠️ Spotify Premium Required\n\nYou need a Spotify Premium subscription for in-browser playback. Switching back to YouTube.")
+    }
+}, [setPlaybackSource])
 
   const handleNext = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) {
@@ -448,22 +457,43 @@ export function PlayerControls() {
     }
   }, [playbackSource, setPlaybackSource])
 
-  const handleSwitch = () => {
+  const handleSwitch = async () => {
     if (playbackSource === "youtube" && !isSpotifyAuth) {
-      alert("Please login to Spotify first")
-      return
+        alert("Please login to Spotify first")
+        return
     }
+    
+    // Check if user has premium before switching to Spotify
+    if (playbackSource === "youtube" && isSpotifyAuth) {
+        try {
+        const token = await getValidAccessToken()
+        const response = await fetch("https://api.spotify.com/v1/me", {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+        
+        if (response.ok) {
+            const profile = await response.json()
+            if (profile.product !== "premium") {
+            alert("⚠️ Spotify Premium Required\n\nIn-browser playback requires a Spotify Premium subscription. You'll continue using YouTube for playback.\n\nYou can still search and add Spotify tracks to your library!")
+            return
+            }
+        }
+        } catch (error) {
+        console.error("[Spotify] Failed to check premium status:", error)
+        }
+    }
+    
     if (playbackSource === "youtube" && youtubePlayer) {
-      youtubePlayer.pauseVideo()
+        youtubePlayer.pauseVideo()
     } else if (playbackSource === "spotify" && spotifyPlayer) {
-      SpotifyPlayerControls.pause(spotifyPlayer)
+        SpotifyPlayerControls.pause(spotifyPlayer)
     }
     setIsPlaying(false)
     setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
     // Reset visual modes when switching
     setSpotifyVisualMode(false)
     toggleVideoMode(false)
-  }
+    }
 
   const handleYouTubeStateChange = useCallback(
     (event: any) => {
