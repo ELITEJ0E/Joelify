@@ -1,4 +1,3 @@
-// components/PlayerControls.tsx
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -45,7 +44,7 @@ export function PlayerControls() {
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [isSpotifyAuth, setIsSpotifyAuth] = useState(false)
-  const [spotifyVisualMode, setSpotifyVisualMode] = useState(false) // New state for Spotify visual toggle
+
   const [spotifyState, setSpotifyState] = useState<any>(null)
 
   const isSeekingRef = useRef(false)
@@ -54,25 +53,32 @@ export function PlayerControls() {
   const playedTracksRef = useRef(new Set<string>())
   const playHistoryRef = useRef<string[]>([])
 
-  // Auto-play Spotify tracks when they change
+  // **NEW: Auto-play Spotify tracks when they change**
   useEffect(() => {
     if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady) return
 
     const playSpotifyTrack = async () => {
       try {
         console.log("[Spotify] Auto-playing track:", currentTrack.title)
+        
+        // Ensure track ID is in correct format
         let trackUri = currentTrack.id
         if (!trackUri.startsWith('spotify:track:')) {
           trackUri = `spotify:track:${trackUri}`
         }
+
         console.log("[Spotify] Playing URI:", trackUri)
+
+        // Play the track
         await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
         setIsPlaying(true)
+        
       } catch (error) {
         console.error("[Spotify] Failed to auto-play track:", error)
       }
     }
 
+    // Small delay to ensure player is ready
     const timer = setTimeout(() => {
       playSpotifyTrack()
     }, 300)
@@ -90,6 +96,7 @@ export function PlayerControls() {
       if (!isSeekingRef.current && playbackSource === "youtube") {
         setCurrentTime(currentTime)
         setPlaybackPosition(currentTime)
+
         setDuration((prevDuration) => {
           if (Math.abs(prevDuration - duration) > 1) {
             console.log("[SyncFix] Duration updated:", duration)
@@ -262,6 +269,7 @@ export function PlayerControls() {
       console.log("[SyncFix] Player instance ready in PlayerControls")
       setYoutubePlayer(playerInstance)
       setIsReady(true)
+
       if (playerInstance && typeof playerInstance.setVolume === "function") {
         playerInstance.setVolume(volume)
         if (isMuted) {
@@ -287,9 +295,11 @@ export function PlayerControls() {
       if (playHistoryRef.current.length > 1) {
         playHistoryRef.current.pop()
         const previousTrackId = playHistoryRef.current[playHistoryRef.current.length - 1]
+
         if (currentPlaylistId) {
           const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
           const previousTrack = currentPlaylist?.tracks.find((t) => t.id === previousTrackId)
+
           if (previousTrack) {
             setCurrentTrack(previousTrack)
             setCurrentTime(0)
@@ -298,6 +308,7 @@ export function PlayerControls() {
           }
         }
       }
+
       if (playbackSource === "youtube" && youtubePlayer) {
         youtubePlayer.seekTo(0, true)
         setCurrentTime(0)
@@ -323,6 +334,7 @@ export function PlayerControls() {
 
   const handleSeekForward = useCallback(() => {
     if (!currentTrack || !isReady) return
+    
     if (playbackSource === "youtube" && youtubePlayer) {
       const newTime = Math.min(duration, currentTime + 5)
       youtubePlayer.seekTo(newTime, true)
@@ -338,6 +350,7 @@ export function PlayerControls() {
 
   const handleSeekBackward = useCallback(() => {
     if (!currentTrack || !isReady) return
+    
     if (playbackSource === "youtube" && youtubePlayer) {
       const newTime = Math.max(0, currentTime - 5)
       youtubePlayer.seekTo(newTime, true)
@@ -354,8 +367,10 @@ export function PlayerControls() {
   const handleSeek = useCallback(
     (value: number[]) => {
       if (!isReady) return
+
       const newTime = value[0]
       isSeekingRef.current = true
+
       if (playbackSource === "youtube" && youtubePlayer) {
         console.log("[SyncFix] Seeking to:", newTime)
         youtubePlayer.seekTo(newTime, true)
@@ -363,8 +378,10 @@ export function PlayerControls() {
         console.log("[Spotify] Seeking to:", newTime)
         SpotifyPlayerControls.seek(spotifyPlayer, newTime * 1000)
       }
+
       setCurrentTime(newTime)
       setPlaybackPosition(newTime)
+
       setTimeout(() => {
         isSeekingRef.current = false
         console.log("[SyncFix] Seek complete")
@@ -377,11 +394,13 @@ export function PlayerControls() {
     (value: number[]) => {
       const newVolume = value[0]
       setVolume(newVolume)
+      
       if (playbackSource === "youtube" && youtubePlayer) {
         youtubePlayer.setVolume(newVolume)
       } else if (playbackSource === "spotify" && spotifyPlayer) {
         SpotifyPlayerControls.setVolume(spotifyPlayer, newVolume)
       }
+      
       if (newVolume === 0) {
         setIsMuted(true)
       } else {
@@ -454,24 +473,27 @@ export function PlayerControls() {
       alert("Please login to Spotify first")
       return
     }
+    
+    // Pause current player before switching
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.pauseVideo()
     } else if (playbackSource === "spotify" && spotifyPlayer) {
       SpotifyPlayerControls.pause(spotifyPlayer)
     }
+    
     setIsPlaying(false)
     setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
-    // Reset visual modes when switching
-    setSpotifyVisualMode(false)
-    toggleVideoMode(false)
   }
 
   const handleYouTubeStateChange = useCallback(
     (event: any) => {
       if (playbackSource !== "youtube") return
+
       const playerState = event.data
       console.log("[SyncFix] State changed in PlayerControls:", playerState)
+
       lastPlayerStateRef.current = playerState
+
       switch (playerState) {
         case 1:
           setIsPlaying(true)
@@ -500,6 +522,7 @@ export function PlayerControls() {
 
   const handlePlayPause = useCallback(() => {
     if (!currentTrack || !isReady) return
+
     if (playbackSource === "youtube") {
       if (!youtubePlayer) return
       if (isPlaying) {
@@ -513,13 +536,10 @@ export function PlayerControls() {
     }
   }, [youtubePlayer, spotifyPlayer, currentTrack, isReady, isPlaying, playbackSource])
 
-  const toggleSpotifyVisualMode = useCallback(() => {
-    setSpotifyVisualMode((prev) => !prev)
-  }, [])
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
       switch (e.code) {
         case "Space":
           e.preventDefault()
@@ -535,11 +555,7 @@ export function PlayerControls() {
           break
         case "KeyV":
           e.preventDefault()
-          if (playbackSource === "youtube") {
-            toggleVideoMode()
-          } else if (playbackSource === "spotify") {
-            toggleSpotifyVisualMode()
-          }
+          toggleVideoMode()
           break
         case "KeyM":
           e.preventDefault()
@@ -569,7 +585,6 @@ export function PlayerControls() {
     handlePlayPause,
     handleVolumeChange,
     toggleVideoMode,
-    toggleSpotifyVisualMode,
     toggleMute,
     handleSeekForward,
     handleSeekBackward,
@@ -589,34 +604,6 @@ export function PlayerControls() {
         onStateChange={handleSpotifyStateChange}
         onError={handleSpotifyError}
       />
-
-      {/* Spotify Visual Player */}
-      {playbackSource === "spotify" && spotifyVisualMode && currentTrack && (
-        <div
-          className="flex justify-center items-center bg-black p-2 w-full relative overflow-hidden"
-          style={{ maxWidth: "640px", maxHeight: "360px", margin: "0 auto" }}
-        >
-          <div className="w-full h-full bg-gradient-to-b from-gray-950 to-gray-900 rounded-lg flex items-center justify-center flex-col gap-4">
-            {currentTrack.thumbnail ? (
-              <Image
-                src={currentTrack.thumbnail}
-                width={200}
-                height={200}
-                alt={currentTrack.title || "Spotify track"}
-                className="rounded-lg object-cover"
-              />
-            ) : (
-              <div className="w-48 h-48 bg-secondary rounded-lg flex items-center justify-center">
-                <Music2 size={48} className="text-muted-foreground" />
-              </div>
-            )}
-            <div className="text-center px-4">
-              <p className="text-sm font-semibold text-white line-clamp-1">{currentTrack.title}</p>
-              <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="bg-black text-white p-3 md:p-4 border-border w-full">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
@@ -846,16 +833,16 @@ export function PlayerControls() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={playbackSource === "youtube" ? toggleVideoMode : toggleSpotifyVisualMode}
-                        className={`h-10 w-10 ${videoMode || spotifyVisualMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                        onClick={toggleVideoMode}
+                        className={`h-10 w-10 ${videoMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
                         disabled={!currentTrack}
-                        aria-label={playbackSource === "youtube" ? (videoMode ? "Switch to music mode" : "Switch to video mode") : (spotifyVisualMode ? "Hide Spotify player" : "Show Spotify player")}
+                        aria-label={videoMode ? "Switch to music mode" : "Switch to video mode"}
                       >
-                        {playbackSource === "youtube" ? (videoMode ? <Video size={20} /> : <Music size={20} />) : (spotifyVisualMode ? <Music2 size={20} /> : <Music size={20} />)}
+                        {videoMode ? <Video size={20} /> : <Music size={20} />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{playbackSource === "youtube" ? (videoMode ? "Hide Video" : "Show Video") : (spotifyVisualMode ? "Hide Spotify Player" : "Show Spotify Player")}</p>
+                      <p>{videoMode ? "Hide Video" : "Show Video"}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
