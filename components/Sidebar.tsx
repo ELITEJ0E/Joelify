@@ -169,7 +169,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} aria-hidden="true" />}
 
       <div
-        className={`fixed lg:relative inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-black-950 to-black-900 text-black-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
+        className={`fixed lg:relative inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
