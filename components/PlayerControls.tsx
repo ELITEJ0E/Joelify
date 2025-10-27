@@ -44,9 +44,8 @@ export function PlayerControls() {
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [isSpotifyAuth, setIsSpotifyAuth] = useState(false)
+  const [spotifyVisualMode, setSpotifyVisualMode] = useState(false) // New state for Spotify visual toggle
   const [spotifyState, setSpotifyState] = useState<any>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [isSpotifyPremium, setIsSpotifyPremium] = useState<boolean | null>(null) // New state for Premium status
 
   const isSeekingRef = useRef(false)
   const hasRestoredPositionRef = useRef(false)
@@ -54,71 +53,12 @@ export function PlayerControls() {
   const playedTracksRef = useRef(new Set<string>())
   const playHistoryRef = useRef<string[]>([])
 
-  // Validate track ID format
-  const isValidTrackId = useCallback((track: any) => {
-    if (!track || !track.id) return false
-    if (playbackSource === "youtube") {
-      return /^[A-Za-z0-9_-]{11}$/.test(track.id)
-    } else if (playbackSource === "spotify") {
-      return track.id.startsWith("spotify:track:") || /^[A-Za-z0-9]{22}$/.test(track.id)
-    }
-    return false
-  }, [playbackSource])
-
-  // Check Spotify Premium status
-  useEffect(() => {
-    if (!isSpotifyAuth || playbackSource !== "spotify") return
-
-    const checkPremium = async () => {
-      try {
-        const response = await fetch("https://api.spotify.com/v1/me", {
-          headers: { Authorization: `Bearer ${localStorage.getItem("spotify_access_token")}` },
-        })
-        if (response.ok) {
-          const user = await response.json()
-          setIsSpotifyPremium(user.product === "premium")
-          if (user.product !== "premium") {
-            setErrorMessage("Spotify Premium is required to play tracks. Switch to YouTube or upgrade your account.")
-            setPlaybackSource("youtube") // Fallback to YouTube
-          }
-        } else {
-          console.error("[Spotify] Failed to fetch user profile:", response.status)
-          setIsSpotifyPremium(false)
-          setErrorMessage("Failed to verify Spotify account. Switch to YouTube.")
-          setPlaybackSource("youtube")
-        }
-      } catch (error) {
-        console.error("[Spotify] Error checking Premium status:", error)
-        setIsSpotifyPremium(false)
-        setErrorMessage("Error checking Spotify account. Switch to YouTube.")
-        setPlaybackSource("youtube")
-      }
-    }
-
-    checkPremium()
-  }, [isSpotifyAuth, playbackSource, setPlaybackSource])
-
-  // Validate currentTrack on load
-  useEffect(() => {
-    if (currentTrack && !isValidTrackId(currentTrack)) {
-      console.error("[PlayerControls] Invalid currentTrack on load:", currentTrack)
-      setErrorMessage("Invalid track detected. Skipping to next.")
-      setTimeout(() => handleNext(), 100)
-    }
-  }, [currentTrack, isValidTrackId, handleNext])
-
   // Auto-play Spotify tracks when they change
   useEffect(() => {
-    if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady || !isSpotifyPremium) return
+    if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady) return
 
     const playSpotifyTrack = async () => {
       try {
-        if (!isValidTrackId(currentTrack)) {
-          console.error("[Spotify] Invalid track ID:", currentTrack.id)
-          setErrorMessage("Invalid Spotify track. Skipping to next.")
-          setTimeout(() => handleNext(), 100)
-          return
-        }
         console.log("[Spotify] Auto-playing track:", currentTrack.title)
         let trackUri = currentTrack.id
         if (!trackUri.startsWith('spotify:track:')) {
@@ -127,11 +67,8 @@ export function PlayerControls() {
         console.log("[Spotify] Playing URI:", trackUri)
         await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
         setIsPlaying(true)
-        setErrorMessage(null)
       } catch (error) {
         console.error("[Spotify] Failed to auto-play track:", error)
-        setErrorMessage("Failed to play Spotify track. Switch to YouTube or check your Premium account.")
-        setPlaybackSource("youtube")
       }
     }
 
@@ -140,12 +77,11 @@ export function PlayerControls() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [currentTrack?.id, spotifyPlayer, playbackSource, isReady, isSpotifyPremium, isValidTrackId, handleNext, setPlaybackSource])
+  }, [currentTrack?.id, spotifyPlayer, playbackSource, isReady])
 
   const handleYouTubeDurationReady = useCallback((validDuration: number) => {
     console.log("[SyncFix] Duration ready in PlayerControls:", validDuration)
     setDuration(validDuration)
-    setErrorMessage(null)
   }, [])
 
   const handleYouTubeTimeUpdate = useCallback(
@@ -170,7 +106,6 @@ export function PlayerControls() {
       console.log("[Spotify] Player ready in PlayerControls")
       setSpotifyPlayer(player)
       setIsReady(true)
-      setErrorMessage(null)
     },
     [setSpotifyPlayer],
   )
@@ -209,15 +144,7 @@ export function PlayerControls() {
 
   const handleSpotifyError = useCallback((error: any) => {
     console.error("[Spotify] Player error:", error)
-    if (error.type === "account_error" && error.message.includes("premium users only")) {
-      setErrorMessage("Spotify Premium is required to play tracks. Switch to YouTube or upgrade your account.")
-      setIsSpotifyPremium(false)
-      setPlaybackSource("youtube")
-    } else {
-      setErrorMessage("Spotify playback error. Switching to YouTube.")
-      setPlaybackSource("youtube")
-    }
-  }, [setPlaybackSource, handleNext])
+  }, [])
 
   const handleNext = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) {
@@ -231,25 +158,17 @@ export function PlayerControls() {
       if (playbackSource === "youtube" && youtubePlayer) {
         youtubePlayer.seekTo(0, true)
         setTimeout(() => youtubePlayer.playVideo(), 100)
-      } else if (playbackSource === "spotify" && spotifyPlayer && isSpotifyPremium) {
+      } else if (playbackSource === "spotify" && spotifyPlayer) {
         SpotifyPlayerControls.seek(spotifyPlayer, 0)
         setTimeout(() => SpotifyPlayerControls.play(spotifyPlayer), 100)
       }
       setCurrentTime(0)
       setPlaybackPosition(0)
-      setErrorMessage(null)
       return
     }
 
     if (queue.length > 0) {
       const nextTrack = queue[0]
-      if (!isValidTrackId(nextTrack)) {
-        console.error("[PlayerControls] Invalid track in queue:", nextTrack)
-        setErrorMessage("Invalid track in queue. Skipping.")
-        setQueue(queue.slice(1))
-        setTimeout(() => handleNext(), 100)
-        return
-      }
       setCurrentTrack(nextTrack)
       setQueue(queue.slice(1))
       setCurrentTime(0)
@@ -258,7 +177,6 @@ export function PlayerControls() {
         playedTracksRef.current.add(currentTrack.id)
         playHistoryRef.current.push(currentTrack.id)
       }
-      setErrorMessage(null)
       return
     }
 
@@ -269,20 +187,12 @@ export function PlayerControls() {
 
         if (shuffle) {
           const recentlyPlayed = playHistoryRef.current.slice(-Math.min(3, currentPlaylist.tracks.length - 1))
-          const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id) && isValidTrackId(t))
+          const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id))
 
           if (availableTracks.length === 0) {
             playHistoryRef.current = []
             playedTracksRef.current.clear()
-            const randomTracks = [...currentPlaylist.tracks].filter(isValidTrackId)
-            if (randomTracks.length === 0) {
-              setErrorMessage("No valid tracks in playlist.")
-              setCurrentTrack(null)
-              setIsPlaying(false)
-              setCurrentTime(0)
-              setPlaybackPosition(0)
-              return
-            }
+            const randomTracks = [...currentPlaylist.tracks]
             for (let i = randomTracks.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1))
               ;[randomTracks[i], randomTracks[j]] = [randomTracks[j], randomTracks[i]]
@@ -297,7 +207,7 @@ export function PlayerControls() {
           nextTrack = currentPlaylist.tracks[nextIndex]
         }
 
-        if (nextTrack && isValidTrackId(nextTrack)) {
+        if (nextTrack) {
           setCurrentTrack(nextTrack)
           setCurrentTime(0)
           setPlaybackPosition(0)
@@ -305,20 +215,14 @@ export function PlayerControls() {
             playedTracksRef.current.add(currentTrack.id)
             playHistoryRef.current.push(currentTrack.id)
           }
-          setErrorMessage(null)
-        } else {
-          setErrorMessage("Invalid next track. Skipping.")
-          setTimeout(() => handleNext(), 100)
         }
-        return
       }
+      return
     }
 
     setIsPlaying(false)
     setCurrentTime(0)
     setPlaybackPosition(0)
-    setCurrentTrack(null)
-    setErrorMessage("No more tracks to play.")
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.pauseVideo()
     } else if (playbackSource === "spotify" && spotifyPlayer) {
@@ -339,15 +243,15 @@ export function PlayerControls() {
     shuffle,
     currentPlaylistId,
     playlists,
-    isValidTrackId,
-    isSpotifyPremium,
   ])
 
   const handleError = useCallback(
     (event: any) => {
-      console.error("[Player] YouTube Error:", event)
-      setErrorMessage("YouTube playback error. Skipping to next.")
-      setTimeout(() => handleNext(), 1000)
+      console.error("[Player] YouTube Error:", event.data)
+      if ([2, 5, 100, 101, 150].includes(event.data)) {
+        console.log("[Player] Video unplayable, skipping to next")
+        setTimeout(() => handleNext(), 1000)
+      }
     },
     [handleNext],
   )
@@ -363,13 +267,8 @@ export function PlayerControls() {
           playerInstance.mute()
         }
       }
-      if (currentTrack && !isValidTrackId(currentTrack)) {
-        console.error("[PlayerControls] Invalid currentTrack on YouTube player ready:", currentTrack)
-        setErrorMessage("Invalid YouTube track. Skipping to next.")
-        setTimeout(() => handleNext(), 100)
-      }
     },
-    [volume, isMuted, currentTrack, isValidTrackId, handleNext],
+    [volume, isMuted],
   )
 
   const handlePrevious = useCallback(() => {
@@ -378,12 +277,11 @@ export function PlayerControls() {
         youtubePlayer.seekTo(0, true)
         setCurrentTime(0)
         setPlaybackPosition(0)
-      } else if (playbackSource === "spotify" && spotifyPlayer && isSpotifyPremium) {
+      } else if (playbackSource === "spotify" && spotifyPlayer) {
         SpotifyPlayerControls.seek(spotifyPlayer, 0)
         setCurrentTime(0)
         setPlaybackPosition(0)
       }
-      setErrorMessage(null)
     } else {
       if (playHistoryRef.current.length > 1) {
         playHistoryRef.current.pop()
@@ -391,11 +289,10 @@ export function PlayerControls() {
         if (currentPlaylistId) {
           const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
           const previousTrack = currentPlaylist?.tracks.find((t) => t.id === previousTrackId)
-          if (previousTrack && isValidTrackId(previousTrack)) {
+          if (previousTrack) {
             setCurrentTrack(previousTrack)
             setCurrentTime(0)
             setPlaybackPosition(0)
-            setErrorMessage(null)
             return
           }
         }
@@ -404,12 +301,11 @@ export function PlayerControls() {
         youtubePlayer.seekTo(0, true)
         setCurrentTime(0)
         setPlaybackPosition(0)
-      } else if (playbackSource === "spotify" && spotifyPlayer && isSpotifyPremium) {
+      } else if (playbackSource === "spotify" && spotifyPlayer) {
         SpotifyPlayerControls.seek(spotifyPlayer, 0)
         setCurrentTime(0)
         setPlaybackPosition(0)
       }
-      setErrorMessage(null)
     }
   }, [
     youtubePlayer,
@@ -422,12 +318,10 @@ export function PlayerControls() {
     playlists,
     playbackSource,
     currentTime,
-    isValidTrackId,
-    isSpotifyPremium,
   ])
 
   const handleSeekForward = useCallback(() => {
-    if (!currentTrack || !isReady || (playbackSource === "spotify" && !isSpotifyPremium)) return
+    if (!currentTrack || !isReady) return
     if (playbackSource === "youtube" && youtubePlayer) {
       const newTime = Math.min(duration, currentTime + 5)
       youtubePlayer.seekTo(newTime, true)
@@ -439,11 +333,10 @@ export function PlayerControls() {
       setCurrentTime(newTime)
       setPlaybackPosition(newTime)
     }
-    setErrorMessage(null)
-  }, [youtubePlayer, spotifyPlayer, isReady, currentTrack, duration, currentTime, playbackSource, setPlaybackPosition, isSpotifyPremium])
+  }, [youtubePlayer, spotifyPlayer, isReady, currentTrack, duration, currentTime, playbackSource, setPlaybackPosition])
 
   const handleSeekBackward = useCallback(() => {
-    if (!currentTrack || !isReady || (playbackSource === "spotify" && !isSpotifyPremium)) return
+    if (!currentTrack || !isReady) return
     if (playbackSource === "youtube" && youtubePlayer) {
       const newTime = Math.max(0, currentTime - 5)
       youtubePlayer.seekTo(newTime, true)
@@ -455,12 +348,11 @@ export function PlayerControls() {
       setCurrentTime(newTime)
       setPlaybackPosition(newTime)
     }
-    setErrorMessage(null)
-  }, [youtubePlayer, spotifyPlayer, isReady, currentTrack, currentTime, playbackSource, setPlaybackPosition, isSpotifyPremium])
+  }, [youtubePlayer, spotifyPlayer, isReady, currentTrack, currentTime, playbackSource, setPlaybackPosition])
 
   const handleSeek = useCallback(
     (value: number[]) => {
-      if (!isReady || (playbackSource === "spotify" && !isSpotifyPremium)) return
+      if (!isReady) return
       const newTime = value[0]
       isSeekingRef.current = true
       if (playbackSource === "youtube" && youtubePlayer) {
@@ -472,13 +364,12 @@ export function PlayerControls() {
       }
       setCurrentTime(newTime)
       setPlaybackPosition(newTime)
-      setErrorMessage(null)
       setTimeout(() => {
         isSeekingRef.current = false
         console.log("[SyncFix] Seek complete")
       }, 300)
     },
-    [youtubePlayer, spotifyPlayer, isReady, setPlaybackPosition, playbackSource, isSpotifyPremium],
+    [youtubePlayer, spotifyPlayer, isReady, setPlaybackPosition, playbackSource],
   )
 
   const handleVolumeChange = useCallback(
@@ -487,7 +378,7 @@ export function PlayerControls() {
       setVolume(newVolume)
       if (playbackSource === "youtube" && youtubePlayer) {
         youtubePlayer.setVolume(newVolume)
-      } else if (playbackSource === "spotify" && spotifyPlayer && isSpotifyPremium) {
+      } else if (playbackSource === "spotify" && spotifyPlayer) {
         SpotifyPlayerControls.setVolume(spotifyPlayer, newVolume)
       }
       if (newVolume === 0) {
@@ -496,7 +387,7 @@ export function PlayerControls() {
         setIsMuted(false)
       }
     },
-    [youtubePlayer, spotifyPlayer, setVolume, setIsMuted, playbackSource, isSpotifyPremium],
+    [youtubePlayer, spotifyPlayer, setVolume, setIsMuted, playbackSource],
   )
 
   const toggleMute = useCallback(() => {
@@ -509,7 +400,7 @@ export function PlayerControls() {
         youtubePlayer.mute()
         setIsMuted(true)
       }
-    } else if (playbackSource === "spotify" && spotifyPlayer && isSpotifyPremium) {
+    } else if (playbackSource === "spotify" && spotifyPlayer) {
       if (isMuted) {
         SpotifyPlayerControls.setVolume(spotifyPlayer, volume)
         setIsMuted(false)
@@ -518,7 +409,7 @@ export function PlayerControls() {
         setIsMuted(true)
       }
     }
-  }, [youtubePlayer, spotifyPlayer, isMuted, volume, setIsMuted, playbackSource, isSpotifyPremium])
+  }, [youtubePlayer, spotifyPlayer, isMuted, volume, setIsMuted, playbackSource])
 
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return "0:00"
@@ -559,7 +450,7 @@ export function PlayerControls() {
 
   const handleSwitch = () => {
     if (playbackSource === "youtube" && !isSpotifyAuth) {
-      setErrorMessage("Please login to Spotify first")
+      alert("Please login to Spotify first")
       return
     }
     if (playbackSource === "youtube" && youtubePlayer) {
@@ -569,7 +460,9 @@ export function PlayerControls() {
     }
     setIsPlaying(false)
     setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
-    setErrorMessage(null)
+    // Reset visual modes when switching
+    setSpotifyVisualMode(false)
+    toggleVideoMode(false)
   }
 
   const handleYouTubeStateChange = useCallback(
@@ -581,7 +474,6 @@ export function PlayerControls() {
       switch (playerState) {
         case 1:
           setIsPlaying(true)
-          setErrorMessage(null)
           break
         case 2:
           setIsPlaying(false)
@@ -606,38 +498,23 @@ export function PlayerControls() {
   )
 
   const handlePlayPause = useCallback(() => {
-    if (!currentTrack || !isReady || (playbackSource === "spotify" && !isSpotifyPremium)) {
-      if (playbackSource === "spotify" && !isSpotifyPremium) {
-        setErrorMessage("Spotify Premium is required to play tracks. Switch to YouTube.")
-        setPlaybackSource("youtube")
-      }
-      return
-    }
+    if (!currentTrack || !isReady) return
     if (playbackSource === "youtube") {
       if (!youtubePlayer) return
       if (isPlaying) {
         youtubePlayer.pauseVideo()
       } else {
-        if (!isValidTrackId(currentTrack)) {
-          console.error("[PlayerControls] Invalid track on play:", currentTrack)
-          setErrorMessage("Invalid YouTube track. Skipping to next.")
-          setTimeout(() => handleNext(), 100)
-          return
-        }
         youtubePlayer.playVideo()
       }
     } else if (playbackSource === "spotify") {
       if (!spotifyPlayer) return
-      if (!isValidTrackId(currentTrack)) {
-        console.error("[PlayerControls] Invalid track on play:", currentTrack)
-        setErrorMessage("Invalid Spotify track. Skipping to next.")
-        setTimeout(() => handleNext(), 100)
-        return
-      }
       SpotifyPlayerControls.togglePlay(spotifyPlayer)
     }
-    setErrorMessage(null)
-  }, [youtubePlayer, spotifyPlayer, currentTrack, isReady, isPlaying, playbackSource, isValidTrackId, handleNext, isSpotifyPremium, setPlaybackSource])
+  }, [youtubePlayer, spotifyPlayer, currentTrack, isReady, isPlaying, playbackSource])
+
+  const toggleSpotifyVisualMode = useCallback(() => {
+    setSpotifyVisualMode((prev) => !prev)
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -657,7 +534,11 @@ export function PlayerControls() {
           break
         case "KeyV":
           e.preventDefault()
-          toggleVideoMode()
+          if (playbackSource === "youtube") {
+            toggleVideoMode()
+          } else if (playbackSource === "spotify") {
+            toggleSpotifyVisualMode()
+          }
           break
         case "KeyM":
           e.preventDefault()
@@ -687,10 +568,10 @@ export function PlayerControls() {
     handlePlayPause,
     handleVolumeChange,
     toggleVideoMode,
+    toggleSpotifyVisualMode,
     toggleMute,
     handleSeekForward,
     handleSeekBackward,
-    isSpotifyPremium,
   ])
 
   return (
@@ -708,29 +589,37 @@ export function PlayerControls() {
         onError={handleSpotifyError}
       />
 
-      {errorMessage && (
-        <div className="bg-red-600 text-white p-2 text-center text-sm">
-          {errorMessage}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setCurrentTrack(null)
-              setQueue([])
-              setErrorMessage(null)
-              setIsPlaying(false)
-              if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.pauseVideo()
-              if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.pause(spotifyPlayer)
-            }}
-            className="ml-2 text-white underline"
-          >
-            Reset Player
-          </Button>
+      {/* Spotify Visual Player */}
+      {playbackSource === "spotify" && spotifyVisualMode && currentTrack && (
+        <div
+          className="flex justify-center items-center bg-black p-2 w-full relative overflow-hidden"
+          style={{ maxWidth: "640px", maxHeight: "360px", margin: "0 auto" }}
+        >
+          <div className="w-full h-full bg-gradient-to-b from-gray-950 to-gray-900 rounded-lg flex items-center justify-center flex-col gap-4">
+            {currentTrack.thumbnail ? (
+              <Image
+                src={currentTrack.thumbnail}
+                width={200}
+                height={200}
+                alt={currentTrack.title || "Spotify track"}
+                className="rounded-lg object-cover"
+              />
+            ) : (
+              <div className="w-48 h-48 bg-secondary rounded-lg flex items-center justify-center">
+                <Music2 size={48} className="text-muted-foreground" />
+              </div>
+            )}
+            <div className="text-center px-4">
+              <p className="text-sm font-semibold text-white line-clamp-1">{currentTrack.title}</p>
+              <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
+            </div>
+          </div>
         </div>
       )}
 
       <div className="bg-black text-white p-3 md:p-4 border-border w-full">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+          {/* DESKTOP: Track Info */}
           <div className="hidden md:flex items-center gap-4 flex-1 min-w-0">
             {currentTrack ? (
               <>
@@ -748,8 +637,8 @@ export function PlayerControls() {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-sm line-clamp-1">{currentTrack.title || "Unknown Track"}</p>
-                  <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist || "Unknown Artist"}</p>
+                  <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
+                  <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
                 </div>
               </>
             ) : (
@@ -765,6 +654,7 @@ export function PlayerControls() {
             )}
           </div>
 
+          {/* MOBILE: Track Info + Queue + Toggle */}
           <div className="md:hidden w-full flex items-center justify-between mb-3">
             {currentTrack ? (
               <>
@@ -782,8 +672,8 @@ export function PlayerControls() {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-sm line-clamp-1">{currentTrack.title || "Unknown Track"}</p>
-                  <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist || "Unknown Artist"}</p>
+                  <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
+                  <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
                 </div>
               </>
             ) : (
@@ -839,6 +729,7 @@ export function PlayerControls() {
             </div>
           </div>
 
+          {/* PLAYBACK CONTROLS */}
           <div className="flex flex-col items-center w-full md:flex-1 md:max-w-2xl">
             <div className="flex items-center gap-2 w-full mb-3 md:mb-0 md:order-2">
               <span className="text-xs text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
@@ -848,9 +739,9 @@ export function PlayerControls() {
                   max={duration > 0 ? duration : 1}
                   step={0.1}
                   onValueChange={handleSeek}
-                  disabled={!currentTrack || duration === 0 || !isReady || (playbackSource === "spotify" && !isSpotifyPremium)}
+                  disabled={!currentTrack || duration === 0 || !isReady}
                   aria-label="Seek"
-                  key={`slider-${currentTrack?.id || "no-track"}-${Math.floor(currentTime)}`}
+                  key={`slider-${currentTrack?.id}-${Math.floor(currentTime)}`}
                 />
               </div>
               <span className="text-xs text-gray-400 w-10">{formatTime(duration)}</span>
@@ -884,7 +775,7 @@ export function PlayerControls() {
                         variant="ghost"
                         onClick={handlePrevious}
                         className="h-10 w-10 text-gray-400 hover:text-white"
-                        disabled={!currentTrack || (playbackSource === "spotify" && !isSpotifyPremium)}
+                        disabled={!currentTrack}
                         aria-label="Previous track"
                       >
                         <SkipBack size={22} />
@@ -901,7 +792,7 @@ export function PlayerControls() {
                         size="icon"
                         className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 transition disabled:opacity-50"
                         onClick={handlePlayPause}
-                        disabled={!currentTrack || !isReady || (playbackSource === "spotify" && !isSpotifyPremium)}
+                        disabled={!currentTrack || !isReady}
                         aria-label={isPlaying ? "Pause" : "Play"}
                       >
                         {isPlaying ? <Pause fill="currentColor" size={24} /> : <Play fill="currentColor" size={24} />}
@@ -919,7 +810,7 @@ export function PlayerControls() {
                         variant="ghost"
                         onClick={handleNext}
                         className="h-10 w-10 text-gray-400 hover:text-white"
-                        disabled={!currentTrack || (playbackSource === "spotify" && !isSpotifyPremium)}
+                        disabled={!currentTrack}
                         aria-label="Next track"
                       >
                         <SkipForward size={22} />
@@ -954,16 +845,16 @@ export function PlayerControls() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={toggleVideoMode}
-                        className={`h-10 w-10 ${videoMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
-                        disabled={!currentTrack || playbackSource !== "youtube"}
-                        aria-label={videoMode ? "Switch to music mode" : "Switch to video mode"}
+                        onClick={playbackSource === "youtube" ? toggleVideoMode : toggleSpotifyVisualMode}
+                        className={`h-10 w-10 ${videoMode || spotifyVisualMode ? "text-primary" : "text-gray-400 hover:text-white"}`}
+                        disabled={!currentTrack}
+                        aria-label={playbackSource === "youtube" ? (videoMode ? "Switch to music mode" : "Switch to video mode") : (spotifyVisualMode ? "Hide Spotify player" : "Show Spotify player")}
                       >
-                        {videoMode ? <Video size={20} /> : <Music size={20} />}
+                        {playbackSource === "youtube" ? (videoMode ? <Video size={20} /> : <Music size={20} />) : (spotifyVisualMode ? <Music2 size={20} /> : <Music size={20} />)}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{videoMode ? "Hide Video" : "Show Video"}</p>
+                      <p>{playbackSource === "youtube" ? (videoMode ? "Hide Video" : "Show Video") : (spotifyVisualMode ? "Hide Spotify Player" : "Show Spotify Player")}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -971,6 +862,7 @@ export function PlayerControls() {
             </TooltipProvider>
           </div>
 
+          {/* DESKTOP: Queue, Toggle, Volume */}
           <div className="hidden md:flex items-center gap-4 flex-1 justify-end">
             <Sheet>
               <SheetTrigger asChild>
@@ -1037,14 +929,7 @@ export function PlayerControls() {
               </Tooltip>
             </TooltipProvider>
             <div className="w-24">
-              <Slider
-                value={[volume]}
-                max={100}
-                step={1}
-                onValueChange={handleVolumeChange}
-                aria-label="Volume"
-                disabled={playbackSource === "spotify" && !isSpotifyPremium}
-              />
+              <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} aria-label="Volume" />
             </div>
           </div>
         </div>
