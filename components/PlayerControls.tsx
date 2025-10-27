@@ -1,4 +1,3 @@
-// components/PlayerControls.tsx
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -53,30 +52,6 @@ export function PlayerControls() {
   const lastPlayerStateRef = useRef<number>(-1)
   const playedTracksRef = useRef(new Set<string>())
   const playHistoryRef = useRef<string[]>([])
-
-  useEffect(() => {
-  const validateAndFixState = () => {
-    if (currentTrack && (
-      !currentTrack.id ||
-      typeof currentTrack.title === 'undefined' ||
-      currentTrack.id === 'undefined' ||
-      currentTrack.title === 'undefined'
-    )) {
-      console.error("[Player] Corrupted track state detected, resetting player")
-      setCurrentTrack(null)
-      setQueue([])
-      setPlaybackPosition(0)
-      setIsPlaying(false)
-      
-      // Also clear from localStorage
-      localStorage.removeItem('currentTrack')
-      localStorage.removeItem('queue')
-    }
-  }
-
-  validateAndFixState()
-}, [currentTrack, setCurrentTrack, setQueue, setPlaybackPosition, setIsPlaying])
-
 
   // Auto-play Spotify tracks when they change
   useEffect(() => {
