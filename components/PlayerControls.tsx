@@ -52,57 +52,42 @@ export function PlayerControls() {
   const lastPlayerStateRef = useRef<number>(-1)
   const playedTracksRef = useRef(new Set<string>())
   const playHistoryRef = useRef<string[]>([])
-  const nextTrackTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Clear any pending next track timeouts
-  const clearNextTrackTimeout = useCallback(() => {
-    if (nextTrackTimeoutRef.current) {
-      clearTimeout(nextTrackTimeoutRef.current)
-      nextTrackTimeoutRef.current = null
-    }
-  }, [])
-
-  // **FIXED: Auto-play new tracks when they change**
+  // **NEW: Auto-play Spotify tracks when they change**
   useEffect(() => {
-    if (!currentTrack || !isReady) return
+    if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady) return
 
-    console.log("[Player] ===== Track changed =====")
-    console.log("[Player] New track:", currentTrack.title)
-    console.log("[Player] Playback source:", playbackSource)
-    console.log("[Player] Is ready:", isReady)
-    
-    // Clear any pending next track actions
-    clearNextTrackTimeout()
-
-    if (playbackSource === "spotify" && spotifyPlayer) {
-      const playSpotifyTrack = async () => {
-        try {
-          let trackUri = currentTrack.id
-          if (!trackUri.startsWith('spotify:track:')) {
-            trackUri = `spotify:track:${trackUri}`
-          }
-          console.log("[Spotify] Auto-playing:", trackUri)
-          await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
-          setIsPlaying(true)
-        } catch (error) {
-          console.error("[Spotify] Failed to auto-play track:", error)
+    const playSpotifyTrack = async () => {
+      try {
+        console.log("[Spotify] Auto-playing track:", currentTrack.title)
+        
+        // Ensure track ID is in correct format
+        let trackUri = currentTrack.id
+        if (!trackUri.startsWith('spotify:track:')) {
+          trackUri = `spotify:track:${trackUri}`
         }
+
+        console.log("[Spotify] Playing URI:", trackUri)
+
+        // Play the track
+        await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
+        setIsPlaying(true)
+        
+      } catch (error) {
+        console.error("[Spotify] Failed to auto-play track:", error)
       }
-      setTimeout(playSpotifyTrack, 300)
-    } else if (playbackSource === "youtube" && youtubePlayer) {
-      // YouTube will auto-play when video changes via loadVideoById
-      setTimeout(() => {
-        console.log("[YouTube] Auto-playing video")
-        if (youtubePlayer && typeof youtubePlayer.playVideo === 'function') {
-          youtubePlayer.playVideo()
-          setIsPlaying(true)
-        }
-      }, 500)
     }
-  }, [currentTrack?.id, spotifyPlayer, youtubePlayer, playbackSource, isReady, clearNextTrackTimeout])
+
+    // Small delay to ensure player is ready
+    const timer = setTimeout(() => {
+      playSpotifyTrack()
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [currentTrack?.id, spotifyPlayer, playbackSource, isReady])
 
   const handleYouTubeDurationReady = useCallback((validDuration: number) => {
-    console.log("[Player] Duration ready:", validDuration)
+    console.log("[SyncFix] Duration ready in PlayerControls:", validDuration)
     setDuration(validDuration)
   }, [])
 
@@ -114,6 +99,7 @@ export function PlayerControls() {
 
         setDuration((prevDuration) => {
           if (Math.abs(prevDuration - duration) > 1) {
+            console.log("[SyncFix] Duration updated:", duration)
             return duration
           }
           return prevDuration
@@ -125,7 +111,7 @@ export function PlayerControls() {
 
   const handleSpotifyPlayerReady = useCallback(
     (player: any) => {
-      console.log("[Spotify] Player ready")
+      console.log("[Spotify] Player ready in PlayerControls")
       setSpotifyPlayer(player)
       setIsReady(true)
     },
@@ -156,196 +142,97 @@ export function PlayerControls() {
         }
       }
 
-      // **FIXED: Detect track end and auto-play next**
-      if (state.paused && state.position === 0 && state.duration > 0 && !state.loading) {
-        console.log("[Spotify] Track ended, playing next")
-        clearNextTrackTimeout()
-        nextTrackTimeoutRef.current = setTimeout(() => handleNext(), 100)
+      if (state.paused && state.position === 0 && state.duration > 0) {
+        console.log("[Spotify] Track ended")
+        setTimeout(() => handleNext(), 100)
       }
     },
-    [playbackSource, currentTrack, setCurrentTrack, setPlaybackPosition, clearNextTrackTimeout],
+    [playbackSource, currentTrack, setCurrentTrack, setPlaybackPosition],
   )
 
   const handleSpotifyError = useCallback((error: any) => {
     console.error("[Spotify] Player error:", error)
   }, [])
 
-  // **FIXED: Improved handleNext with proper queue and repeat logic**
   const handleNext = useCallback(() => {
-    console.log("[Player] ===== handleNext called =====")
-    console.log("[Player] Queue length:", queue.length)
-    console.log("[Player] Repeat:", repeat)
-    console.log("[Player] Shuffle:", shuffle)
-    console.log("[Player] Current playlist ID:", currentPlaylistId)
-    console.log("[Player] Current track:", currentTrack?.title)
-    
-    // **1. Handle Repeat One - HIGHEST PRIORITY**
+    if (playbackSource === "youtube" && youtubePlayer) {
+      youtubePlayer.pauseVideo()
+    } else if (playbackSource === "spotify" && spotifyPlayer) {
+      SpotifyPlayerControls.pause(spotifyPlayer)
+    }
+    setIsPlaying(false)
+
     if (repeat === "one" && currentTrack) {
-      console.log("[Player] ✅ Repeat ONE - replaying current track")
+      if (playbackSource === "youtube" && youtubePlayer) {
+        youtubePlayer.seekTo(0, true)
+        setTimeout(() => youtubePlayer.playVideo(), 100)
+      } else if (playbackSource === "spotify" && spotifyPlayer) {
+        SpotifyPlayerControls.seek(spotifyPlayer, 0)
+        setTimeout(() => SpotifyPlayerControls.play(spotifyPlayer), 100)
+      }
       setCurrentTime(0)
       setPlaybackPosition(0)
-      
-      // Force track to replay by re-setting it
-      const trackToReplay = { ...currentTrack }
-      
-      if (playbackSource === "youtube" && youtubePlayer) {
-        setTimeout(() => {
-          youtubePlayer.seekTo(0, true)
-          youtubePlayer.playVideo()
-          setIsPlaying(true)
-        }, 200)
-      } else if (playbackSource === "spotify" && spotifyPlayer) {
-        setTimeout(async () => {
-          let trackUri = trackToReplay.id
-          if (!trackUri.startsWith('spotify:track:')) {
-            trackUri = `spotify:track:${trackUri}`
-          }
-          await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
-          setIsPlaying(true)
-        }, 200)
-      }
       return
     }
 
-    // **2. Play next track from queue - SECOND PRIORITY**
     if (queue.length > 0) {
-      console.log("[Player] ✅ Playing next from QUEUE:", queue[0].title)
       const nextTrack = queue[0]
-      const newQueue = queue.slice(1)
-      
-      // Update track history
+      setCurrentTrack(nextTrack)
+      setQueue(queue.slice(1))
+      setCurrentTime(0)
+      setPlaybackPosition(0)
       if (currentTrack) {
         playedTracksRef.current.add(currentTrack.id)
         playHistoryRef.current.push(currentTrack.id)
       }
-      
-      setCurrentTrack(nextTrack)
-      setQueue(newQueue)
-      setCurrentTime(0)
-      setPlaybackPosition(0)
-      console.log("[Player] New queue length:", newQueue.length)
       return
     }
 
-    // **3. Handle Repeat All - THIRD PRIORITY**
-    if (repeat === "all") {
-      console.log("[Player] ✅ Repeat ALL mode active")
-      
-      // Get current playlist or use all available tracks
-      let availableTracks: Track[] = []
-      
-      if (currentPlaylistId) {
-        const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
-        if (currentPlaylist) {
-          availableTracks = currentPlaylist.tracks
-          console.log("[Player] Using playlist tracks:", availableTracks.length)
-        }
-      }
-      
-      // If no playlist, we can't repeat all
-      if (availableTracks.length === 0) {
-        console.log("[Player] ❌ No tracks available for repeat all")
-        setIsPlaying(false)
-        return
-      }
+    if (repeat === "all" && currentPlaylistId) {
+      const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
+      if (currentPlaylist && currentPlaylist.tracks.length > 0) {
+        let nextTrack: typeof currentTrack = null
 
-      let nextTrack: Track | null = null
+        if (shuffle) {
+          const recentlyPlayed = playHistoryRef.current.slice(-Math.min(3, currentPlaylist.tracks.length - 1))
+          const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id))
 
-      if (shuffle) {
-        console.log("[Player] Shuffle mode - selecting random track")
-        // Shuffle mode: avoid recently played tracks
-        const recentlyPlayed = playHistoryRef.current.slice(-Math.min(3, availableTracks.length - 1))
-        const notRecentlyPlayed = availableTracks.filter((t) => !recentlyPlayed.includes(t.id))
-
-        if (notRecentlyPlayed.length === 0) {
-          // Reset history and pick random
-          console.log("[Player] Resetting shuffle history")
-          playHistoryRef.current = []
-          playedTracksRef.current.clear()
-          nextTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]
+          if (availableTracks.length === 0) {
+            playHistoryRef.current = []
+            playedTracksRef.current.clear()
+            const randomTracks = [...currentPlaylist.tracks]
+            for (let i = randomTracks.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1))
+              ;[randomTracks[i], randomTracks[j]] = [randomTracks[j], randomTracks[i]]
+            }
+            nextTrack = randomTracks[0]
+          } else {
+            nextTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]
+          }
         } else {
-          nextTrack = notRecentlyPlayed[Math.floor(Math.random() * notRecentlyPlayed.length)]
+          const currentIndex = currentPlaylist.tracks.findIndex((t) => t.id === currentTrack?.id)
+          const nextIndex = (currentIndex + 1) % currentPlaylist.tracks.length
+          nextTrack = currentPlaylist.tracks[nextIndex]
         }
-      } else {
-        console.log("[Player] Sequential mode - playing next in order")
-        // Sequential mode: play next track
-        const currentIndex = availableTracks.findIndex((t) => t.id === currentTrack?.id)
-        console.log("[Player] Current index:", currentIndex)
-        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % availableTracks.length : 0
-        console.log("[Player] Next index:", nextIndex)
-        nextTrack = availableTracks[nextIndex]
-      }
 
-      if (nextTrack) {
-        console.log("[Player] ✅ Playing next track:", nextTrack.title)
-        if (currentTrack) {
-          playedTracksRef.current.add(currentTrack.id)
-          playHistoryRef.current.push(currentTrack.id)
-        }
-        setCurrentTrack(nextTrack)
-        setCurrentTime(0)
-        setPlaybackPosition(0)
-        return
-      }
-    }
-
-    // **4. Handle shuffle without repeat all**
-    if (shuffle && currentPlaylistId) {
-      console.log("[Player] ✅ Shuffle mode (no repeat)")
-      const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
-      if (currentPlaylist && currentPlaylist.tracks.length > 0) {
-        const recentlyPlayed = playHistoryRef.current.slice(-Math.min(3, currentPlaylist.tracks.length - 1))
-        const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id))
-        
-        if (availableTracks.length > 0) {
-          const nextTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]
-          console.log("[Player] ✅ Playing shuffled track:", nextTrack.title)
-          
+        if (nextTrack) {
+          setCurrentTrack(nextTrack)
+          setCurrentTime(0)
+          setPlaybackPosition(0)
           if (currentTrack) {
             playedTracksRef.current.add(currentTrack.id)
             playHistoryRef.current.push(currentTrack.id)
           }
-          
-          setCurrentTrack(nextTrack)
-          setCurrentTime(0)
-          setPlaybackPosition(0)
-          return
         }
       }
+      return
     }
 
-    // **5. Sequential play (no repeat, no shuffle)**
-    if (currentPlaylistId && !shuffle && repeat === "off") {
-      console.log("[Player] Sequential mode (no repeat)")
-      const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
-      if (currentPlaylist && currentPlaylist.tracks.length > 0) {
-        const currentIndex = currentPlaylist.tracks.findIndex((t) => t.id === currentTrack?.id)
-        if (currentIndex >= 0 && currentIndex < currentPlaylist.tracks.length - 1) {
-          const nextTrack = currentPlaylist.tracks[currentIndex + 1]
-          console.log("[Player] ✅ Playing next sequential track:", nextTrack.title)
-          
-          if (currentTrack) {
-            playedTracksRef.current.add(currentTrack.id)
-            playHistoryRef.current.push(currentTrack.id)
-          }
-          
-          setCurrentTrack(nextTrack)
-          setCurrentTime(0)
-          setPlaybackPosition(0)
-          return
-        }
-      }
-    }
-
-    // **6. No more tracks - stop playback**
-    console.log("[Player] ❌ No more tracks to play - stopping")
     setIsPlaying(false)
     setCurrentTime(0)
     setPlaybackPosition(0)
-    
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.pauseVideo()
-      youtubePlayer.seekTo(0)
     } else if (playbackSource === "spotify" && spotifyPlayer) {
       SpotifyPlayerControls.pause(spotifyPlayer)
     }
@@ -379,7 +266,7 @@ export function PlayerControls() {
 
   const handleYouTubePlayerReady = useCallback(
     (playerInstance: any) => {
-      console.log("[Player] YouTube player ready")
+      console.log("[SyncFix] Player instance ready in PlayerControls")
       setYoutubePlayer(playerInstance)
       setIsReady(true)
 
@@ -485,8 +372,10 @@ export function PlayerControls() {
       isSeekingRef.current = true
 
       if (playbackSource === "youtube" && youtubePlayer) {
+        console.log("[SyncFix] Seeking to:", newTime)
         youtubePlayer.seekTo(newTime, true)
       } else if (playbackSource === "spotify" && spotifyPlayer) {
+        console.log("[Spotify] Seeking to:", newTime)
         SpotifyPlayerControls.seek(spotifyPlayer, newTime * 1000)
       }
 
@@ -495,6 +384,7 @@ export function PlayerControls() {
 
       setTimeout(() => {
         isSeekingRef.current = false
+        console.log("[SyncFix] Seek complete")
       }, 300)
     },
     [youtubePlayer, spotifyPlayer, isReady, setPlaybackPosition, playbackSource],
@@ -556,7 +446,7 @@ export function PlayerControls() {
 
   useEffect(() => {
     if (currentTrack) {
-      console.log("[Player] Track changed:", currentTrack.title)
+      console.log("[SyncFix] Track changed:", currentTrack.title)
       setCurrentTime(0)
       setPlaybackPosition(0)
       setDuration(0)
@@ -584,6 +474,7 @@ export function PlayerControls() {
       return
     }
     
+    // Pause current player before switching
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.pauseVideo()
     } else if (playbackSource === "spotify" && spotifyPlayer) {
@@ -594,21 +485,20 @@ export function PlayerControls() {
     setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
   }
 
-  // **FIXED: YouTube state change handler with better track end detection**
   const handleYouTubeStateChange = useCallback(
     (event: any) => {
       if (playbackSource !== "youtube") return
 
       const playerState = event.data
-      console.log("[Player] YouTube state changed:", playerState)
+      console.log("[SyncFix] State changed in PlayerControls:", playerState)
 
       lastPlayerStateRef.current = playerState
 
       switch (playerState) {
-        case 1: // Playing
+        case 1:
           setIsPlaying(true)
           break
-        case 2: // Paused
+        case 2:
           setIsPlaying(false)
           if (youtubePlayer && typeof youtubePlayer.getCurrentTime === "function") {
             const time = youtubePlayer.getCurrentTime()
@@ -616,21 +506,18 @@ export function PlayerControls() {
             setPlaybackPosition(time)
           }
           break
-        case 0: // Ended
-          console.log("[Player] YouTube video ended")
+        case 0:
           setIsPlaying(false)
           setCurrentTime(0)
           setPlaybackPosition(0)
-          // **FIXED: Call handleNext to play next track**
-          clearNextTrackTimeout()
-          nextTrackTimeoutRef.current = setTimeout(() => handleNext(), 100)
+          setTimeout(() => handleNext(), 100)
           break
-        case -1: // Unstarted
+        case -1:
           setIsPlaying(false)
           break
       }
     },
-    [youtubePlayer, setPlaybackPosition, playbackSource, handleNext, clearNextTrackTimeout],
+    [youtubePlayer, setPlaybackPosition, playbackSource, handleNext],
   )
 
   const handlePlayPause = useCallback(() => {
@@ -702,13 +589,6 @@ export function PlayerControls() {
     handleSeekForward,
     handleSeekBackward,
   ])
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      clearNextTrackTimeout()
-    }
-  }, [clearNextTrackTimeout])
 
   return (
     <>
