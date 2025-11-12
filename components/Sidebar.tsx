@@ -17,6 +17,7 @@ import {
   X,
   Download,
   Upload,
+  BarChart3,
 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useApp } from "@/contexts/AppContext"
@@ -38,7 +39,7 @@ import { SpotifyQuota } from "./SpotifyQuota"
 import { isAuthenticated } from "@/lib/spotifyAuth"
 
 interface SidebarProps {
-  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => void
   isOpen: boolean
   onClose: () => void
 }
@@ -57,7 +58,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setPlaylists,
     primaryColor = "green-500", // Default to green-500 if not provided
   } = useApp()
-  
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -158,7 +159,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     input.click()
   }
 
-  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library") => {
+  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => {
     setActiveView(view)
     onNavigate(view)
     onClose()
@@ -276,14 +277,19 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                 <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                                   <DialogTrigger asChild>
                                     <button className="flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out hover:bg-primary/10 hover:text-primary">
-                                      <PlusSquare size={20} className="transition-transform duration-300 group-hover:scale-105" />
+                                      <PlusSquare
+                                        size={20}
+                                        className="transition-transform duration-300 group-hover:scale-105"
+                                      />
                                       <span className="font-medium text-sm">Create Playlist</span>
                                     </button>
                                   </DialogTrigger>
                                   <DialogContent>
                                     <DialogHeader>
                                       <DialogTitle className="text-primary">Create New Playlist</DialogTitle>
-                                      <DialogDescription className="text-gray-300">Give your playlist a name to get started.</DialogDescription>
+                                      <DialogDescription className="text-gray-300">
+                                        Give your playlist a name to get started.
+                                      </DialogDescription>
                                     </DialogHeader>
                                     <Input
                                       placeholder="My Playlist"
@@ -293,15 +299,15 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                       className="border-primary bg-gray-800/50 text-gray-100 focus:ring-2 focus:ring-primary transition-all duration-200"
                                     />
                                     <DialogFooter>
-                                      <Button 
-                                        variant="outline" 
+                                      <Button
+                                        variant="outline"
                                         onClick={() => setIsCreateDialogOpen(false)}
                                         className="border-primary text-gray-300 hover:bg-gray-800/50"
                                       >
                                         Cancel
                                       </Button>
-                                      <Button 
-                                        onClick={handleCreatePlaylist} 
+                                      <Button
+                                        onClick={handleCreatePlaylist}
                                         disabled={!newPlaylistName.trim()}
                                         className="bg-primary hover:bg-primary/90 text-white"
                                       >
@@ -315,8 +321,8 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                               {playlists.map((playlist) => (
                                 <li key={playlist.id} className="group">
                                   <div className="flex items-center justify-between py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
-                                    <button 
-                                      onClick={() => handlePlaylistClick(playlist.id)} 
+                                    <button
+                                      onClick={() => handlePlaylistClick(playlist.id)}
                                       className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${
                                         currentPlaylistId === playlist.id
                                           ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
@@ -336,7 +342,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                         </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end" className=" border-gray-800/50">
-                                        <DropdownMenuItem 
+                                        <DropdownMenuItem
                                           onClick={() => openRenameDialog(playlist.id, playlist.name)}
                                           className="text-gray-200 hover:bg-primary/10 hover:text-primary"
                                         >
@@ -362,15 +368,15 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                               </DialogDescription>
                                             </DialogHeader>
                                             <DialogFooter>
-                                              <Button 
-                                                variant="outline" 
+                                              <Button
+                                                variant="outline"
                                                 onClick={() => setIsDeleteDialogOpen(false)}
                                                 className="border-primary text-gray-300 hover:bg-gray-800/50"
                                               >
                                                 Cancel
                                               </Button>
-                                              <Button 
-                                                onClick={handleDeletePlaylist} 
+                                              <Button
+                                                onClick={handleDeletePlaylist}
                                                 className="bg-red-500 hover:bg-red-600 text-white"
                                               >
                                                 Delete
@@ -406,9 +412,26 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                         )}
                       </button>
                     </li>
+                    <li>
+                      <button
+                        onClick={() => handleNavigate("stats")}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                          activeView === "stats"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
+                      >
+                        <BarChart3 size={20} className="transition-transform duration-300 group-hover:scale-105" />
+                        <span className="font-medium text-sm">Statistics</span>
+                      </button>
+                    </li>
                     <li className="mt-4 pt-4 border-t border-gray-800/30">
                       <SpotifyLogin />
-                      {isSpotifyAuth && <div className="mt-3"><SpotifyQuota /></div>}
+                      {isSpotifyAuth && (
+                        <div className="mt-3">
+                          <SpotifyQuota />
+                        </div>
+                      )}
                     </li>
                   </ul>
                 </nav>
@@ -456,15 +479,15 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
             className="border-primary bg-gray-800/50 text-gray-100 focus:ring-2 focus:ring-primary transition-all duration-200"
           />
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setIsRenameDialogOpen(false)}
               className="border-primary text-gray-300 hover:bg-gray-800/50"
             >
               Cancel
             </Button>
-            <Button 
-              onClick={handleRenamePlaylist} 
+            <Button
+              onClick={handleRenamePlaylist}
               disabled={!renamePlaylistName.trim()}
               className="bg-primary hover:bg-primary/90 text-white"
             >

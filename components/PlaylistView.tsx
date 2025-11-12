@@ -6,12 +6,7 @@ import { useApp } from "@/contexts/AppContext"
 import { Play, MoreVertical, Trash2, GripVertical, Plus, Edit } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -21,15 +16,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { ShareMenu } from "./ShareMenu"
 
 export function PlaylistView() {
   const {
@@ -269,11 +259,12 @@ export function PlaylistView() {
 
         {currentPlaylist.tracks.length > 0 && (
           <>
-            <div className="mb-8">
+            <div className="mb-8 flex items-center gap-4">
               <Button size="lg" className="bg-primary hover:bg-primary/90 rounded-full" onClick={handlePlayPlaylist}>
                 <Play fill="currentColor" size={20} className="mr-2" />
                 Play
               </Button>
+              <ShareMenu type="playlist" data={currentPlaylist} />
             </div>
 
             <div className="space-y-2">

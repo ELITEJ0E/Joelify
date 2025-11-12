@@ -5,10 +5,11 @@ import { PlaylistView } from "./PlaylistView"
 import { HomeView } from "./HomeView"
 import { LikedSongsView } from "./LikedSongsView"
 import { LibraryView } from "./LibraryView"
+import { StatisticsView } from "./StatisticsView"
 
 interface MainContentProps {
-  view: "home" | "search" | "playlist" | "liked" | "library"
-  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
+  view: "home" | "search" | "playlist" | "liked" | "library" | "stats"
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => void
 }
 
 export function MainContent({ view, onNavigate }: MainContentProps) {
@@ -26,6 +27,10 @@ export function MainContent({ view, onNavigate }: MainContentProps) {
 
   if (view === "library") {
     return <LibraryView onNavigate={onNavigate} />
+  }
+
+  if (view === "stats") {
+    return <StatisticsView />
   }
 
   return <HomeView onNavigate={onNavigate} />

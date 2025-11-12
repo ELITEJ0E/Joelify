@@ -43,6 +43,15 @@ interface AppContextType extends AppState {
   setPlaybackSource: (source: PlaybackSource) => void
   spotifyPlayer: any
   setSpotifyPlayer: (player: any) => void
+  audioSettings: {
+    crossfadeDuration: number
+    gaplessPlayback: boolean
+    eqPreset: string
+    customEQ: number[]
+    youtubeQuality: "audio" | "360p" | "720p" | "1080p"
+    spotifyQuality: "normal" | "high" | "veryhigh"
+  }
+  setAudioSettings: (settings: AppContextType["audioSettings"]) => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -64,6 +73,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false)
   const [playbackSource, setPlaybackSource] = useState<PlaybackSource>("youtube")
   const [spotifyPlayer, setSpotifyPlayer] = useState<any>(null)
+  const [audioSettings, setAudioSettingsState] = useState({
+    crossfadeDuration: 0,
+    gaplessPlayback: true,
+    eqPreset: "Flat",
+    customEQ: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    youtubeQuality: "720p" as const,
+    spotifyQuality: "high" as const,
+  })
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -85,6 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (stored.videoMode !== undefined) setVideoMode(stored.videoMode)
     if (stored.customTheme) setCustomThemeState(stored.customTheme)
     if (stored.playbackSource) setPlaybackSource(stored.playbackSource as PlaybackSource)
+    if (stored.audioSettings) setAudioSettingsState(stored.audioSettings)
     setIsInitialized(true)
   }, [])
 
@@ -106,6 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       videoMode,
       customTheme,
       playbackSource,
+      audioSettings,
     })
   }, [
     currentTrack,
@@ -121,6 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     videoMode,
     customTheme,
     playbackSource,
+    audioSettings,
     isInitialized,
   ])
 
@@ -246,6 +266,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCustomThemeState(colors)
   }
 
+  const setAudioSettings = (settings: typeof audioSettings) => {
+    setAudioSettingsState(settings)
+  }
+
   return (
     <AppContext.Provider
       value={{
@@ -291,6 +315,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPlaybackSource,
         spotifyPlayer,
         setSpotifyPlayer,
+        audioSettings,
+        setAudioSettings,
       }}
     >
       {children}

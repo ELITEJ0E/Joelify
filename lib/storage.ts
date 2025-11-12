@@ -33,6 +33,14 @@ export interface AppState {
     accent: string
   }
   playbackSource?: "youtube" | "spotify"
+  audioSettings?: {
+    crossfadeDuration: number
+    gaplessPlayback: boolean
+    eqPreset: string
+    customEQ: number[]
+    youtubeQuality: "audio" | "360p" | "720p" | "1080p"
+    spotifyQuality: "normal" | "high" | "veryhigh"
+  }
 }
 
 const STORAGE_KEY = "spotify-youtube-app-state"

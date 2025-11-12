@@ -12,7 +12,7 @@ import { Suspense } from "react"
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
-  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library">("home")
+  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library" | "stats">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   useEffect(() => {
