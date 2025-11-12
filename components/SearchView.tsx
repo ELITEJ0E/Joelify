@@ -34,6 +34,8 @@ export function SearchView() {
   const [error, setError] = useState<string | null>(null)
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
   const [searchSource, setSearchSource] = useState<"youtube" | "spotify" | "both">("both")
+  const [lastQuery, setLastQuery] = useState("")
+
   const {
     playlists,
     addTrackToPlaylist,
@@ -51,12 +53,12 @@ export function SearchView() {
     e.preventDefault()
     if (!query.trim()) return
 
+    setLastQuery(query)
     setIsLoading(true)
     setError(null)
     setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
 
     try {
-      // Search YouTube
       if (searchSource === "youtube" || searchSource === "both") {
         const cacheKey = `searchCache_${query.trim().toLowerCase()}`
         const cached = getCachedData<YouTubeVideo[]>(cacheKey, sessionStorage)
@@ -78,7 +80,6 @@ export function SearchView() {
         }
       }
 
-      // Search Spotify
       if ((searchSource === "spotify" || searchSource === "both") && isSpotifyAuth) {
         const cacheKey = `spotifySearchCache_${query.trim().toLowerCase()}`
         const cached = getCachedData<any[]>(cacheKey, sessionStorage)
@@ -124,7 +125,6 @@ export function SearchView() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Search</h1>
 
-        {/* Search Bar */}
         <form onSubmit={handleSearch} className="mb-6 md:mb-8">
           <div className="flex flex-col gap-3 md:gap-4">
             <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
@@ -161,7 +161,6 @@ export function SearchView() {
           </div>
         </form>
 
-        {/* Loading State */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="animate-spin text-primary mb-4" size={48} />
@@ -169,7 +168,6 @@ export function SearchView() {
           </div>
         )}
 
-        {/* Error State */}
         {error && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-8">
             <p className="text-destructive font-semibold mb-2">Oops! Something went wrong</p>
@@ -180,9 +178,9 @@ export function SearchView() {
           </div>
         )}
 
-        {/* Results Section */}
         {!isLoading && (youtubeResults.length > 0 || spotifyResults.length > 0) && (
           <div className="mb-12">
+            {lastQuery && <p className="text-sm text-muted-foreground mb-4">Showing results for "{lastQuery}"</p>}
             <Tabs defaultValue="youtube" className="w-full">
               <TabsList className="mb-6">
                 {youtubeResults.length > 0 && (
@@ -236,7 +234,6 @@ export function SearchView() {
           </div>
         )}
 
-        {/* No Results Message */}
         {!isLoading && !error && youtubeResults.length === 0 && spotifyResults.length === 0 && query && (
           <div className="text-center py-20">
             <p className="text-lg md:text-xl text-muted-foreground">Looking for "{query}"?</p>
@@ -244,7 +241,6 @@ export function SearchView() {
           </div>
         )}
 
-        {/* Discover More Section */}
         <section className="mb-12">
           <div className="flex items-center gap-2 mb-6">
             <Compass size={24} className="text-primary" />
@@ -257,7 +253,6 @@ export function SearchView() {
   )
 }
 
-/* ---------------- Search Result Card ---------------- */
 function SearchResultCard({
   video,
   source,

@@ -1,7 +1,21 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, List, Music, Video, Youtube, Music2 } from "lucide-react"
+import {
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Repeat,
+  Shuffle,
+  Volume2,
+  VolumeX,
+  List,
+  Music,
+  Video,
+  Youtube,
+  Music2,
+} from "lucide-react"
 import Image from "next/image"
 import { useApp } from "@/contexts/AppContext"
 import { YouTubePlayer } from "./YouTubePlayer"
@@ -44,8 +58,9 @@ export function PlayerControls() {
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [isSpotifyAuth, setIsSpotifyAuth] = useState(false)
-
   const [spotifyState, setSpotifyState] = useState<any>(null)
+  const [shouldAutoPlaySpotify, setShouldAutoPlaySpotify] = useState(false)
+  const trackEndHandledRef = useRef(false)
 
   const isSeekingRef = useRef(false)
   const hasRestoredPositionRef = useRef(false)
@@ -53,38 +68,33 @@ export function PlayerControls() {
   const playedTracksRef = useRef(new Set<string>())
   const playHistoryRef = useRef<string[]>([])
 
-  // **NEW: Auto-play Spotify tracks when they change**
   useEffect(() => {
-    if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady) return
+    if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady || !shouldAutoPlaySpotify) return
 
     const playSpotifyTrack = async () => {
       try {
         console.log("[Spotify] Auto-playing track:", currentTrack.title)
-        
-        // Ensure track ID is in correct format
+
         let trackUri = currentTrack.id
-        if (!trackUri.startsWith('spotify:track:')) {
+        if (!trackUri.startsWith("spotify:track:")) {
           trackUri = `spotify:track:${trackUri}`
         }
 
         console.log("[Spotify] Playing URI:", trackUri)
-
-        // Play the track
         await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
         setIsPlaying(true)
-        
+        setShouldAutoPlaySpotify(false)
       } catch (error) {
         console.error("[Spotify] Failed to auto-play track:", error)
       }
     }
 
-    // Small delay to ensure player is ready
     const timer = setTimeout(() => {
       playSpotifyTrack()
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [currentTrack?.id, spotifyPlayer, playbackSource, isReady])
+  }, [currentTrack, spotifyPlayer, playbackSource, isReady, shouldAutoPlaySpotify])
 
   const handleYouTubeDurationReady = useCallback((validDuration: number) => {
     console.log("[SyncFix] Duration ready in PlayerControls:", validDuration)
@@ -142,9 +152,13 @@ export function PlayerControls() {
         }
       }
 
-      if (state.paused && state.position === 0 && state.duration > 0) {
-        console.log("[Spotify] Track ended")
-        setTimeout(() => handleNext(), 100)
+      if (state.paused && state.position === 0 && state.duration > 0 && !trackEndHandledRef.current) {
+        console.log("[Spotify] Track ended - triggering next")
+        trackEndHandledRef.current = true
+        setTimeout(() => {
+          handleNext()
+          trackEndHandledRef.current = false
+        }, 100)
       }
     },
     [playbackSource, currentTrack, setCurrentTrack, setPlaybackPosition],
@@ -152,6 +166,11 @@ export function PlayerControls() {
 
   const handleSpotifyError = useCallback((error: any) => {
     console.error("[Spotify] Player error:", error)
+    if (error.type === "account_error" || error.type === "premium_required") {
+      alert(
+        "Spotify Premium is required to use the Spotify player. Please upgrade your account or continue using YouTube.",
+      )
+    }
   }, [])
 
   const handleNext = useCallback(() => {
@@ -172,6 +191,7 @@ export function PlayerControls() {
       }
       setCurrentTime(0)
       setPlaybackPosition(0)
+      setIsPlaying(true)
       return
     }
 
@@ -185,6 +205,9 @@ export function PlayerControls() {
         playedTracksRef.current.add(currentTrack.id)
         playHistoryRef.current.push(currentTrack.id)
       }
+      if (playbackSource === "spotify") {
+        setShouldAutoPlaySpotify(true)
+      }
       return
     }
 
@@ -194,12 +217,14 @@ export function PlayerControls() {
         let nextTrack: typeof currentTrack = null
 
         if (shuffle) {
-          const recentlyPlayed = playHistoryRef.current.slice(-Math.min(3, currentPlaylist.tracks.length - 1))
+          const recentlyPlayed = playHistoryRef.current.slice(-Math.min(5, currentPlaylist.tracks.length - 1))
           const availableTracks = currentPlaylist.tracks.filter((t) => !recentlyPlayed.includes(t.id))
 
           if (availableTracks.length === 0) {
+            // Reset history when all tracks have been played
             playHistoryRef.current = []
             playedTracksRef.current.clear()
+            // Fisher-Yates shuffle
             const randomTracks = [...currentPlaylist.tracks]
             for (let i = randomTracks.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1))
@@ -222,6 +247,9 @@ export function PlayerControls() {
           if (currentTrack) {
             playedTracksRef.current.add(currentTrack.id)
             playHistoryRef.current.push(currentTrack.id)
+          }
+          if (playbackSource === "spotify") {
+            setShouldAutoPlaySpotify(true)
           }
         }
       }
@@ -252,33 +280,6 @@ export function PlayerControls() {
     currentPlaylistId,
     playlists,
   ])
-
-  const handleError = useCallback(
-    (event: any) => {
-      console.error("[Player] YouTube Error:", event.data)
-      if ([2, 5, 100, 101, 150].includes(event.data)) {
-        console.log("[Player] Video unplayable, skipping to next")
-        setTimeout(() => handleNext(), 1000)
-      }
-    },
-    [handleNext],
-  )
-
-  const handleYouTubePlayerReady = useCallback(
-    (playerInstance: any) => {
-      console.log("[SyncFix] Player instance ready in PlayerControls")
-      setYoutubePlayer(playerInstance)
-      setIsReady(true)
-
-      if (playerInstance && typeof playerInstance.setVolume === "function") {
-        playerInstance.setVolume(volume)
-        if (isMuted) {
-          playerInstance.mute()
-        }
-      }
-    },
-    [volume, isMuted],
-  )
 
   const handlePrevious = useCallback(() => {
     if (currentTime > 3) {
@@ -334,7 +335,7 @@ export function PlayerControls() {
 
   const handleSeekForward = useCallback(() => {
     if (!currentTrack || !isReady) return
-    
+
     if (playbackSource === "youtube" && youtubePlayer) {
       const newTime = Math.min(duration, currentTime + 5)
       youtubePlayer.seekTo(newTime, true)
@@ -350,7 +351,7 @@ export function PlayerControls() {
 
   const handleSeekBackward = useCallback(() => {
     if (!currentTrack || !isReady) return
-    
+
     if (playbackSource === "youtube" && youtubePlayer) {
       const newTime = Math.max(0, currentTime - 5)
       youtubePlayer.seekTo(newTime, true)
@@ -394,13 +395,13 @@ export function PlayerControls() {
     (value: number[]) => {
       const newVolume = value[0]
       setVolume(newVolume)
-      
+
       if (playbackSource === "youtube" && youtubePlayer) {
         youtubePlayer.setVolume(newVolume)
       } else if (playbackSource === "spotify" && spotifyPlayer) {
         SpotifyPlayerControls.setVolume(spotifyPlayer, newVolume)
       }
-      
+
       if (newVolume === 0) {
         setIsMuted(true)
       } else {
@@ -452,6 +453,7 @@ export function PlayerControls() {
       setDuration(0)
       hasRestoredPositionRef.current = false
       setIsPlaying(false)
+      trackEndHandledRef.current = false
     } else {
       setDuration(0)
       setCurrentTime(0)
@@ -473,15 +475,15 @@ export function PlayerControls() {
       alert("Please login to Spotify first")
       return
     }
-    
-    // Pause current player before switching
+
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.pauseVideo()
     } else if (playbackSource === "spotify" && spotifyPlayer) {
       SpotifyPlayerControls.pause(spotifyPlayer)
     }
-    
+
     setIsPlaying(false)
+    setShouldAutoPlaySpotify(false)
     setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
   }
 
@@ -536,59 +538,32 @@ export function PlayerControls() {
     }
   }, [youtubePlayer, spotifyPlayer, currentTrack, isReady, isPlaying, playbackSource])
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-
-      switch (e.code) {
-        case "Space":
-          e.preventDefault()
-          handlePlayPause()
-          break
-        case "ArrowUp":
-          e.preventDefault()
-          handleVolumeChange([Math.min(100, volume + 10)])
-          break
-        case "ArrowDown":
-          e.preventDefault()
-          handleVolumeChange([Math.max(0, volume - 10)])
-          break
-        case "KeyV":
-          e.preventDefault()
-          toggleVideoMode()
-          break
-        case "KeyM":
-          e.preventDefault()
-          toggleMute()
-          break
-        case "ArrowRight":
-          e.preventDefault()
-          handleSeekForward()
-          break
-        case "ArrowLeft":
-          e.preventDefault()
-          handleSeekBackward()
-          break
+  const handleError = useCallback(
+    (event: any) => {
+      console.error("[Player] YouTube Error:", event.data)
+      if ([2, 5, 100, 101, 150].includes(event.data)) {
+        console.log("[Player] Video unplayable, skipping to next")
+        setTimeout(() => handleNext(), 1000)
       }
-    }
+    },
+    [handleNext],
+  )
 
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [
-    youtubePlayer,
-    spotifyPlayer,
-    playbackSource,
-    isReady,
-    currentTrack,
-    volume,
-    isPlaying,
-    handlePlayPause,
-    handleVolumeChange,
-    toggleVideoMode,
-    toggleMute,
-    handleSeekForward,
-    handleSeekBackward,
-  ])
+  const handleYouTubePlayerReady = useCallback(
+    (playerInstance: any) => {
+      console.log("[SyncFix] Player instance ready in PlayerControls")
+      setYoutubePlayer(playerInstance)
+      setIsReady(true)
+
+      if (playerInstance && typeof playerInstance.setVolume === "function") {
+        playerInstance.setVolume(volume)
+        if (isMuted) {
+          playerInstance.mute()
+        }
+      }
+    },
+    [volume, isMuted],
+  )
 
   return (
     <>
