@@ -82,127 +82,120 @@ export function AudioSettings({ settings, onChange }: AudioSettingsProps) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white">
-          <Settings size={20} />
+        <Button variant="ghost" size="xs" className="p-2 text-gray-400 hover:text-white">
+          <Settings size={18} />
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full sm:w-[480px] overflow-y-auto">
+
+      <SheetContent className="w-full sm:w-[440px] overflow-y-auto px-5 py-4">
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Music2 size={20} />
+          <SheetTitle className="flex items-center gap-1.5 text-base">
+            <Music2 size={18} />
             Audio Settings
           </SheetTitle>
-          <SheetDescription>
-            Customize your audio experience with crossfade, equalizer, and quality settings.
+          <SheetDescription className="text-xs">
+            Customize your audio experience with crossfade, EQ, and quality.
           </SheetDescription>
         </SheetHeader>
 
-        <Tabs defaultValue="playback" className="mt-6">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="playback" className="mt-4">
+          <TabsList className="grid w-full grid-cols-3 text-xs">
             <TabsTrigger value="playback">Playback</TabsTrigger>
             <TabsTrigger value="equalizer">Equalizer</TabsTrigger>
             <TabsTrigger value="quality">Quality</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="playback" className="space-y-6 mt-6">
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Crossfade Duration</Label>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Smoothly blend tracks together ({localSettings.crossfadeDuration}s)
-                </p>
-                <Slider
-                  value={[localSettings.crossfadeDuration]}
-                  min={0}
-                  max={12}
-                  step={1}
-                  onValueChange={handleCrossfadeChange}
-                />
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>Off</span>
-                  <span>2s</span>
-                  <span>6s</span>
-                  <span>12s</span>
-                </div>
+          <TabsContent value="playback" className="space-y-4 mt-4">
+            <div>
+              <Label className="text-sm font-medium">Crossfade Duration</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Blend tracks smoothly ({localSettings.crossfadeDuration}s)
+              </p>
+              <Slider
+                value={[localSettings.crossfadeDuration]}
+                min={0}
+                max={12}
+                step={1}
+                onValueChange={handleCrossfadeChange}
+              />
+              <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
+                <span>Off</span>
+                <span>2s</span>
+                <span>6s</span>
+                <span>12s</span>
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="equalizer" className="space-y-6 mt-6">
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium mb-3 block">EQ Preset</Label>
-                <Select value={localSettings.eqPreset} onValueChange={handleEQPresetChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select preset" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(EQ_PRESETS).map((preset) => (
-                      <SelectItem key={preset} value={preset}>
-                        {preset}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium mb-4 block">Custom Equalizer</Label>
-                <div className="space-y-4">
-                  {localSettings.customEQ.map((value, index) => (
-                    <div key={index} className="flex items-center gap-4">
-                      <span className="text-xs text-muted-foreground w-12">{FREQUENCY_BANDS[index]}</span>
-                      <Slider
-                        value={[value]}
-                        min={-12}
-                        max={12}
-                        step={1}
-                        onValueChange={(val) => handleCustomEQChange(index, val)}
-                        className="flex-1"
-                      />
-                      <span className="text-xs text-muted-foreground w-8 text-right">
-                        {value > 0 ? "+" : ""}
-                        {value}dB
-                      </span>
-                    </div>
+          <TabsContent value="equalizer" className="space-y-4 mt-4">
+            <div>
+              <Label className="text-sm font-medium mb-2 block">EQ Preset</Label>
+              <Select value={localSettings.eqPreset} onValueChange={handleEQPresetChange}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Select preset" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(EQ_PRESETS).map((preset) => (
+                    <SelectItem key={preset} value={preset}>
+                      {preset}
+                    </SelectItem>
                   ))}
-                </div>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Custom Equalizer</Label>
+              <div className="space-y-2">
+                {localSettings.customEQ.map((value, index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <span className="text-[11px] text-muted-foreground w-10">{FREQUENCY_BANDS[index]}</span>
+                    <Slider
+                      value={[value]}
+                      min={-12}
+                      max={12}
+                      step={1}
+                      onValueChange={(val) => handleCustomEQChange(index, val)}
+                      className="flex-1"
+                    />
+                    <span className="text-[11px] text-muted-foreground w-8 text-right">
+                      {value > 0 ? "+" : ""}
+                      {value}dB
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="quality" className="space-y-6 mt-6">
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium mb-3 block">YouTube Quality</Label>
-                <Select value={localSettings.youtubeQuality} onValueChange={handleYouTubeQualityChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="audio">Audio Only (Best Battery)</SelectItem>
-                    <SelectItem value="360p">360p</SelectItem>
-                    <SelectItem value="720p">720p (Recommended)</SelectItem>
-                    <SelectItem value="1080p">1080p (Highest)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-2">Higher quality uses more data and battery</p>
-              </div>
+          <TabsContent value="quality" className="space-y-4 mt-4">
+            <div>
+              <Label className="text-sm font-medium mb-2 block">YouTube Quality</Label>
+              <Select value={localSettings.youtubeQuality} onValueChange={handleYouTubeQualityChange}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="audio">Audio Only</SelectItem>
+                  <SelectItem value="360p">360p</SelectItem>
+                  <SelectItem value="720p">720p</SelectItem>
+                  <SelectItem value="1080p">1080p</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div>
-                <Label className="text-sm font-medium mb-3 block">Spotify Quality</Label>
-                <Select value={localSettings.spotifyQuality} onValueChange={handleSpotifyQualityChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">Normal (96 kbps)</SelectItem>
-                    <SelectItem value="high">High (160 kbps)</SelectItem>
-                    <SelectItem value="veryhigh">Very High (320 kbps)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-2">Premium required for Very High quality</p>
-              </div>
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Spotify Quality</Label>
+              <Select value={localSettings.spotifyQuality} onValueChange={handleSpotifyQualityChange}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="veryhigh">Very High</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </TabsContent>
         </Tabs>

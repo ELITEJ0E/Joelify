@@ -26,14 +26,11 @@ import { QueueSheet } from "./QueueSheet"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { MiniPlayer } from "./MiniPlayer"
 import { SleepTimer } from "./SleepTimer"
-import { KeyboardShortcuts } from "./KeyboardShortcuts" // Import KeyboardShortcuts
-import { ShareMenu } from "./ShareMenu"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { isAuthenticated } from "@/lib/spotifyAuth"
-import { AudioSettings } from "./AudioSettings"
 
 export function PlayerControls() {
   const {
@@ -773,7 +770,6 @@ export function PlayerControls() {
                   <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
                   <p className="text-xs text-gray-400 line-clamp-1">{currentTrack.artist}</p>
                 </div>
-                <ShareMenu type="track" />
               </>
             ) : (
               <>
@@ -816,7 +812,6 @@ export function PlayerControls() {
               </div>
             )}
             <div className="flex items-center gap-2">
-              <ShareMenu type="track" />
               <Sheet>
                 <SheetTrigger asChild>
                   <Button
@@ -1107,11 +1102,6 @@ export function PlayerControls() {
             </TooltipProvider>
 
             <SleepTimer onTimerEnd={handleSleepTimerEnd} isPlaying={isPlaying} />
-
-            {/* Add keyboard shortcuts button */}
-            <KeyboardShortcuts />
-
-            <AudioSettings settings={audioSettings} onChange={setAudioSettings} />
 
             <TooltipProvider>
               <Tooltip>

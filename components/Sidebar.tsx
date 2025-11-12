@@ -37,6 +37,9 @@ import { ThemeSettings } from "./ThemeSettings"
 import { SpotifyLogin } from "./SpotifyLogin"
 import { SpotifyQuota } from "./SpotifyQuota"
 import { isAuthenticated } from "@/lib/spotifyAuth"
+import { AudioSettings } from "./AudioSettings"
+import { KeyboardShortcuts } from "./KeyboardShortcuts"
+
 
 interface SidebarProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => void
@@ -56,6 +59,8 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme,
     likedSongs,
     setPlaylists,
+    audioSettings,
+    setAudioSettings,
     primaryColor = "green-500", // Default to green-500 if not provided
   } = useApp()
 
@@ -182,6 +187,8 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                 Joelify
               </h1>
               <div className="flex items-center gap-2">
+                <AudioSettings settings={audioSettings} onChange={setAudioSettings} />
+                <KeyboardShortcuts />
                 <ThemeSettings />
                 <Button
                   size="icon"
