@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
 import { X, ChevronDown, Type } from "lucide-react"
 import Image from "next/image"
@@ -26,11 +26,89 @@ export function ExpandablePlayer({
   isPlaying,
   children,
 }: ExpandablePlayerProps) {
-  const { currentTrack } = useApp()
+  const { currentTrack, videoMode } = useApp()
   const [showLyrics, setShowLyrics] = useState(false)
+  const [localVideoMode, setLocalVideoMode] = useState(false)
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.8])
+  const expandedPlayerRef = useRef<any>(null)
+  const isPlayerReadyRef = useRef(false)
+
+  // Initialize YouTube player for expanded view
+  useEffect(() => {
+    if (!isExpanded || !localVideoMode || !currentTrack?.id) return
+
+    const initExpandedPlayer = () => {
+      if (window.YT && window.YT.Player && !expandedPlayerRef.current) {
+        expandedPlayerRef.current = new window.YT.Player("expanded-youtube-player", {
+          height: "100%",
+          width: "100%",
+          videoId: currentTrack.id,
+          playerVars: {
+            autoplay: 0,
+            controls: 1,
+            disablekb: 0,
+            fs: 1,
+            modestbranding: 1,
+            playsinline: 1,
+            rel: 0,
+            iv_load_policy: 3,
+          },
+          events: {
+            onReady: () => {
+              isPlayerReadyRef.current = true
+              console.log("[ExpandedPlayer] Player ready")
+            },
+          },
+        })
+      }
+    }
+
+    if (window.YT && window.YT.Player) {
+      initExpandedPlayer()
+    } else {
+      const checkYT = setInterval(() => {
+        if (window.YT && window.YT.Player) {
+          clearInterval(checkYT)
+          initExpandedPlayer()
+        }
+      }, 100)
+
+      return () => clearInterval(checkYT)
+    }
+
+    return () => {
+      if (expandedPlayerRef.current && typeof expandedPlayerRef.current.destroy === "function") {
+        expandedPlayerRef.current.destroy()
+        expandedPlayerRef.current = null
+        isPlayerReadyRef.current = false
+      }
+    }
+  }, [isExpanded, localVideoMode, currentTrack?.id])
+
+  // Sync playback state with expanded player
+  useEffect(() => {
+    if (!expandedPlayerRef.current || !isPlayerReadyRef.current) return
+
+    if (isPlaying) {
+      expandedPlayerRef.current.playVideo?.()
+    } else {
+      expandedPlayerRef.current.pauseVideo?.()
+    }
+  }, [isPlaying])
+
+  // Seek to current position when video mode is toggled
+  useEffect(() => {
+    if (expandedPlayerRef.current && isPlayerReadyRef.current && localVideoMode) {
+      setTimeout(() => {
+        expandedPlayerRef.current.seekTo?.(currentTime, true)
+        if (isPlaying) {
+          expandedPlayerRef.current.playVideo?.()
+        }
+      }, 500)
+    }
+  }, [localVideoMode])
 
   const handleDragEnd = (_event: any, info: PanInfo) => {
     if (info.offset.y > 100 || info.velocity.y > 500) {
@@ -44,8 +122,11 @@ export function ExpandablePlayer({
     if (!isExpanded) {
       y.set(0)
       setShowLyrics(false)
+      setLocalVideoMode(false)
+    } else {
+      setLocalVideoMode(videoMode)
     }
-  }, [isExpanded, y])
+  }, [isExpanded, y, videoMode])
 
   // Desktop: Click to toggle
   const handleBackdropClick = () => {
