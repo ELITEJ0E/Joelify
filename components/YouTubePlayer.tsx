@@ -31,7 +31,7 @@ export function YouTubePlayer({
   const isPlayerReadyRef = useRef(false)
   const durationPollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const progressRAFRef = useRef<number | null>(null)
-  const { currentTrack, videoMode } = useApp()
+  const { currentTrack, videoMode, audioSettings } = useApp()
 
   const startDurationPolling = (player: any) => {
     if (durationPollIntervalRef.current) {
@@ -139,57 +139,62 @@ export function YouTubePlayer({
 
     const initPlayer = () => {
       if (window.YT && window.YT.Player && containerRef.current && !playerRef.current) {
+        const playerVars: any = {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          modestbranding: 1,
+          playsinline: 1,
+          rel: 0,
+          iv_load_policy: 3,
+        }
+
+        // Apply quality setting if not audio-only
+        if (audioSettings.youtubeQuality !== "audio") {
+          playerVars.quality = audioSettings.youtubeQuality
+        }
+
         playerRef.current = new window.YT.Player("youtube-player", {
           height: "100%",
           width: "100%",
           videoId: currentTrack?.id || "",
-          playerVars: {
-            autoplay: 0,
-            controls: 0,
-            disablekb: 1,
-            fs: 0,
-            modestbranding: 1,
-            playsinline: 1,
-            rel: 0,
-            iv_load_policy: 3,
-          },
+          playerVars,
           events: {
             onReady: (event: any) => {
-              console.log("[SyncFix] Player ready event fired")
               isPlayerReadyRef.current = true
-              // Set volume to maximum (100)
               event.target.setVolume(100)
+
+              if (audioSettings.youtubeQuality !== "audio") {
+                event.target.setPlaybackQuality(audioSettings.youtubeQuality)
+              }
+
               startDurationPolling(event.target)
               onPlayerReady(event.target)
             },
             onStateChange: (event: any) => {
-              console.log("[SyncFix] State change:", event.data)
               const playerState = event.data
 
               if (playerState === 1) {
-                // PLAYING
-                console.log("[SyncFix] Video is playing - starting sync")
-                // Ensure we have duration
+                if (audioSettings.youtubeQuality !== "audio") {
+                  event.target.setPlaybackQuality(audioSettings.youtubeQuality)
+                }
+
                 if (!durationPollIntervalRef.current) {
                   startDurationPolling(event.target)
                 }
-                // Start progress tracking
                 startProgressTracking(event.target)
               } else if (playerState === 3) {
-                // BUFFERING
-                console.log("[SyncFix] Video buffering - checking duration")
                 if (!durationPollIntervalRef.current) {
                   startDurationPolling(event.target)
                 }
               } else if (playerState === 2 || playerState === 0) {
-                // PAUSED or ENDED
-                console.log("[SyncFix] Video paused/ended - stopping progress tracking")
                 stopProgressTracking()
               }
               onStateChange(event)
             },
             onError: (event: any) => {
-              console.error("[SyncFix] YouTube Error:", event.data)
+              console.error("[YouTube] Error:", event.data)
               if (durationPollIntervalRef.current) {
                 clearInterval(durationPollIntervalRef.current)
                 durationPollIntervalRef.current = null
@@ -216,14 +221,13 @@ export function YouTubePlayer({
       }
       stopProgressTracking()
       if (playerRef.current && typeof playerRef.current.destroy === "function") {
-        console.log("[SyncFix] Destroying player")
         playerRef.current.destroy()
         playerRef.current = null
         isPlayerReadyRef.current = false
       }
       window.onYouTubeIframeAPIReady = () => {}
     }
-  }, [])
+  }, [audioSettings])
 
   useEffect(() => {
     if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id) {

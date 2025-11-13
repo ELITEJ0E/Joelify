@@ -21,6 +21,7 @@ export function SpotifyPlayer({ onPlayerReady, onStateChange, onError }: Spotify
   const [isSDKLoaded, setIsSDKLoaded] = useState(false)
   const [deviceId, setDeviceId] = useState<string | null>(null)
   const [isPremium, setIsPremium] = useState<boolean | null>(null)
+  const hasShownPremiumAlertRef = useRef(false)
 
   // Load Spotify Web Playback SDK
   useEffect(() => {
@@ -60,17 +61,18 @@ export function SpotifyPlayer({ onPlayerReady, onStateChange, onError }: Spotify
         const profileResponse = await fetch("https://api.spotify.com/v1/me", {
           headers: { Authorization: `Bearer ${token}` },
         })
-        
+
         if (profileResponse.ok) {
           const profile = await profileResponse.json()
           const hasPremium = profile.product === "premium"
           setIsPremium(hasPremium)
-          
-          if (!hasPremium) {
+
+          if (!hasPremium && !hasShownPremiumAlertRef.current) {
+            hasShownPremiumAlertRef.current = true
             console.warn("[Spotify] Free account detected - Web Playback SDK requires Premium")
-            onError({ 
-              type: "premium_required", 
-              message: "Spotify Web Player requires a Premium subscription" 
+            onError({
+              type: "premium_required",
+              message: "Spotify Web Player requires a Premium subscription",
             })
             return
           }
@@ -137,7 +139,11 @@ export function SpotifyPlayer({ onPlayerReady, onStateChange, onError }: Spotify
         player.addListener("account_error", ({ message }: { message: string }) => {
           console.error("[Spotify] Account error:", message)
           setIsPremium(false)
-          onError({ type: "account_error", message })
+
+          if (!hasShownPremiumAlertRef.current) {
+            hasShownPremiumAlertRef.current = true
+            onError({ type: "account_error", message })
+          }
         })
 
         // Playback error
