@@ -1294,8 +1294,6 @@ export function PlayerControls() {
 
             <SleepTimer onTimerEnd={handleSleepTimerEnd} isPlaying={isPlaying} />
 
-            <AudioSettings settings={audioSettings} onChange={setAudioSettings} />
-
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
