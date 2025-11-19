@@ -1,15 +1,15 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown, Type } from 'lucide-react'
+import { X, ChevronDown, Type, Video, Music } from 'lucide-react'
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { useApp } from "@/contexts/AppContext"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface ExpandablePlayerProps {
   isExpanded: boolean
@@ -26,100 +26,21 @@ export function ExpandablePlayer({
   isPlaying,
   children,
 }: ExpandablePlayerProps) {
-  const { currentTrack, videoMode } = useApp()
+  const { currentTrack } = useApp()
   const [showLyrics, setShowLyrics] = useState(false)
-  const [localVideoMode, setLocalVideoMode] = useState(false)
+  const [expandedVideoMode, setExpandedVideoMode] = useState(false)
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.8])
-  const expandedPlayerRef = useRef<any>(null)
-  const isPlayerReadyRef = useRef(false)
-
-  // Initialize YouTube player for expanded view
-  useEffect(() => {
-    if (!isExpanded || !localVideoMode || !currentTrack?.id) return
-
-    const initExpandedPlayer = () => {
-      if (window.YT && window.YT.Player && !expandedPlayerRef.current) {
-        expandedPlayerRef.current = new window.YT.Player("expanded-youtube-player", {
-          height: "100%",
-          width: "100%",
-          videoId: currentTrack.id,
-          playerVars: {
-            autoplay: 0,
-            controls: 1,
-            disablekb: 0,
-            fs: 1,
-            modestbranding: 1,
-            playsinline: 1,
-            rel: 0,
-            iv_load_policy: 3,
-          },
-          events: {
-            onReady: () => {
-              isPlayerReadyRef.current = true
-              console.log("[ExpandedPlayer] Player ready")
-            },
-          },
-        })
-      }
-    }
-
-    if (window.YT && window.YT.Player) {
-      initExpandedPlayer()
-    } else {
-      const checkYT = setInterval(() => {
-        if (window.YT && window.YT.Player) {
-          clearInterval(checkYT)
-          initExpandedPlayer()
-        }
-      }, 100)
-
-      return () => clearInterval(checkYT)
-    }
-
-    return () => {
-      if (expandedPlayerRef.current && typeof expandedPlayerRef.current.destroy === "function") {
-        expandedPlayerRef.current.destroy()
-        expandedPlayerRef.current = null
-        isPlayerReadyRef.current = false
-      }
-    }
-  }, [isExpanded, localVideoMode, currentTrack?.id])
-
-  // Sync playback state with expanded player
-  useEffect(() => {
-    if (!expandedPlayerRef.current || !isPlayerReadyRef.current) return
-
-    if (isPlaying) {
-      expandedPlayerRef.current.playVideo?.()
-    } else {
-      expandedPlayerRef.current.pauseVideo?.()
-    }
-  }, [isPlaying])
-
-  useEffect(() => {
-    if (expandedPlayerRef.current && isPlayerReadyRef.current && localVideoMode) {
-      setTimeout(() => {
-        expandedPlayerRef.current.seekTo?.(currentTime, true)
-        if (isPlaying) {
-          expandedPlayerRef.current.playVideo?.()
-        }
-      }, 500)
-    }
-  }, [localVideoMode])
 
   useEffect(() => {
     if (!isExpanded) {
       y.set(0)
       setShowLyrics(false)
-      setLocalVideoMode(false)
-    } else {
-      setLocalVideoMode(videoMode)
+      setExpandedVideoMode(false)
     }
-  }, [isExpanded, y, videoMode])
+  }, [isExpanded, y])
 
-  // Desktop: Click to toggle
   const handleBackdropClick = () => {
     if (window.innerWidth >= 768) {
       onExpandChange(false)
@@ -181,15 +102,15 @@ export function ExpandablePlayer({
 
         {/* Content */}
         <div className="flex-1 flex flex-col items-center justify-start px-6 md:px-12 overflow-hidden">
-          {/* Album Art / Video */}
-          {localVideoMode && currentTrack ? (
+          {expandedVideoMode && currentTrack ? (
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.5 }}
               className="relative w-full max-w-md aspect-video mb-6 md:mb-8 bg-black rounded-xl overflow-hidden shadow-2xl"
+              id="expanded-youtube-container"
             >
-              <div id="expanded-youtube-player" className="w-full h-full"></div>
+              {/* YouTube iframe will be moved here via CSS */}
             </motion.div>
           ) : currentTrack?.thumbnail ? (
             <motion.div
@@ -220,9 +141,26 @@ export function ExpandablePlayer({
             <p className="text-lg md:text-xl text-white/60">{currentTrack?.artist || "Unknown Artist"}</p>
           </div>
 
-          {/* Lyrics Button - ONLY IN EXPANDED VIEW */}
           {currentTrack && (
-            <div className="mb-6">
+            <div className="mb-6 flex gap-3">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={`bg-white/10 border-white/20 text-white hover:bg-white/20 ${expandedVideoMode ? 'bg-white/20' : ''}`}
+                      onClick={() => setExpandedVideoMode(!expandedVideoMode)}
+                    >
+                      {expandedVideoMode ? <Music size={20} className="mr-2" /> : <Video size={20} className="mr-2" />}
+                      {expandedVideoMode ? "Hide Video" : "Show Video"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{expandedVideoMode ? "Switch to album art" : "Show video player"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
               <Sheet open={showLyrics} onOpenChange={setShowLyrics}>
                 <Button
                   variant="outline"
@@ -248,6 +186,35 @@ export function ExpandablePlayer({
           <div className="w-full max-w-2xl">{children}</div>
         </div>
       </motion.div>
+
+      <style jsx global>{`
+        ${expandedVideoMode && isExpanded ? `
+          #youtube-player {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 9999 !important;
+          }
+          
+          #expanded-youtube-container {
+            position: relative;
+          }
+          
+          #youtube-player > * {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            max-width: 640px !important;
+            max-height: 360px !important;
+            width: 90% !important;
+            height: auto !important;
+            aspect-ratio: 16/9 !important;
+          }
+        ` : ''}
+      `}</style>
     </motion.div>
   )
 }

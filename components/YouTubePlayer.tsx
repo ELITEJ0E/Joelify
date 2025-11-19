@@ -272,7 +272,7 @@ export function YouTubePlayer({
       ref={containerRef}
       className={`${
         videoMode ? "flex justify-center items-center bg-black p-2 w-full" : "hidden"
-      } relative overflow-hidden`}
+      } relative overflow-hidden youtube-player-wrapper`}
       style={{ maxWidth: "640px", maxHeight: "360px", margin: "0 auto" }}
     >
       <div id="youtube-player" className="w-full h-full" style={{ aspectRatio: "16/9" }}></div>
