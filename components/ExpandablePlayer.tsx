@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown, Type } from "lucide-react"
+import { X, ChevronDown, Type } from 'lucide-react'
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -98,7 +98,6 @@ export function ExpandablePlayer({
     }
   }, [isPlaying])
 
-  // Seek to current position when video mode is toggled
   useEffect(() => {
     if (expandedPlayerRef.current && isPlayerReadyRef.current && localVideoMode) {
       setTimeout(() => {
@@ -109,14 +108,6 @@ export function ExpandablePlayer({
       }, 500)
     }
   }, [localVideoMode])
-
-  const handleDragEnd = (_event: any, info: PanInfo) => {
-    if (info.offset.y > 100 || info.velocity.y > 500) {
-      onExpandChange(false)
-    } else {
-      y.set(0)
-    }
-  }
 
   useEffect(() => {
     if (!isExpanded) {
@@ -132,6 +123,14 @@ export function ExpandablePlayer({
   const handleBackdropClick = () => {
     if (window.innerWidth >= 768) {
       onExpandChange(false)
+    }
+  }
+
+  const handleDragEnd = (_event: any, info: PanInfo) => {
+    if (info.offset.y > 100 || info.velocity.y > 500) {
+      onExpandChange(false)
+    } else {
+      y.set(0)
     }
   }
 
@@ -182,8 +181,17 @@ export function ExpandablePlayer({
 
         {/* Content */}
         <div className="flex-1 flex flex-col items-center justify-start px-6 md:px-12 overflow-hidden">
-          {/* Album Art */}
-          {currentTrack?.thumbnail ? (
+          {/* Album Art / Video */}
+          {localVideoMode && currentTrack ? (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="relative w-full max-w-md aspect-video mb-6 md:mb-8 bg-black rounded-xl overflow-hidden shadow-2xl"
+            >
+              <div id="expanded-youtube-player" className="w-full h-full"></div>
+            </motion.div>
+          ) : currentTrack?.thumbnail ? (
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}

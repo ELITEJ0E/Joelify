@@ -165,10 +165,6 @@ export function YouTubePlayer({
               isPlayerReadyRef.current = true
               event.target.setVolume(100)
 
-              if (audioSettings.youtubeQuality !== "audio") {
-                event.target.setPlaybackQuality(audioSettings.youtubeQuality)
-              }
-
               startDurationPolling(event.target)
               onPlayerReady(event.target)
             },
@@ -176,10 +172,6 @@ export function YouTubePlayer({
               const playerState = event.data
 
               if (playerState === 1) {
-                if (audioSettings.youtubeQuality !== "audio") {
-                  event.target.setPlaybackQuality(audioSettings.youtubeQuality)
-                }
-
                 if (!durationPollIntervalRef.current) {
                   startDurationPolling(event.target)
                 }

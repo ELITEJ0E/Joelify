@@ -1,24 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import {
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  Repeat,
-  Shuffle,
-  Volume2,
-  VolumeX,
-  List,
-  Music,
-  Video,
-  Youtube,
-  Music2,
-  Type,
-  Minimize2,
-  Maximize2,
-} from "lucide-react"
+import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, List, Music, Video, Youtube, Music2, Type, Minimize2, Maximize2 } from 'lucide-react'
 import Image from "next/image"
 import { useApp } from "@/contexts/AppContext"
 import { YouTubePlayer } from "./YouTubePlayer"
@@ -33,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { isAuthenticated } from "@/lib/spotifyAuth"
+import { isAuthenticated, getValidAccessToken } from "@/lib/spotifyAuth"
 
 export function PlayerControls() {
   const {
@@ -114,6 +97,27 @@ export function PlayerControls() {
   const handleNext = useCallback(() => {
     console.log("[Player] handleNext called - repeat:", repeat, "queue length:", queue.length)
 
+    if (repeat === "one" && currentTrack) {
+      console.log("[Player] Repeat one - restarting track")
+      if (playbackSource === "youtube" && youtubePlayer) {
+        youtubePlayer.seekTo(0, true)
+        setTimeout(() => {
+          youtubePlayer.playVideo()
+          setIsPlaying(true)
+        }, 100)
+      } else if (playbackSource === "spotify" && spotifyPlayer) {
+        SpotifyPlayerControls.seek(spotifyPlayer, 0)
+        setTimeout(() => {
+          SpotifyPlayerControls.play(spotifyPlayer)
+          setIsPlaying(true)
+          setShouldAutoPlaySpotify(true)
+        }, 100)
+      }
+      setCurrentTime(0)
+      setPlaybackPosition(0)
+      return // Return immediately after restarting
+    }
+
     // Pause current player
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.pauseVideo()
@@ -122,55 +126,57 @@ export function PlayerControls() {
     }
     setIsPlaying(false)
 
-    if (repeat === "one" && currentTrack) {
-      console.log("[Player] Repeat one - restarting track")
-      if (playbackSource === "youtube" && youtubePlayer) {
-        youtubePlayer.seekTo(0, true)
-        setTimeout(() => youtubePlayer.playVideo(), 100)
-      } else if (playbackSource === "spotify" && spotifyPlayer) {
-        SpotifyPlayerControls.seek(spotifyPlayer, 0)
-        setTimeout(() => SpotifyPlayerControls.play(spotifyPlayer), 100)
-      }
-      setCurrentTime(0)
-      setPlaybackPosition(0)
-      setIsPlaying(true)
-      return
-    }
-
     if (queue.length > 0) {
       console.log("[Player] Playing next from queue")
       const nextTrack = queue[0]
+      
+      if (currentTrack) {
+        playedTracksRef.current.add(currentTrack.id)
+        playHistoryRef.current.push(currentTrack.id)
+      }
+      
       setCurrentTrack(nextTrack)
       setQueue(queue.slice(1))
       setCurrentTime(0)
       setPlaybackPosition(0)
 
-      if (currentTrack) {
-        playedTracksRef.current.add(currentTrack.id)
-        playHistoryRef.current.push(currentTrack.id)
-      }
-
-      if (playbackSource === "spotify") {
+      if (playbackSource === "youtube" && youtubePlayer) {
+        setTimeout(() => youtubePlayer.playVideo(), 500)
+      } else if (playbackSource === "spotify") {
         setShouldAutoPlaySpotify(true)
       }
       return
     }
 
-    if (repeat === "all" && currentPlaylistId) {
+    if (currentPlaylistId) {
       const currentPlaylist = playlists.find((p) => p.id === currentPlaylistId)
 
       if (currentPlaylist && currentPlaylist.tracks.length > 0) {
-        console.log("[Player] Repeat all - finding next track, shuffle:", shuffle)
+        console.log("[Player] Finding next track, shuffle:", shuffle, "repeat:", repeat)
         let nextTrack: typeof currentTrack = null
+
+        if (currentTrack) {
+          playedTracksRef.current.add(currentTrack.id)
+          playHistoryRef.current.push(currentTrack.id)
+        }
 
         if (shuffle) {
           nextTrack = getNextShuffleTrack(currentPlaylist)
+          console.log("[Player] Shuffle: selected track:", nextTrack?.title)
         } else {
-          // Sequential playback - loop to start
+          // Sequential playback
           const currentIndex = currentPlaylist.tracks.findIndex((t: any) => t.id === currentTrack?.id)
-          const nextIndex = (currentIndex + 1) % currentPlaylist.tracks.length
-          nextTrack = currentPlaylist.tracks[nextIndex]
-          console.log("[Player] Sequential: current index:", currentIndex, "next index:", nextIndex)
+          
+          if (repeat === "all") {
+            const nextIndex = (currentIndex + 1) % currentPlaylist.tracks.length
+            nextTrack = currentPlaylist.tracks[nextIndex]
+            console.log("[Player] Repeat All Sequential: current:", currentIndex, "next:", nextIndex)
+          } else {
+            // No repeat - play next if available
+            if (currentIndex + 1 < currentPlaylist.tracks.length) {
+              nextTrack = currentPlaylist.tracks[currentIndex + 1]
+            }
+          }
         }
 
         if (nextTrack) {
@@ -179,12 +185,9 @@ export function PlayerControls() {
           setCurrentTime(0)
           setPlaybackPosition(0)
 
-          if (currentTrack) {
-            playedTracksRef.current.add(currentTrack.id)
-            playHistoryRef.current.push(currentTrack.id)
-          }
-
-          if (playbackSource === "spotify") {
+          if (playbackSource === "youtube" && youtubePlayer) {
+            setTimeout(() => youtubePlayer.playVideo(), 500)
+          } else if (playbackSource === "spotify") {
             setShouldAutoPlaySpotify(true)
           }
           return
@@ -418,10 +421,55 @@ export function PlayerControls() {
     }
   }, [playbackSource, setPlaybackSource])
 
+  useEffect(() => {
+    if (playbackSource !== "spotify" || !isSpotifyAuth) return
+
+    const checkSpotifyPremium = async () => {
+      // Check localStorage flag first
+      const hasShownAlert = localStorage.getItem("spotify_premium_alert_shown")
+      if (hasShownAlert === "true") return
+
+      try {
+        const token = await getValidAccessToken()
+        const response = await fetch("https://api.spotify.com/v1/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (response.ok) {
+          const profile = await response.json()
+          const hasPremium = profile.product === "premium"
+
+          if (!hasPremium) {
+            // Show dialog instead of alert
+            const shouldSwitch = confirm(
+              "Spotify Premium is required to use the Spotify player.\n\nWould you like to switch back to YouTube?",
+            )
+
+            // Set flag to not show again this session
+            localStorage.setItem("spotify_premium_alert_shown", "true")
+
+            if (shouldSwitch) {
+              // Switch back to YouTube
+              setPlaybackSource("youtube")
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[Spotify] Failed to check premium status:", error)
+      }
+    }
+
+    checkSpotifyPremium()
+  }, [playbackSource, isSpotifyAuth, setPlaybackSource])
+
   const handleSwitch = () => {
     if (playbackSource === "youtube" && !isSpotifyAuth) {
       alert("Please login to Spotify first")
       return
+    }
+
+    if (playbackSource === "spotify") {
+      localStorage.removeItem("spotify_premium_alert_shown")
     }
 
     if (playbackSource === "youtube" && youtubePlayer) {

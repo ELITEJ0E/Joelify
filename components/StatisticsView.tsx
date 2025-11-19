@@ -3,7 +3,7 @@
 import { useApp } from "@/contexts/AppContext"
 import { Card } from "@/components/ui/card"
 import { useEffect, useState } from "react"
-import { Clock, Music, TrendingUp, Calendar, BarChart3, Share2 } from "lucide-react"
+import { Clock, Music, TrendingUp, Calendar, BarChart3, Share2 } from 'lucide-react'
 import { ShareMenu } from "./ShareMenu"
 
 interface ListeningStats {
@@ -25,6 +25,7 @@ export function StatisticsView() {
     const trackPlays = new Map<string, { track: any; count: number }>()
     const artistPlays = new Map<string, number>()
     const dayPlays = new Map<string, number>()
+    let totalTimeSeconds = 0
 
     history.forEach((item: any) => {
       const key = `${item.id}-${item.title}`
@@ -37,6 +38,10 @@ export function StatisticsView() {
 
       const day = new Date(item.playedAt).toLocaleDateString("en-US", { weekday: "short" })
       dayPlays.set(day, (dayPlays.get(day) || 0) + 1)
+
+      if (item.duration && typeof item.duration === 'number') {
+        totalTimeSeconds += item.duration
+      }
     })
 
     const topTracks = Array.from(trackPlays.entries())
@@ -72,7 +77,7 @@ export function StatisticsView() {
 
     setStats({
       totalPlays: history.length,
-      totalTime: history.reduce((sum: number, item: any) => sum + (item.duration || 0), 0),
+      totalTime: totalTimeSeconds,
       topTracks,
       topArtists,
       recentlyPlayed,

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { Search, Plus, ExternalLink, Loader2, Heart, Compass } from "lucide-react"
+import { Search, Plus, ExternalLink, Loader2, Heart, Compass } from 'lucide-react'
 import Image from "next/image"
 import type { YouTubeVideo } from "@/lib/youtube"
 import { useApp } from "@/contexts/AppContext"
@@ -35,6 +35,7 @@ export function SearchView() {
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
   const [searchSource, setSearchSource] = useState<"youtube" | "spotify" | "both">("both")
   const [lastQuery, setLastQuery] = useState("")
+  const [activeTab, setActiveTab] = useState<"youtube" | "spotify">("youtube")
 
   const {
     playlists,
@@ -66,6 +67,7 @@ export function SearchView() {
         if (cached) {
           console.log(`[v0] Using cached YouTube search results for "${query}"`)
           setYoutubeResults(cached)
+          if (cached.length > 0) setActiveTab("youtube")
         } else {
           const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
           const data = await res.json()
@@ -76,6 +78,7 @@ export function SearchView() {
           } else {
             setCachedData(cacheKey, data.items, sessionStorage)
             setYoutubeResults(data.items)
+            if (data.items.length > 0) setActiveTab("youtube")
           }
         }
       }
@@ -87,6 +90,7 @@ export function SearchView() {
         if (cached) {
           console.log(`[Spotify] Using cached search results for "${query}"`)
           setSpotifyResults(cached)
+          if (cached.length > 0 && youtubeResults.length === 0) setActiveTab("spotify")
         } else {
           const data = await searchTracks(query, 20)
           const tracks = data.tracks.items.map((track: any) => ({
@@ -100,6 +104,7 @@ export function SearchView() {
           }))
           setCachedData(cacheKey, tracks, sessionStorage)
           setSpotifyResults(tracks)
+          if (tracks.length > 0 && youtubeResults.length === 0) setActiveTab("spotify")
         }
       }
 
@@ -181,7 +186,7 @@ export function SearchView() {
         {!isLoading && (youtubeResults.length > 0 || spotifyResults.length > 0) && (
           <div className="mb-12">
             {lastQuery && <p className="text-sm text-muted-foreground mb-4">Showing results for "{lastQuery}"</p>}
-            <Tabs defaultValue="youtube" className="w-full">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "youtube" | "spotify")} className="w-full">
               <TabsList className="mb-6">
                 {youtubeResults.length > 0 && (
                   <TabsTrigger value="youtube">YouTube ({youtubeResults.length})</TabsTrigger>

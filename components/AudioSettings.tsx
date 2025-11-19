@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Settings, Music2 } from "lucide-react"
+import { Settings, Music2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
@@ -99,9 +99,8 @@ export function AudioSettings({ settings, onChange }: AudioSettingsProps) {
         </SheetHeader>
 
         <Tabs defaultValue="playback" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3 text-xs">
+          <TabsList className="grid w-full grid-cols-2 text-xs">
             <TabsTrigger value="playback">Playback</TabsTrigger>
-            <TabsTrigger value="equalizer">Equalizer</TabsTrigger>
             <TabsTrigger value="quality">Quality</TabsTrigger>
           </TabsList>
 
@@ -127,61 +126,12 @@ export function AudioSettings({ settings, onChange }: AudioSettingsProps) {
             </div>
           </TabsContent>
 
-          <TabsContent value="equalizer" className="space-y-4 mt-4">
-            <div>
-              <Label className="text-sm font-medium mb-2 block">EQ Preset</Label>
-              <Select value={localSettings.eqPreset} onValueChange={handleEQPresetChange}>
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue placeholder="Select preset" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.keys(EQ_PRESETS).map((preset) => (
-                    <SelectItem key={preset} value={preset}>
-                      {preset}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium mb-2 block">Custom Equalizer</Label>
-              <div className="space-y-2">
-                {localSettings.customEQ.map((value, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <span className="text-[11px] text-muted-foreground w-10">{FREQUENCY_BANDS[index]}</span>
-                    <Slider
-                      value={[value]}
-                      min={-12}
-                      max={12}
-                      step={1}
-                      onValueChange={(val) => handleCustomEQChange(index, val)}
-                      className="flex-1"
-                    />
-                    <span className="text-[11px] text-muted-foreground w-8 text-right">
-                      {value > 0 ? "+" : ""}
-                      {value}dB
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
           <TabsContent value="quality" className="space-y-4 mt-4">
             <div>
               <Label className="text-sm font-medium mb-2 block">YouTube Quality</Label>
-              <Select value={localSettings.youtubeQuality} onValueChange={handleYouTubeQualityChange}>
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="audio">Audio Only</SelectItem>
-                  <SelectItem value="360p">360p</SelectItem>
-                  <SelectItem value="720p">720p</SelectItem>
-                  <SelectItem value="1080p">1080p</SelectItem>
-                </SelectContent>
-              </Select>
+              <p className="text-xs text-muted-foreground">
+                YouTube quality auto-optimizes based on your connection for the best experience.
+              </p>
             </div>
 
             <div>
@@ -196,6 +146,9 @@ export function AudioSettings({ settings, onChange }: AudioSettingsProps) {
                   <SelectItem value="veryhigh">Very High</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Note: Spotify quality is managed by your account settings.
+              </p>
             </div>
           </TabsContent>
         </Tabs>

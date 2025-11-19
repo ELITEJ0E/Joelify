@@ -57,27 +57,6 @@ export function SpotifyPlayer({ onPlayerReady, onStateChange, onError }: Spotify
       try {
         const token = await getValidAccessToken()
 
-        // Check if user has premium before initializing player
-        const profileResponse = await fetch("https://api.spotify.com/v1/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (profileResponse.ok) {
-          const profile = await profileResponse.json()
-          const hasPremium = profile.product === "premium"
-          setIsPremium(hasPremium)
-
-          if (!hasPremium && !hasShownPremiumAlertRef.current) {
-            hasShownPremiumAlertRef.current = true
-            console.warn("[Spotify] Free account detected - Web Playback SDK requires Premium")
-            onError({
-              type: "premium_required",
-              message: "Spotify Web Player requires a Premium subscription",
-            })
-            return
-          }
-        }
-
         console.log("[Spotify] Initializing player")
 
         const player = new window.Spotify.Player({
@@ -290,6 +269,25 @@ export const SpotifyPlayerControls = {
       console.log("[Spotify] Toggled play/pause")
     } catch (error) {
       console.error("[Spotify] Toggle play error:", error)
+    }
+  },
+
+  async checkPremium(player: any) {
+    if (!player) return
+
+    try {
+      const token = await getValidAccessToken()
+      const profileResponse = await fetch("https://api.spotify.com/v1/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (profileResponse.ok) {
+        const profile = await profileResponse.json()
+        const hasPremium = profile.product === "premium"
+        return hasPremium
+      }
+    } catch (error) {
+      console.error("[Spotify] Failed to check premium status:", error)
     }
   },
 }
