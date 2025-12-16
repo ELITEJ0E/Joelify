@@ -1,7 +1,24 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, List, Music, Video, Youtube, Music2, Type, Minimize2, Maximize2 } from 'lucide-react'
+import {
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Repeat,
+  Shuffle,
+  Volume2,
+  VolumeX,
+  List,
+  Music,
+  Video,
+  Youtube,
+  Music2,
+  Type,
+  Minimize2,
+  Maximize2,
+} from "lucide-react"
 import Image from "next/image"
 import { useApp } from "@/contexts/AppContext"
 import { YouTubePlayer } from "./YouTubePlayer"
@@ -10,7 +27,6 @@ import { QueueSheet } from "./QueueSheet"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { MiniPlayer } from "./MiniPlayer"
 import { SleepTimer } from "./SleepTimer"
-import { AudioSettings } from "./AudioSettings"
 import { ExpandablePlayer } from "./ExpandablePlayer"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
@@ -99,6 +115,10 @@ export function PlayerControls() {
 
     if (repeat === "one" && currentTrack) {
       console.log("[Player] Repeat one - restarting track")
+      trackEndHandledRef.current = false
+      setCurrentTime(0)
+      setPlaybackPosition(0)
+
       if (playbackSource === "youtube" && youtubePlayer) {
         youtubePlayer.seekTo(0, true)
         setTimeout(() => {
@@ -113,12 +133,10 @@ export function PlayerControls() {
           setShouldAutoPlaySpotify(true)
         }, 100)
       }
-      setCurrentTime(0)
-      setPlaybackPosition(0)
-      return // Return immediately after restarting
+      return
     }
 
-    // Pause current player
+    // Pause current player before switching tracks
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.pauseVideo()
     } else if (playbackSource === "spotify" && spotifyPlayer) {
@@ -126,22 +144,27 @@ export function PlayerControls() {
     }
     setIsPlaying(false)
 
+    if (currentTrack) {
+      playedTracksRef.current.add(currentTrack.id)
+      playHistoryRef.current.push(currentTrack.id)
+      console.log("[Player] Added to history:", currentTrack.title, "Total played:", playHistoryRef.current.length)
+    }
+
     if (queue.length > 0) {
       console.log("[Player] Playing next from queue")
       const nextTrack = queue[0]
-      
-      if (currentTrack) {
-        playedTracksRef.current.add(currentTrack.id)
-        playHistoryRef.current.push(currentTrack.id)
-      }
-      
       setCurrentTrack(nextTrack)
       setQueue(queue.slice(1))
       setCurrentTime(0)
       setPlaybackPosition(0)
+      trackEndHandledRef.current = false
 
+      // Auto-play the queue track
       if (playbackSource === "youtube" && youtubePlayer) {
-        setTimeout(() => youtubePlayer.playVideo(), 500)
+        setTimeout(() => {
+          youtubePlayer.playVideo()
+          setIsPlaying(true)
+        }, 500)
       } else if (playbackSource === "spotify") {
         setShouldAutoPlaySpotify(true)
       }
@@ -155,27 +178,31 @@ export function PlayerControls() {
         console.log("[Player] Finding next track, shuffle:", shuffle, "repeat:", repeat)
         let nextTrack: typeof currentTrack = null
 
-        if (currentTrack) {
-          playedTracksRef.current.add(currentTrack.id)
-          playHistoryRef.current.push(currentTrack.id)
-        }
-
         if (shuffle) {
           nextTrack = getNextShuffleTrack(currentPlaylist)
           console.log("[Player] Shuffle: selected track:", nextTrack?.title)
         } else {
-          // Sequential playback
           const currentIndex = currentPlaylist.tracks.findIndex((t: any) => t.id === currentTrack?.id)
-          
-          if (repeat === "all") {
-            const nextIndex = (currentIndex + 1) % currentPlaylist.tracks.length
-            nextTrack = currentPlaylist.tracks[nextIndex]
-            console.log("[Player] Repeat All Sequential: current:", currentIndex, "next:", nextIndex)
+          console.log(
+            "[Player] Sequential: current index:",
+            currentIndex,
+            "total tracks:",
+            currentPlaylist.tracks.length,
+          )
+
+          if (currentIndex + 1 < currentPlaylist.tracks.length) {
+            // There's a next track
+            nextTrack = currentPlaylist.tracks[currentIndex + 1]
+            console.log("[Player] Playing next track at index:", currentIndex + 1)
+          } else if (repeat === "all") {
+            nextTrack = currentPlaylist.tracks[0]
+            console.log("[Player] Repeat All: looping back to first track")
+            // Reset history when looping
+            playHistoryRef.current = []
+            playedTracksRef.current.clear()
           } else {
-            // No repeat - play next if available
-            if (currentIndex + 1 < currentPlaylist.tracks.length) {
-              nextTrack = currentPlaylist.tracks[currentIndex + 1]
-            }
+            // No next track and no repeat - stop playback
+            console.log("[Player] End of playlist, no repeat - stopping")
           }
         }
 
@@ -184,9 +211,14 @@ export function PlayerControls() {
           setCurrentTrack(nextTrack)
           setCurrentTime(0)
           setPlaybackPosition(0)
+          trackEndHandledRef.current = false
 
+          // Auto-play the next track
           if (playbackSource === "youtube" && youtubePlayer) {
-            setTimeout(() => youtubePlayer.playVideo(), 500)
+            setTimeout(() => {
+              youtubePlayer.playVideo()
+              setIsPlaying(true)
+            }, 500)
           } else if (playbackSource === "spotify") {
             setShouldAutoPlaySpotify(true)
           }
@@ -199,6 +231,7 @@ export function PlayerControls() {
     setIsPlaying(false)
     setCurrentTime(0)
     setPlaybackPosition(0)
+    trackEndHandledRef.current = false
   }, [
     youtubePlayer,
     spotifyPlayer,
