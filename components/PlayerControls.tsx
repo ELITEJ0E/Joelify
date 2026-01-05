@@ -84,58 +84,57 @@ export function PlayerControls() {
 
   const getNextShuffleTrack = useCallback((currentPlaylist: any) => {
     if (!currentPlaylist || currentPlaylist.tracks.length === 0) return null
-
-    // Get recently played tracks (last 40% of playlist or minimum 5)
-    const recentCount = Math.max(5, Math.floor(currentPlaylist.tracks.length * 0.4))
-    const recentlyPlayed = playHistoryRef.current.slice(-recentCount)
-
-    // Filter out recently played tracks
-    let availableTracks = currentPlaylist.tracks.filter((t: any) => !recentlyPlayed.includes(t.id))
-
-    // If no tracks available, reset history and use all tracks
-    if (availableTracks.length === 0) {
+    
+    // If all tracks have been played, reset history
+    if (playedTracksRef.current.size >= currentPlaylist.tracks.length) {
       console.log("[Shuffle] All tracks played, resetting history")
-      playHistoryRef.current = []
       playedTracksRef.current.clear()
-      availableTracks = [...currentPlaylist.tracks]
+      playHistoryRef.current = []
     }
-
-    // Fisher-Yates shuffle
-    const shuffled = [...availableTracks]
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-    }
-
-    return shuffled[0]
+    
+    // Get unplayed tracks
+    const unplayedTracks = currentPlaylist.tracks.filter((t: any) => !playedTracksRef.current.has(t.id))
+    
+    // If all tracks are played (shouldn't happen after reset), use all tracks
+    const availableTracks = unplayedTracks.length > 0 ? unplayedTracks : currentPlaylist.tracks
+    
+    // Pick random track
+    const randomIndex = Math.floor(Math.random() * availableTracks.length)
+    return availableTracks[randomIndex]
   }, [])
 
+  const handleRepeatOne = useCallback(() => {
+    if (!currentTrack) return
+    
+    console.log("[Player] Repeat one - restarting track")
+    trackEndHandledRef.current = false // Reset immediately
+    
+    if (playbackSource === "youtube" && youtubePlayer) {
+      youtubePlayer.seekTo(0, true)
+      youtubePlayer.playVideo()
+      setIsPlaying(true)
+    } else if (playbackSource === "spotify" && spotifyPlayer) {
+      SpotifyPlayerControls.seek(spotifyPlayer, 0)
+      SpotifyPlayerControls.play(spotifyPlayer)
+      setIsPlaying(true)
+      setShouldAutoPlaySpotify(true)
+    }
+    
+    setCurrentTime(0)
+    setPlaybackPosition(0)
+  }, [currentTrack, youtubePlayer, spotifyPlayer, playbackSource, setPlaybackPosition])
+
   const handleNext = useCallback(() => {
-    console.log("[Player] handleNext called - repeat:", repeat, "queue length:", queue.length)
+    console.log("[Player] handleNext called", {
+      repeat,
+      queueLength: queue.length,
+      currentTrack: currentTrack?.title,
+      shuffle,
+      currentPlaylistId
+    })
 
     if (repeat === "one" && currentTrack) {
-      console.log("[Player] Repeat one - restarting track")
-      setCurrentTime(0)
-      setPlaybackPosition(0)
-
-      if (playbackSource === "youtube" && youtubePlayer) {
-        youtubePlayer.seekTo(0, true)
-        youtubePlayer.playVideo()
-        setIsPlaying(true)
-        // Reset the flag after a brief delay to allow the track to start playing
-        setTimeout(() => {
-          trackEndHandledRef.current = false
-        }, 100)
-      } else if (playbackSource === "spotify" && spotifyPlayer) {
-        SpotifyPlayerControls.seek(spotifyPlayer, 0)
-        SpotifyPlayerControls.play(spotifyPlayer)
-        setIsPlaying(true)
-        setShouldAutoPlaySpotify(true)
-        setTimeout(() => {
-          trackEndHandledRef.current = false
-        }, 100)
-      }
-      // Don't reset flag here - let the state change handler manage it
+      handleRepeatOne()
       return
     }
 
@@ -253,6 +252,7 @@ export function PlayerControls() {
     playlists,
     setPlaybackPosition,
     getNextShuffleTrack,
+    handleRepeatOne,
   ])
 
   // Check PiP support on mount
@@ -499,7 +499,7 @@ export function PlayerControls() {
       switch (playerState) {
         case 1: // Playing
           setIsPlaying(true)
-          if (trackEndHandledRef.current && repeat !== "one") {
+          if (trackEndHandledRef.current) {
             console.log("[Player] Track started playing, resetting end flag")
             trackEndHandledRef.current = false
           }
@@ -517,14 +517,13 @@ export function PlayerControls() {
           break
         case 0: // Ended
           if (!trackEndHandledRef.current) {
-            console.log("[Player] Track ended, calling handleNext")
+            console.log("[Player] Track ended")
             trackEndHandledRef.current = true
-            setIsPlaying(false)
-            setCurrentTime(0)
-            setPlaybackPosition(0)
-            handleNext()
-          } else {
-            console.log("[Player] Track end already handled, skipping")
+            if (repeat === "one") {
+              handleRepeatOne()
+            } else {
+              handleNext()
+            }
           }
           break
         case -1: // Unstarted
@@ -532,7 +531,7 @@ export function PlayerControls() {
           break
       }
     },
-    [youtubePlayer, setPlaybackPosition, playbackSource, handleNext, audioSettings, repeat],
+    [youtubePlayer, setPlaybackPosition, playbackSource, handleNext, audioSettings, repeat, handleRepeatOne],
   )
 
   const handleError = useCallback(
@@ -719,17 +718,25 @@ export function PlayerControls() {
         }
       }
 
-      if (state.paused && state.position === 0 && state.duration > 0 && !trackEndHandledRef.current) {
+      // Better track end detection for Spotify
+      const trackEnded = state.position >= state.duration - 1000 && state.duration > 0 // Within last second
+      const justEnded = !state.paused && trackEnded && !trackEndHandledRef.current
+
+      if (justEnded || (state.paused && state.position === 0 && state.duration > 0 && !trackEndHandledRef.current)) {
         console.log("[Spotify] Track ended, moving to next")
         trackEndHandledRef.current = true
-        handleNext()
+        if (repeat === "one") {
+          handleRepeatOne()
+        } else {
+          handleNext()
+        }
       }
 
       if (!state.paused && trackEndHandledRef.current) {
         trackEndHandledRef.current = false
       }
     },
-    [playbackSource, currentTrack, setCurrentTrack, setPlaybackPosition, handleNext],
+    [playbackSource, currentTrack, setCurrentTrack, setPlaybackPosition, handleNext, repeat, handleRepeatOne],
   )
 
   const handleSpotifyError = useCallback((error: any) => {
@@ -763,6 +770,13 @@ export function PlayerControls() {
 
     const playSpotifyTrack = async () => {
       try {
+        // Add a check for player state
+        const state = spotifyPlayer._state
+        if (state && !state.paused) {
+          // Player is already playing something
+          return
+        }
+        
         let trackUri = currentTrack.id
         if (!trackUri.startsWith("spotify:track:")) {
           trackUri = `spotify:track:${trackUri}`
@@ -771,14 +785,21 @@ export function PlayerControls() {
         await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
         setIsPlaying(true)
         setShouldAutoPlaySpotify(false)
+        trackEndHandledRef.current = false // Reset end flag
       } catch (error) {
         console.error("[Spotify] Failed to auto-play track:", error)
+        // Retry once after delay
+        setTimeout(() => {
+          if (shouldAutoPlaySpotify) {
+            playSpotifyTrack()
+          }
+        }, 1000)
       }
     }
 
     const timer = setTimeout(() => {
       playSpotifyTrack()
-    }, 300)
+    }, 500) // Increased delay for better reliability
 
     return () => clearTimeout(timer)
   }, [currentTrack, spotifyPlayer, playbackSource, isReady, shouldAutoPlaySpotify])
