@@ -28,6 +28,7 @@ import { LyricsDisplay } from "./LyricsDisplay"
 import { MiniPlayer } from "./MiniPlayer"
 import { SleepTimer } from "./SleepTimer"
 import { ExpandablePlayer } from "./ExpandablePlayer"
+import { MusicVisualizer } from "./MusicVisualizer"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -84,20 +85,20 @@ export function PlayerControls() {
 
   const getNextShuffleTrack = useCallback((currentPlaylist: any) => {
     if (!currentPlaylist || currentPlaylist.tracks.length === 0) return null
-    
+
     // If all tracks have been played, reset history
     if (playedTracksRef.current.size >= currentPlaylist.tracks.length) {
       console.log("[Shuffle] All tracks played, resetting history")
       playedTracksRef.current.clear()
       playHistoryRef.current = []
     }
-    
+
     // Get unplayed tracks
     const unplayedTracks = currentPlaylist.tracks.filter((t: any) => !playedTracksRef.current.has(t.id))
-    
+
     // If all tracks are played (shouldn't happen after reset), use all tracks
     const availableTracks = unplayedTracks.length > 0 ? unplayedTracks : currentPlaylist.tracks
-    
+
     // Pick random track
     const randomIndex = Math.floor(Math.random() * availableTracks.length)
     return availableTracks[randomIndex]
@@ -105,10 +106,10 @@ export function PlayerControls() {
 
   const handleRepeatOne = useCallback(() => {
     if (!currentTrack) return
-    
+
     console.log("[Player] Repeat one - restarting track")
     trackEndHandledRef.current = false // Reset immediately
-    
+
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.seekTo(0, true)
       youtubePlayer.playVideo()
@@ -119,7 +120,7 @@ export function PlayerControls() {
       setIsPlaying(true)
       setShouldAutoPlaySpotify(true)
     }
-    
+
     setCurrentTime(0)
     setPlaybackPosition(0)
   }, [currentTrack, youtubePlayer, spotifyPlayer, playbackSource, setPlaybackPosition])
@@ -130,7 +131,7 @@ export function PlayerControls() {
       queueLength: queue.length,
       currentTrack: currentTrack?.title,
       shuffle,
-      currentPlaylistId
+      currentPlaylistId,
     })
 
     if (repeat === "one" && currentTrack) {
@@ -776,7 +777,7 @@ export function PlayerControls() {
           // Player is already playing something
           return
         }
-        
+
         let trackUri = currentTrack.id
         if (!trackUri.startsWith("spotify:track:")) {
           trackUri = `spotify:track:${trackUri}`
@@ -845,6 +846,8 @@ export function PlayerControls() {
         onStateChange={handleSpotifyStateChange}
         onError={handleSpotifyError}
       />
+
+      <MusicVisualizer isPlaying={isPlaying} />
 
       {/* Expandable Player */}
       <ExpandablePlayer
@@ -1113,7 +1116,7 @@ export function PlayerControls() {
           </div>
 
           {/* PLAYBACK CONTROLS */}
-          <div className="flex flex-col items-center w-full md:flex-1 md:max-w-2xl">
+          <div className="flex-col items-center w-full md:flex-1 md:max-w-2xl">
             <div className="flex items-center gap-2 w-full mb-3 md:mb-0 md:order-2">
               <span className="text-xs text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
               <div className="flex-1">
