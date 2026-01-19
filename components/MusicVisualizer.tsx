@@ -1,14 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
-import { Eye, EyeOff, Maximize2, Minimize2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useEffect, useRef, useCallback } from "react"
 
 interface MusicVisualizerProps {
   isPlaying: boolean
   currentTime?: number
   duration?: number
-  audioElement?: HTMLAudioElement | null
+  volume?: number
 }
 
 interface Particle {
@@ -19,243 +17,237 @@ interface Particle {
   life: number
   size: number
   hue: number
-  angle: number
-  speed: number
 }
 
-export function MusicVisualizer({ isPlaying, currentTime = 0, duration = 0 }: MusicVisualizerProps) {
+export function MusicVisualizer({ isPlaying, currentTime = 0, volume = 1 }: MusicVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationFrameRef = useRef<number | null>(null)
-  const [isVisible, setIsVisible] = useState(true)
-  const [isFullscreen, setIsFullscreen] = useState(false)
 
-  const bpm = 120 // Assume 120 BPM for most music
-  const beatInterval = 60000 / bpm // ~500ms per beat
-  const lastBeatRef = useRef(-1)
-  const hueRef = useRef(180)
+  // Refs for smooth animations
+  const hueRef = useRef(220)
   const particlesRef = useRef<Particle[]>([])
-  const rotationRef = useRef(0)
-  const pulseRef = useRef(1)
   const energyRef = useRef({ bass: 0, mid: 0, high: 0 })
-  const meshOffsetRef = useRef(0)
+  const wavePhaseRef = useRef(0)
+  const lastBeatRef = useRef(-1)
+  const pulseRef = useRef(1)
 
-  const detectBeat = useCallback(
-    (time: number): { isBeat: boolean; isDownbeat: boolean; beatPhase: number } => {
-      const currentBeat = Math.floor((time * 1000) / beatInterval)
-      const beatPhase = ((time * 1000) % beatInterval) / beatInterval
-      const isDownbeat = currentBeat % 4 === 0
-      const isBeat = currentBeat !== lastBeatRef.current && beatPhase < 0.1
+  const bpm = 128
+  const beatInterval = 60000 / bpm
 
-      if (isBeat) {
-        lastBeatRef.current = currentBeat
-      }
+  const detectBeat = useCallback((time: number) => {
+    const currentBeat = Math.floor((time * 1000) / beatInterval)
+    const beatPhase = ((time * 1000) % beatInterval) / beatInterval
+    const isDownbeat = currentBeat % 4 === 0
+    const isBeat = currentBeat !== lastBeatRef.current && beatPhase < 0.15
 
-      return { isBeat, isDownbeat, beatPhase }
-    },
-    [beatInterval],
-  )
+    if (isBeat) {
+      lastBeatRef.current = currentBeat
+    }
 
-  const generateEnergy = useCallback(
-    (time: number) => {
-      const { beatPhase, isDownbeat } = detectBeat(time)
+    return { isBeat, isDownbeat, beatPhase }
+  }, [beatInterval])
 
-      // Bass follows beat pattern with exponential decay
-      const bassDecay = 1 - Math.pow(beatPhase, 2)
-      const bassBoost = isDownbeat ? 1.5 : 1.0
-      const bassNoise = Math.sin(time * 2.5) * 0.2 + 0.8
-      const bass = bassDecay * bassBoost * bassNoise
+  const generateEnergy = useCallback((time: number, vol: number) => {
+    const { beatPhase, isDownbeat } = detectBeat(time)
 
-      // Mid frequencies are more continuous
-      const mid = (Math.sin(time * 3.7) * 0.5 + 0.5) * (0.6 + bassDecay * 0.4)
+    // Bass - strong on beats with smooth decay
+    const bassDecay = Math.exp(-beatPhase * 4)
+    const bassBase = bassDecay * (isDownbeat ? 1.0 : 0.7)
+    const bass = bassBase * vol * (0.8 + Math.sin(time * 1.5) * 0.2)
 
-      // High frequencies are sporadic
-      const highBase = Math.sin(time * 7.3) * Math.sin(time * 11.1)
-      const high = (highBase * 0.5 + 0.5) * (Math.random() > 0.6 ? 1.2 : 0.8)
+    // Mid - flowing waves
+    const midWave = Math.sin(time * 2.3) * 0.3 + Math.sin(time * 3.7) * 0.2 + 0.5
+    const mid = midWave * vol * (0.7 + bassDecay * 0.3)
 
-      // Smooth transitions with EMA
-      energyRef.current.bass = energyRef.current.bass * 0.7 + bass * 0.3
-      energyRef.current.mid = energyRef.current.mid * 0.8 + mid * 0.2
-      energyRef.current.high = energyRef.current.high * 0.85 + high * 0.15
+    // High - sparkly, responsive to volume
+    const highBase = (Math.sin(time * 5.1) * Math.cos(time * 7.3) + 1) * 0.5
+    const high = highBase * vol * (0.5 + Math.random() * 0.3)
 
-      return energyRef.current
-    },
-    [detectBeat],
-  )
+    // Smooth with exponential moving average
+    energyRef.current.bass = energyRef.current.bass * 0.75 + bass * 0.25
+    energyRef.current.mid = energyRef.current.mid * 0.85 + mid * 0.15
+    energyRef.current.high = energyRef.current.high * 0.8 + high * 0.2
+
+    return energyRef.current
+  }, [detectBeat])
 
   const render = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext("2d", { alpha: false })
+    const ctx = canvas.getContext("2d", { alpha: true })
     if (!ctx) return
 
-    const width = canvas.width
-    const height = canvas.height
-    const centerX = width / 2
-    const centerY = height / 2
+    const dpr = window.devicePixelRatio || 1
+    const width = canvas.width / dpr
+    const height = canvas.height / dpr
 
     const time = currentTime || 0
-    const { isBeat, isDownbeat } = detectBeat(time)
+    const { isBeat, isDownbeat, beatPhase } = detectBeat(time)
+    const energy = isPlaying ? generateEnergy(time, volume) : { bass: 0, mid: 0, high: 0 }
 
-    // Generate energy levels
-    const energy = isPlaying ? generateEnergy(time) : { bass: 0, mid: 0, high: 0 }
-
-    // Fade out when paused
+    // Fade energy when paused
     if (!isPlaying) {
-      energy.bass *= 0.9
-      energy.mid *= 0.9
-      energy.high *= 0.9
+      energyRef.current.bass *= 0.95
+      energyRef.current.mid *= 0.95
+      energyRef.current.high *= 0.95
     }
 
-    // Update hue on beats
-    if (isBeat) {
-      hueRef.current += isDownbeat ? 40 : 15
+    // Shift hue on beats
+    if (isBeat && isPlaying) {
+      hueRef.current += isDownbeat ? 25 : 10
       if (hueRef.current > 360) hueRef.current -= 360
     }
 
-    // Smooth pulse animation
-    const targetPulse = 1 + energy.bass * 0.15
-    pulseRef.current = pulseRef.current * 0.85 + targetPulse * 0.15
+    // Smooth pulse
+    const targetPulse = 1 + energy.bass * 0.2
+    pulseRef.current = pulseRef.current * 0.9 + targetPulse * 0.1
 
-    ctx.fillStyle = "rgba(0, 0, 0, 0.15)"
+    // Clear with fade trail
+    ctx.fillStyle = "rgba(0, 0, 0, 0.12)"
     ctx.fillRect(0, 0, width, height)
 
-    meshOffsetRef.current += isPlaying ? 0.01 : 0
-    const gradient = ctx.createRadialGradient(
-      centerX + Math.sin(meshOffsetRef.current) * 100,
-      centerY + Math.cos(meshOffsetRef.current * 0.7) * 100,
+    // Update wave phase
+    wavePhaseRef.current += isPlaying ? 0.02 + energy.mid * 0.03 : 0.005
+
+    const centerX = width / 2
+    const centerY = height / 2
+
+    // Layer 1: Ambient gradient background
+    const bgGradient = ctx.createRadialGradient(
+      centerX + Math.sin(wavePhaseRef.current * 0.5) * 50,
+      centerY + Math.cos(wavePhaseRef.current * 0.3) * 50,
       0,
       centerX,
       centerY,
-      Math.max(width, height) * 0.8,
+      Math.max(width, height) * 0.7
     )
-    gradient.addColorStop(0, `hsla(${hueRef.current}, 70%, 15%, 0.3)`)
-    gradient.addColorStop(0.5, `hsla(${hueRef.current + 60}, 60%, 10%, 0.2)`)
-    gradient.addColorStop(1, "hsla(0, 0%, 0%, 0.1)")
-    ctx.fillStyle = gradient
+    bgGradient.addColorStop(0, `hsla(${hueRef.current}, 60%, 20%, ${0.15 + energy.bass * 0.1})`)
+    bgGradient.addColorStop(0.5, `hsla(${hueRef.current + 40}, 50%, 12%, ${0.1 + energy.mid * 0.05})`)
+    bgGradient.addColorStop(1, "transparent")
+    ctx.fillStyle = bgGradient
     ctx.fillRect(0, 0, width, height)
 
+    // Layer 2: Central glow pulse
+    const glowRadius = 80 + energy.bass * 120
+    const glowGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowRadius)
+    glowGradient.addColorStop(0, `hsla(${hueRef.current}, 80%, 60%, ${0.4 + energy.bass * 0.3})`)
+    glowGradient.addColorStop(0.4, `hsla(${hueRef.current + 20}, 70%, 50%, ${0.2 + energy.bass * 0.15})`)
+    glowGradient.addColorStop(1, "transparent")
+    
     ctx.save()
     ctx.translate(centerX, centerY)
     ctx.scale(pulseRef.current, pulseRef.current)
-
-    const glowSize = 150 + energy.bass * 100
-    const glowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize)
-    const saturation = 60 + energy.bass * 30
-    const lightness = 40 + energy.bass * 20
-
-    glowGradient.addColorStop(0, `hsla(${hueRef.current}, ${saturation}%, ${lightness}%, 0.6)`)
-    glowGradient.addColorStop(0.3, `hsla(${hueRef.current}, ${saturation}%, ${lightness}%, 0.3)`)
-    glowGradient.addColorStop(0.6, `hsla(${hueRef.current + 30}, ${saturation}%, ${lightness - 10}%, 0.1)`)
-    glowGradient.addColorStop(1, "transparent")
-
+    ctx.translate(-centerX, -centerY)
     ctx.fillStyle = glowGradient
     ctx.beginPath()
-    ctx.arc(0, 0, glowSize, 0, Math.PI * 2)
+    ctx.arc(centerX, centerY, glowRadius, 0, Math.PI * 2)
     ctx.fill()
     ctx.restore()
 
+    // Layer 3: Flowing wave rings (smooth, no hexagons)
     ctx.save()
     ctx.translate(centerX, centerY)
-    rotationRef.current += (0.001 + energy.mid * 0.005) * (isPlaying ? 1 : 0)
-    ctx.rotate(rotationRef.current)
+    
+    for (let ring = 0; ring < 4; ring++) {
+      const ringRadius = 60 + ring * 50 + energy.bass * 30
+      const waveAmplitude = 15 + energy.mid * 25
+      const waveFrequency = 4 + ring
+      const ringHue = hueRef.current + ring * 30
+      const ringAlpha = 0.4 - ring * 0.08 + energy.mid * 0.2
 
-    const barCount = 64
-    for (let i = 0; i < barCount; i++) {
-      const angle = (i / barCount) * Math.PI * 2
-      const barEnergy = (Math.sin(angle * 3 + time * 2) * 0.5 + 0.5) * energy.mid + energy.bass * 0.5
-      const barHeight = 40 + barEnergy * 120
-      const innerRadius = 60 + energy.bass * 30
-      const barWidth = ((Math.PI * 2 * innerRadius) / barCount) * 0.7
-
-      const x1 = Math.cos(angle) * innerRadius
-      const y1 = Math.sin(angle) * innerRadius
-      const x2 = Math.cos(angle) * (innerRadius + barHeight)
-      const y2 = Math.sin(angle) * (innerRadius + barHeight)
-
-      // Gradient for each bar
-      const barGradient = ctx.createLinearGradient(x1, y1, x2, y2)
-      const barHue = hueRef.current + (i / barCount) * 60
-      barGradient.addColorStop(0, `hsla(${barHue}, 70%, 50%, 0.8)`)
-      barGradient.addColorStop(1, `hsla(${barHue + 30}, 80%, 60%, 0.3)`)
-
-      ctx.strokeStyle = barGradient
-      ctx.lineWidth = barWidth
-      ctx.lineCap = "round"
+      ctx.strokeStyle = `hsla(${ringHue}, 75%, 55%, ${ringAlpha})`
+      ctx.lineWidth = 2.5 - ring * 0.4
+      ctx.shadowBlur = 15
+      ctx.shadowColor = `hsla(${ringHue}, 80%, 60%, 0.5)`
       ctx.beginPath()
-      ctx.moveTo(x1, y1)
-      ctx.lineTo(x2, y2)
+
+      for (let i = 0; i <= 360; i += 2) {
+        const angle = (i * Math.PI) / 180
+        const wave = Math.sin(angle * waveFrequency + wavePhaseRef.current + ring * 0.5) * waveAmplitude
+        const r = ringRadius + wave
+        const x = Math.cos(angle) * r
+        const y = Math.sin(angle) * r
+
+        if (i === 0) {
+          ctx.moveTo(x, y)
+        } else {
+          ctx.lineTo(x, y)
+        }
+      }
+      ctx.closePath()
       ctx.stroke()
     }
     ctx.restore()
 
-    ctx.save()
-    ctx.translate(centerX, centerY)
-    ctx.rotate(-rotationRef.current * 2)
+    // Layer 4: Horizontal flowing waves at bottom
+    const waveCount = 3
+    for (let w = 0; w < waveCount; w++) {
+      const baseY = height * 0.7 + w * 25
+      const waveHue = hueRef.current + w * 40 + 60
+      const amplitude = 20 + energy.mid * 40
+      const frequency = 0.015 + w * 0.005
 
-    const sides = 6
-    const shapeRadius = 80 + energy.mid * 60
+      ctx.strokeStyle = `hsla(${waveHue}, 70%, 55%, ${0.3 + energy.mid * 0.2 - w * 0.05})`
+      ctx.lineWidth = 3 - w * 0.5
+      ctx.shadowBlur = 12
+      ctx.shadowColor = `hsla(${waveHue}, 80%, 60%, 0.4)`
+      ctx.beginPath()
 
-    ctx.strokeStyle = `hsla(${hueRef.current + 120}, 80%, 60%, 0.6)`
-    ctx.lineWidth = 3
-    ctx.shadowBlur = 20
-    ctx.shadowColor = `hsla(${hueRef.current + 120}, 80%, 60%, 0.8)`
-    ctx.beginPath()
+      for (let x = 0; x <= width; x += 3) {
+        const y = baseY + 
+          Math.sin(x * frequency + wavePhaseRef.current * (1 + w * 0.3)) * amplitude * (0.5 + energy.bass * 0.5) +
+          Math.sin(x * frequency * 2.5 + wavePhaseRef.current * 1.5) * amplitude * 0.3
 
-    for (let i = 0; i <= sides; i++) {
-      const angle = (i / sides) * Math.PI * 2
-      const waveOffset = Math.sin(angle * 3 + time * 3) * 25 * energy.mid
-      const r = shapeRadius + waveOffset
-      const x = Math.cos(angle) * r
-      const y = Math.sin(angle) * r
+        if (x === 0) {
+          ctx.moveTo(x, y)
+        } else {
+          ctx.lineTo(x, y)
+        }
+      }
+      ctx.stroke()
+    }
 
-      if (i === 0) {
-        ctx.moveTo(x, y)
-      } else {
-        ctx.lineTo(x, y)
+    // Layer 5: Floating particles on high energy
+    if (isPlaying && energy.high > 0.3) {
+      const spawnChance = energy.high * 0.4
+      if (Math.random() < spawnChance) {
+        const count = Math.floor(1 + energy.high * 3)
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2
+          const dist = 50 + Math.random() * 100
+          particlesRef.current.push({
+            x: centerX + Math.cos(angle) * dist,
+            y: centerY + Math.sin(angle) * dist,
+            vx: (Math.random() - 0.5) * 3,
+            vy: -1 - Math.random() * 2,
+            life: 1,
+            size: 2 + Math.random() * 3,
+            hue: hueRef.current + Math.random() * 60
+          })
+        }
       }
     }
-    ctx.closePath()
-    ctx.stroke()
-    ctx.restore()
 
-    if (isPlaying && energy.high > 0.4 && Math.random() > 0.6) {
-      const particleCount = Math.floor(energy.high * 8)
-      for (let i = 0; i < particleCount; i++) {
-        const angle = Math.random() * Math.PI * 2
-        const speed = 2 + Math.random() * 4
-        const distance = Math.random() * 100 + 50
-        particlesRef.current.push({
-          x: centerX + Math.cos(angle) * distance,
-          y: centerY + Math.sin(angle) * distance,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 1,
-          size: 1.5 + Math.random() * 3,
-          hue: hueRef.current + Math.random() * 120,
-          angle,
-          speed,
-        })
-      }
+    // Limit particles
+    if (particlesRef.current.length > 150) {
+      particlesRef.current = particlesRef.current.slice(-150)
     }
 
-    // Limit particle count
-    if (particlesRef.current.length > 300) {
-      particlesRef.current = particlesRef.current.slice(-300)
-    }
-
-    particlesRef.current = particlesRef.current.filter((p) => {
+    // Update and draw particles
+    ctx.shadowBlur = 0
+    particlesRef.current = particlesRef.current.filter(p => {
       p.x += p.vx
       p.y += p.vy
-      p.vy += 0.05 // Slight gravity
-      p.life -= 0.015
-      p.size *= 0.98
+      p.vy += 0.02
+      p.life -= 0.012
+      p.size *= 0.99
 
       if (p.life > 0) {
-        // Draw particle with glow
-        ctx.shadowBlur = 10
-        ctx.shadowColor = `hsla(${p.hue}, 90%, 70%, ${p.life})`
-        ctx.fillStyle = `hsla(${p.hue}, 90%, 70%, ${p.life})`
+        const alpha = p.life * 0.8
+        ctx.fillStyle = `hsla(${p.hue}, 85%, 65%, ${alpha})`
+        ctx.shadowBlur = 8
+        ctx.shadowColor = `hsla(${p.hue}, 90%, 70%, ${alpha * 0.5})`
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
         ctx.fill()
@@ -263,33 +255,27 @@ export function MusicVisualizer({ isPlaying, currentTime = 0, duration = 0 }: Mu
       }
       return false
     })
+    ctx.shadowBlur = 0
 
-    if (isBeat) {
-      const flashIntensity = isDownbeat ? 0.15 : 0.08
-      ctx.fillStyle = `hsla(${hueRef.current}, 100%, 80%, ${flashIntensity})`
+    // Beat flash
+    if (isBeat && isPlaying) {
+      const intensity = isDownbeat ? 0.12 : 0.06
+      ctx.fillStyle = `hsla(${hueRef.current}, 100%, 85%, ${intensity})`
       ctx.fillRect(0, 0, width, height)
     }
 
-    // Continue animation loop
-    if (isVisible) {
-      animationFrameRef.current = requestAnimationFrame(render)
-    }
-  }, [isPlaying, currentTime, isVisible, detectBeat, generateEnergy])
+    animationFrameRef.current = requestAnimationFrame(render)
+  }, [isPlaying, currentTime, volume, detectBeat, generateEnergy])
 
-  // Start/stop animation loop
   useEffect(() => {
-    if (isVisible) {
-      render()
-    }
-
+    render()
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [isVisible, render])
+  }, [render])
 
-  // Handle canvas resize with high DPI support
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -299,13 +285,12 @@ export function MusicVisualizer({ isPlaying, currentTime = 0, duration = 0 }: Mu
       if (!container) return
 
       const dpr = window.devicePixelRatio || 1
-      const displayWidth = container.clientWidth
-      const displayHeight = isFullscreen ? window.innerHeight : 200
+      const rect = container.getBoundingClientRect()
 
-      canvas.width = displayWidth * dpr
-      canvas.height = displayHeight * dpr
-      canvas.style.width = `${displayWidth}px`
-      canvas.style.height = `${displayHeight}px`
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      canvas.style.width = `${rect.width}px`
+      canvas.style.height = `${rect.height}px`
 
       const ctx = canvas.getContext("2d")
       if (ctx) {
@@ -315,44 +300,14 @@ export function MusicVisualizer({ isPlaying, currentTime = 0, duration = 0 }: Mu
 
     resizeCanvas()
     window.addEventListener("resize", resizeCanvas)
-
     return () => window.removeEventListener("resize", resizeCanvas)
-  }, [isFullscreen])
-
-  if (!isVisible) {
-    return (
-      <div className="relative w-full h-12 bg-black/50 backdrop-blur-sm flex items-center justify-center border-b border-white/10">
-        <Button size="sm" variant="ghost" onClick={() => setIsVisible(true)} className="text-white/60 hover:text-white">
-          <Eye size={16} className="mr-2" />
-          Show Visualizer
-        </Button>
-      </div>
-    )
-  }
+  }, [])
 
   return (
-    <div className={`relative w-full ${isFullscreen ? "fixed inset-0 z-50" : "h-[200px]"} bg-black overflow-hidden`}>
-      <canvas ref={canvasRef} className="w-full h-full" style={{ display: "block" }} />
-
-      <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/60 via-black/20 to-transparent backdrop-blur-sm" />
-      <div className="absolute top-2 right-2 flex gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setIsFullscreen(!isFullscreen)}
-          className="text-white/70 hover:text-white hover:bg-white/10 backdrop-blur-sm"
-        >
-          {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setIsVisible(false)}
-          className="text-white/70 hover:text-white hover:bg-white/10 backdrop-blur-sm"
-        >
-          <EyeOff size={16} />
-        </Button>
-      </div>
-    </div>
+    <canvas 
+      ref={canvasRef} 
+      className="absolute inset-0 w-full h-full"
+      style={{ display: "block" }}
+    />
   )
 }

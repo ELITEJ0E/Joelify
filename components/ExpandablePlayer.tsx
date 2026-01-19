@@ -1,21 +1,26 @@
 "use client"
 
+import { SheetTitle } from "@/components/ui/sheet"
+import { SheetHeader } from "@/components/ui/sheet"
+import { SheetContent } from "@/components/ui/sheet"
+import { Sheet } from "@/components/ui/sheet"
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown, Type } from 'lucide-react'
+import { X, ChevronDown } from 'lucide-react'
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { LyricsDisplay } from "./LyricsDisplay"
+import { MusicVisualizer } from "./MusicVisualizer"
 import { useApp } from "@/contexts/AppContext"
+import { Type } from 'lucide-react'
+import { LyricsDisplay } from './LyricsDisplay'
 
 interface ExpandablePlayerProps {
   isExpanded: boolean
   onExpandChange: (expanded: boolean) => void
   currentTime: number
   isPlaying: boolean
+  volume?: number
   children?: React.ReactNode
 }
 
@@ -24,11 +29,12 @@ export function ExpandablePlayer({
   onExpandChange,
   currentTime,
   isPlaying,
+  volume = 1,
   children,
 }: ExpandablePlayerProps) {
   const { currentTrack, videoMode } = useApp()
-  const [showLyrics, setShowLyrics] = useState(false)
   const [localVideoMode, setLocalVideoMode] = useState(false)
+  const [showLyrics, setShowLyrics] = useState(false)
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.8])
@@ -141,9 +147,20 @@ export function ExpandablePlayer({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md"
+      className="fixed inset-0 z-50 bg-black overflow-hidden"
       onClick={handleBackdropClick}
     >
+      {/* Visualizer Background */}
+      <div className="absolute inset-0">
+        <MusicVisualizer 
+          isPlaying={isPlaying} 
+          currentTime={currentTime} 
+          volume={volume}
+        />
+      </div>
+      
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/30" />
       <motion.div
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
@@ -220,29 +237,7 @@ export function ExpandablePlayer({
             <p className="text-lg md:text-xl text-white/60">{currentTrack?.artist || "Unknown Artist"}</p>
           </div>
 
-          {/* Lyrics Button - ONLY IN EXPANDED VIEW */}
-          {currentTrack && (
-            <div className="mb-6">
-              <Sheet open={showLyrics} onOpenChange={setShowLyrics}>
-                <Button
-                  variant="outline"
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                  onClick={() => setShowLyrics(true)}
-                >
-                  <Type size={20} className="mr-2" />
-                  View Lyrics
-                </Button>
-                <SheetContent side="right" className="w-full sm:w-96 bg-black/95 border-white/10">
-                  <SheetHeader>
-                    <SheetTitle className="text-white">Lyrics</SheetTitle>
-                  </SheetHeader>
-                  <div className="mt-6 h-[calc(100vh-8rem)]">
-                    <LyricsDisplay currentTime={currentTime} isPlaying={isPlaying} />
-                  </div>
-                </SheetContent>
-              </Sheet>
-            </div>
-          )}
+
 
           {/* Player Controls */}
           <div className="w-full max-w-2xl">{children}</div>

@@ -28,7 +28,8 @@ import { LyricsDisplay } from "./LyricsDisplay"
 import { MiniPlayer } from "./MiniPlayer"
 import { SleepTimer } from "./SleepTimer"
 import { ExpandablePlayer } from "./ExpandablePlayer"
-import { MusicVisualizer } from "./MusicVisualizer"
+import { MusicVisualizer } from "./MusicVisualizer" // Import MusicVisualizer
+
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -847,14 +848,13 @@ export function PlayerControls() {
         onError={handleSpotifyError}
       />
 
-      <MusicVisualizer isPlaying={isPlaying} />
-
-      {/* Expandable Player */}
+      {/* Expandable Player with Visualizer */}
       <ExpandablePlayer
         isExpanded={isExpandedPlayer}
         onExpandChange={setIsExpandedPlayer}
         currentTime={currentTime}
         isPlaying={isPlaying}
+        volume={volume}
       >
         {/* Player controls in expanded view */}
         <div className="flex flex-col items-center w-full gap-4">
