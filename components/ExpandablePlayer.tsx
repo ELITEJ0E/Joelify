@@ -7,10 +7,10 @@ import { Sheet } from "@/components/ui/sheet"
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown } from 'lucide-react'
+import { X, ChevronDown, Music, Image as ImageIcon } from 'lucide-react'
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { MusicVisualizer } from "./MusicVisualizer"
+import { AudioMotionVisualizer } from "./AudioMotionVisualizer"
 import { useApp } from "@/contexts/AppContext"
 import { Type } from 'lucide-react'
 import { LyricsDisplay } from './LyricsDisplay'
@@ -32,14 +32,18 @@ export function ExpandablePlayer({
   volume = 1,
   children,
 }: ExpandablePlayerProps) {
-  const { currentTrack, videoMode } = useApp()
+  const { currentTrack, videoMode, audioElement } = useApp()
   const [localVideoMode, setLocalVideoMode] = useState(false)
   const [showLyrics, setShowLyrics] = useState(false)
+  const [showVisualizer, setShowVisualizer] = useState(false)
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.8])
   const expandedPlayerRef = useRef<any>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const isPlayerReadyRef = useRef(false)
+  const visualizerContainerRef = useRef<HTMLDivElement>(null)
 
   // Initialize YouTube player for expanded view
   useEffect(() => {
@@ -120,6 +124,7 @@ export function ExpandablePlayer({
       y.set(0)
       setShowLyrics(false)
       setLocalVideoMode(false)
+      setShowVisualizer(false)
     } else {
       setLocalVideoMode(videoMode)
     }
@@ -140,6 +145,22 @@ export function ExpandablePlayer({
     }
   }
 
+  // Initialize audio context for visualizer
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
+    return audioContextRef.current
+  }
+
+  const getAudioSource = (audioElement: HTMLAudioElement) => {
+    if (!audioSourceRef.current) {
+      const audioContext = initAudioContext()
+      audioSourceRef.current = audioContext.createMediaElementSource(audioElement)
+    }
+    return audioSourceRef.current
+  }
+
   if (!isExpanded) return null
 
   return (
@@ -150,17 +171,21 @@ export function ExpandablePlayer({
       className="fixed inset-0 z-50 bg-black overflow-hidden"
       onClick={handleBackdropClick}
     >
-      {/* Visualizer Background */}
-      <div className="absolute inset-0">
-        <MusicVisualizer 
-          isPlaying={isPlaying} 
-          currentTime={currentTime} 
-          volume={volume}
-        />
-      </div>
+      {/* Visualizer Background - Only shown when toggle is ON */}
+      {showVisualizer && (
+        <div className="absolute inset-0">
+          <AudioMotionVisualizer 
+            isPlaying={isPlaying} 
+            getAudioSource={getAudioSource}
+            volume={volume}
+            audioElement={audioElement}
+          />
+        </div>
+      )}
       
-      {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-black/30" />
+      {/* Dark overlay for readability - adjust opacity based on visualizer state */}
+      <div className={`absolute inset-0 ${showVisualizer ? 'bg-black/40' : 'bg-black/30'}`} />
+      
       <motion.div
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
@@ -198,7 +223,29 @@ export function ExpandablePlayer({
 
         {/* Content */}
         <div className="flex-1 flex flex-col items-center justify-start px-6 md:px-12 overflow-hidden">
-          {/* Album Art / Video */}
+          {/* Visualizer Toggle Button */}
+          <div className="w-full max-w-md flex justify-end mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowVisualizer(!showVisualizer)}
+              className={`backdrop-blur-sm border-white/20 hover:bg-white/10 transition-all duration-300 ${showVisualizer ? 'bg-white/20 text-white' : 'bg-black/20 text-white/80'}`}
+            >
+              {showVisualizer ? (
+                <>
+                  <ImageIcon size={16} className="mr-2" />
+                  Show Thumbnail
+                </>
+              ) : (
+                <>
+                  <Music size={16} className="mr-2" />
+                  Show Visualizer
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Album Art / Video / Visualizer Container */}
           {localVideoMode && currentTrack ? (
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
@@ -208,7 +255,7 @@ export function ExpandablePlayer({
             >
               <div id="expanded-youtube-player" className="w-full h-full"></div>
             </motion.div>
-          ) : currentTrack?.thumbnail ? (
+          ) : !showVisualizer && currentTrack?.thumbnail ? (
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -221,6 +268,20 @@ export function ExpandablePlayer({
                 fill
                 className="rounded-xl object-cover shadow-2xl"
                 priority
+              />
+            </motion.div>
+          ) : showVisualizer ? (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="relative w-full max-w-md aspect-square mb-6 md:mb-8 rounded-xl overflow-hidden shadow-2xl"
+            >
+              {/* Visualizer will be rendered in this container */}
+              <div 
+                ref={visualizerContainerRef}
+                id="audiomotion-container" 
+                className="w-full h-full bg-black/50"
               />
             </motion.div>
           ) : (
@@ -236,8 +297,6 @@ export function ExpandablePlayer({
             </h1>
             <p className="text-lg md:text-xl text-white/60">{currentTrack?.artist || "Unknown Artist"}</p>
           </div>
-
-
 
           {/* Player Controls */}
           <div className="w-full max-w-2xl">{children}</div>

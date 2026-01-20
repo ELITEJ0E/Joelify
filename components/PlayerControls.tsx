@@ -28,7 +28,7 @@ import { LyricsDisplay } from "./LyricsDisplay"
 import { MiniPlayer } from "./MiniPlayer"
 import { SleepTimer } from "./SleepTimer"
 import { ExpandablePlayer } from "./ExpandablePlayer"
-import { MusicVisualizer } from "./MusicVisualizer" // Import MusicVisualizer
+import { MusicVisualizer } from "./AudioMotionVisualizer" // Import MusicVisualizer
 
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"

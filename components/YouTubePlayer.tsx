@@ -1,4 +1,3 @@
-// components/YouTubePlayer.tsx
 "use client"
 
 import { useEffect, useRef } from "react"

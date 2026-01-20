@@ -52,6 +52,12 @@ interface AppContextType extends AppState {
     spotifyQuality: "normal" | "high" | "veryhigh"
   }
   setAudioSettings: (settings: AppContextType["audioSettings"]) => void
+  audioElement: HTMLAudioElement | null
+  setAudioElement: (element: HTMLAudioElement | null) => void
+  audioContext: AudioContext | null
+  setAudioContext: (context: AudioContext | null) => void
+  analyserNode: AnalyserNode | null
+  setAnalyserNode: (node: AnalyserNode | null) => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -81,6 +87,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     youtubeQuality: "720p" as const,
     spotifyQuality: "high" as const,
   })
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null)
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
+
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -317,6 +327,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSpotifyPlayer,
         audioSettings,
         setAudioSettings,
+        audioElement,
+        setAudioElement,
+        audioContext,
+        setAudioContext,
+        analyserNode,
+        setAnalyserNode,
       }}
     >
       {children}
