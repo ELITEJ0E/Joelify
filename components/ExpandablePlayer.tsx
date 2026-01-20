@@ -10,7 +10,7 @@ import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motio
 import { X, ChevronDown, Music, Image as ImageIcon } from 'lucide-react'
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { AudioMotionVisualizer } from "./AudioMotionVisualizer"
+import { SimpleVisualizer } from "./SimpleVisualizer"
 import { useApp } from "@/contexts/AppContext"
 import { Type } from 'lucide-react'
 import { LyricsDisplay } from './LyricsDisplay'
@@ -32,7 +32,7 @@ export function ExpandablePlayer({
   volume = 1,
   children,
 }: ExpandablePlayerProps) {
-  const { currentTrack, videoMode, audioElement } = useApp()
+  const { currentTrack, videoMode } = useApp()
   const [localVideoMode, setLocalVideoMode] = useState(false)
   const [showLyrics, setShowLyrics] = useState(false)
   const [showVisualizer, setShowVisualizer] = useState(false)
@@ -40,10 +40,7 @@ export function ExpandablePlayer({
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.8])
   const expandedPlayerRef = useRef<any>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const isPlayerReadyRef = useRef(false)
-  const visualizerContainerRef = useRef<HTMLDivElement>(null)
 
   // Initialize YouTube player for expanded view
   useEffect(() => {
@@ -145,22 +142,6 @@ export function ExpandablePlayer({
     }
   }
 
-  // Initialize audio context for visualizer
-  const initAudioContext = () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-    }
-    return audioContextRef.current
-  }
-
-  const getAudioSource = (audioElement: HTMLAudioElement) => {
-    if (!audioSourceRef.current) {
-      const audioContext = initAudioContext()
-      audioSourceRef.current = audioContext.createMediaElementSource(audioElement)
-    }
-    return audioSourceRef.current
-  }
-
   if (!isExpanded) return null
 
   return (
@@ -174,17 +155,17 @@ export function ExpandablePlayer({
       {/* Visualizer Background - Only shown when toggle is ON */}
       {showVisualizer && (
         <div className="absolute inset-0">
-          <AudioMotionVisualizer 
+          <SimpleVisualizer 
             isPlaying={isPlaying} 
-            getAudioSource={getAudioSource}
+            currentTime={currentTime}
             volume={volume}
-            audioElement={audioElement}
+            bpm={128}
           />
         </div>
       )}
       
       {/* Dark overlay for readability - adjust opacity based on visualizer state */}
-      <div className={`absolute inset-0 ${showVisualizer ? 'bg-black/40' : 'bg-black/30'}`} />
+      <div className={`absolute inset-0 ${showVisualizer ? 'bg-black/20' : 'bg-black/30'}`} />
       
       <motion.div
         drag="y"
@@ -277,12 +258,8 @@ export function ExpandablePlayer({
               transition={{ duration: 0.5 }}
               className="relative w-full max-w-md aspect-square mb-6 md:mb-8 rounded-xl overflow-hidden shadow-2xl"
             >
-              {/* Visualizer will be rendered in this container */}
-              <div 
-                ref={visualizerContainerRef}
-                id="audiomotion-container" 
-                className="w-full h-full bg-black/50"
-              />
+              {/* Empty container - visualizer is in the background */}
+              <div className="w-full h-full" />
             </motion.div>
           ) : (
             <div className="w-full max-w-md aspect-square mb-6 md:mb-8 bg-secondary rounded-xl flex items-center justify-center shadow-2xl">
