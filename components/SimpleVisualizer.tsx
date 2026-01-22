@@ -4,236 +4,290 @@ import { useEffect, useRef } from "react"
 
 interface SimpleVisualizerProps {
   isPlaying: boolean
-  currentTime?: number
+  currentTime?: number // Added for beat sync
   volume?: number
-  bpm?: number
+  bpm?: number // Added for beat sync
 }
 
-export function SimpleVisualizer({
-  isPlaying,
-  currentTime = 0,
+export function SimpleVisualizer({ 
+  isPlaying, 
+  currentTime = 0, // Default to 0
   volume = 1,
-  bpm = 128,
+  bpm = 128 // Default BPM for electronic music
 }: SimpleVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationFrameRef = useRef<number | null>(null)
-
   const barsRef = useRef<number[]>([])
-  const smoothedBarsRef = useRef<number[]>([])
-
   const phaseRef = useRef(0)
+  const lastBeatRef = useRef(0)
+  const beatPhaseRef = useRef(0)
   const energyRef = useRef(0)
-  const lastBeatRef = useRef(-999)
 
-  // Safe clamp helper
-  const clamp = (v: number, min = 0, max = 1.5) => Math.max(min, Math.min(max, isNaN(v) ? 0 : v))
-
-  // ─── Init ────────────────────────────────────────────────────────────────
+  // Initialize bars
   useEffect(() => {
-    const numBars = 56
-    barsRef.current = new Array(numBars).fill(0.08)
-    smoothedBarsRef.current = new Array(numBars).fill(0.08)
+    const numBars = 64
+    barsRef.current = Array(numBars).fill(0).map(() => Math.random() * 0.3)
   }, [])
 
-  // ─── Beat detection ──────────────────────────────────────────────────────
+  // Calculate beat timing for sync
   const getBeatInfo = (time: number) => {
     const beatInterval = 60 / bpm
-    const beatProgress = (time % beatInterval) / beatInterval
     const currentBeat = Math.floor(time / beatInterval)
-
-    const isNewBeat = currentBeat > Math.floor(lastBeatRef.current / beatInterval)
-    if (isNewBeat) {
-      lastBeatRef.current = time
-      const isDownbeat = currentBeat % 4 === 0
-      energyRef.current = clamp(energyRef.current + (isDownbeat ? 0.7 : 0.4), 0, 1.35)
+    const beatPhase = (time % beatInterval) / beatInterval
+    const isDownbeat = currentBeat % 4 === 0
+    const isBeat = currentBeat !== lastBeatRef.current
+    
+    if (isBeat) {
+      lastBeatRef.current = currentBeat
+      // Boost energy on beats
+      energyRef.current = Math.min(1, energyRef.current + (isDownbeat ? 0.5 : 0.3))
     }
-
-    return { beatProgress, isNewBeat, isDownbeat: currentBeat % 4 === 0 }
+    
+    return { isBeat, isDownbeat, beatPhase, beatInterval }
   }
 
-  // ─── Render loop ─────────────────────────────────────────────────────────
+  // Animation loop with beat sync
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext("2d")
+    const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    let prevTime = performance.now()
+    const render = () => {
+      if (!canvas || !ctx) return
 
-    const render = (now: number) => {
-      const delta = (now - prevTime) / 1000
-      prevTime = now
+      const width = canvas.width
+      const height = canvas.height
+      
+      // Clear with fade effect
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)'
+      ctx.fillRect(0, 0, width, height)
 
-      const w = canvas.width
-      const h = canvas.height
-      if (w <= 0 || h <= 0) return // safety
+      // Update phase
+      phaseRef.current += isPlaying ? 0.03 : 0.01
 
-      const centerX = w / 2
-      const centerY = h / 2
+      // Get beat info for sync
+      const { isBeat, isDownbeat, beatPhase } = getBeatInfo(currentTime)
+      
+      // Update energy (decay over time)
+      energyRef.current *= 0.95
 
-      ctx.fillStyle = "rgba(0, 0, 0, 0.065)"
-      ctx.fillRect(0, 0, w, h)
+      // Simulate frequency bands based on beat
+      const bassEnergy = Math.sin(beatPhase * Math.PI) * 0.7 * (isDownbeat ? 1.2 : 1)
+      const midEnergy = Math.sin(beatPhase * Math.PI * 2) * 0.5
+      const highEnergy = Math.random() * 0.3 + Math.sin(currentTime * 10) * 0.2
 
-      phaseRef.current += isPlaying ? delta * 0.9 : delta * 0.25
+      // Update bars based on play state and beat sync
+      const bars = barsRef.current
+      for (let i = 0; i < bars.length; i++) {
+        let baseValue
+        
+        // Different frequency bands respond differently
+        if (i < bars.length / 3) {
+          // Bass range - strong on beats
+          baseValue = bassEnergy * (0.8 + Math.random() * 0.4)
+        } else if (i < (bars.length * 2) / 3) {
+          // Mid range - flowing
+          baseValue = midEnergy * (0.7 + Math.random() * 0.6)
+        } else {
+          // High range - sparkly
+          baseValue = highEnergy * (0.6 + Math.random() * 0.8)
+        }
 
-      const { beatProgress, isNewBeat, isDownbeat } = getBeatInfo(currentTime)
-      energyRef.current = clamp(energyRef.current * 0.93)
-
-      const bass = Math.sin(beatProgress * Math.PI * 2) ** 1.4 * (isDownbeat ? 1.25 : 0.95)
-      const mid = Math.sin(beatProgress * Math.PI * 3.2 + 0.3) * 0.6
-      const high = 0.25 + Math.sin(phaseRef.current * 9 + 1.2) * 0.3
-
-      const barCount = barsRef.current.length
-      for (let i = 0; i < barCount; i++) {
-        let target = 0.08
-
+        // Add energy when playing
         if (isPlaying) {
-          const pos = i / (barCount - 1)
-          if (pos < 0.33) {
-            target = bass * (0.9 + Math.random() * 0.35)
-          } else if (pos < 0.66) {
-            target = mid * (0.8 + Math.random() * 0.5)
-          } else {
-            target = high * (0.7 + Math.random() * 0.6)
+          const randomEnergy = Math.random() * 0.7 * (volume / 100)
+          baseValue = Math.min(1, baseValue + randomEnergy)
+          
+          // Boost on beats
+          if (isBeat) {
+            baseValue *= isDownbeat ? 1.5 : 1.2
           }
-
-          target += energyRef.current * 0.75
-
-          if (isNewBeat) {
-            target *= isDownbeat ? 1.75 : 1.35
+          
+          // Occasional peaks
+          if (Math.random() < 0.05) {
+            baseValue = 1
           }
-
-          if (Math.random() < 0.04) target = Math.max(target, 0.9)
         } else {
-          target = 0.12 + Math.sin(phaseRef.current * 1.4 + i * 0.38) * 0.11
+          // Subtle pulsing when paused
+          baseValue = Math.sin(phaseRef.current * 0.2) * 0.1 + 0.2
         }
 
-        barsRef.current[i] = clamp(barsRef.current[i] * 0.82 + target * 0.18)
+        // Smooth transition
+        bars[i] = bars[i] * 0.85 + baseValue * 0.15
       }
 
-      // Smoothing with boundary check
-      for (let i = 0; i < barCount; i++) {
-        const prev = i === 0 ? barsRef.current[barCount - 1] : barsRef.current[i - 1]
-        const next = i === barCount - 1 ? barsRef.current[0] : barsRef.current[i + 1]
-        smoothedBarsRef.current[i] = clamp(
-          barsRef.current[i] * 0.62 + prev * 0.19 + next * 0.19
-        )
-      }
+      // Draw bars with gradient
+      const barWidth = width / bars.length
+      const centerY = height / 2
 
-      // ─── Draw bars ───────────────────────────────────────────────────────
-      const barWidth = w / barCount
-      const timeHueShift = phaseRef.current * 22
-
-      for (let i = 0; i < barCount; i++) {
-        let heightVal = smoothedBarsRef.current[i]
-        if (isNaN(heightVal) || !isFinite(heightVal)) heightVal = 0.08 // prevent NaN propagation
-
-        const barHeight = clamp(heightVal, 0, 1.5) * h * 0.78
-
-        const pos = i / (barCount - 1)
-        let baseHue = 30 + pos * 300
-        baseHue = (baseHue + timeHueShift) % 360
-        const sat = 85 + Math.sin(phaseRef.current * 0.7 + pos * 4) * 15
-        const lum = 55 + heightVal * 20 + (isNewBeat ? 15 : 0)
-
-        const y0 = centerY - barHeight
-        const y1 = centerY + barHeight
-
-        // Only create gradient if y values are finite
-        let gradient
-        if (isFinite(y0) && isFinite(y1)) {
-          gradient = ctx.createLinearGradient(0, y0, 0, y1)
-          gradient.addColorStop(0, `hsla(${baseHue}, ${sat}%, ${lum + 15}%, 0.92)`)
-          gradient.addColorStop(0.45, `hsla(${(baseHue + 40) % 360}, ${sat}%, ${lum}%, 0.75)`)
-          gradient.addColorStop(1, `hsla(${(baseHue + 90) % 360}, ${sat - 10}%, ${lum - 15}%, 0.35)`)
+      for (let i = 0; i < bars.length; i++) {
+        const barHeight = bars[i] * height * 0.7
+        
+        // Create colorful gradient based on frequency band
+        let hue
+        if (i < bars.length / 3) {
+          // Bass - red/orange
+          hue = (i / (bars.length / 3)) * 60 + currentTime * 50
+        } else if (i < (bars.length * 2) / 3) {
+          // Mid - green/cyan
+          hue = 120 + ((i - bars.length / 3) / (bars.length / 3)) * 60 + currentTime * 30
         } else {
-          gradient = ctx.createLinearGradient(0, centerY, 0, centerY + 1) // fallback
+          // High - blue/purple
+          hue = 240 + ((i - (bars.length * 2) / 3) / (bars.length / 3)) * 60 + currentTime * 20
         }
 
-        const x = i * barWidth
+        const gradient = ctx.createLinearGradient(0, centerY - barHeight, 0, centerY + barHeight)
+        gradient.addColorStop(0, `hsla(${hue}, 100%, 60%, 0.9)`)
+        gradient.addColorStop(0.5, `hsla(${hue + 60}, 100%, 50%, 0.6)`)
+        gradient.addColorStop(1, `hsla(${hue + 120}, 100%, 40%, 0.3)`)
 
         ctx.fillStyle = gradient
-        ctx.shadowColor = `hsla(${baseHue}, 90%, 65%, ${0.5 + energyRef.current * 0.45})`
-        ctx.shadowBlur = 18 + (isNewBeat ? 28 : 12)
-        ctx.fillRect(x + 1, centerY - barHeight / 2, barWidth - 2, barHeight)
-
-        // highlight
+        
+        // Draw bar with rounded corners effect
+        const x = i * barWidth
+        const y = centerY - barHeight / 2
+        const barW = barWidth - 1
+        
+        // Draw main bar
+        ctx.fillRect(x, y, barW, barHeight)
+        
+        // Draw glow effect (stronger on beats)
+        const glowIntensity = isBeat ? 20 : 10
+        ctx.shadowColor = `hsla(${hue}, 100%, 60%, ${isBeat ? 0.8 : 0.5})`
+        ctx.shadowBlur = glowIntensity
+        ctx.fillRect(x, y, barW, barHeight)
         ctx.shadowBlur = 0
-        ctx.fillStyle = `hsla(${baseHue}, 80%, 85%, ${0.4 + heightVal * 0.4})`
-        ctx.fillRect(x + 1, centerY - barHeight / 2, barWidth - 2, Math.min(4, barHeight * 0.08))
       }
 
-      // ─── Center pulse ────────────────────────────────────────────────────
-      if (isPlaying || energyRef.current > 0.05) {
-        const pulse = Math.sin(beatProgress * Math.PI * 2.8) * 0.5 + 0.5
-        const size = 28 + pulse * 90 + energyRef.current * 160
-
-        const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size)
-
-        if (isDownbeat) {
-          grad.addColorStop(0, "rgba(255, 110, 140, 0.75)")
-          grad.addColorStop(0.45, "rgba(220, 90, 180, 0.45)")
-        } else if (isNewBeat) {
-          grad.addColorStop(0, "rgba(170, 130, 255, 0.65)")
-          grad.addColorStop(0.5, "rgba(120, 100, 240, 0.35)")
-        } else {
-          grad.addColorStop(0, `rgba(140, 180, 255, ${0.35 + energyRef.current * 0.25})`)
-          grad.addColorStop(0.6, "rgba(100, 140, 220, 0.12)")
-        }
-        grad.addColorStop(1, "rgba(60, 90, 180, 0)")
-
-        ctx.fillStyle = grad
+      // Draw connecting lines for wave effect
+      if (isPlaying) {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.2 + bassEnergy * 0.3})`
+        ctx.lineWidth = 2
         ctx.beginPath()
-        ctx.arc(centerX, centerY, size, 0, Math.PI * 2)
+        
+        const sliceWidth = width / bars.length
+        for (let i = 0; i < bars.length; i++) {
+          const x = i * sliceWidth
+          const y = centerY + (bars[i] - 0.5) * height * 0.3
+          
+          if (i === 0) {
+            ctx.moveTo(x, y)
+          } else {
+            ctx.lineTo(x, y)
+          }
+        }
+        ctx.stroke()
+      }
+
+      // Draw beat-synced center pulse
+      if (isPlaying) {
+        const centerX = width / 2
+        const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.5 + 0.5
+        const pulseSize = 30 + pulse * 50 + energyRef.current * 100
+        
+        const gradient = ctx.createRadialGradient(
+          centerX, centerY, 0,
+          centerX, centerY, pulseSize
+        )
+        
+        if (isDownbeat) {
+          // Strong pulse on downbeats
+          gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)')
+          gradient.addColorStop(0.5, 'rgba(255, 100, 100, 0.4)')
+        } else if (isBeat) {
+          // Regular pulse on beats
+          gradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)')
+          gradient.addColorStop(0.5, 'rgba(100, 100, 255, 0.3)')
+        } else {
+          // Subtle pulse
+          gradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)')
+          gradient.addColorStop(0.5, 'rgba(100, 255, 100, 0.1)')
+        }
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+        
+        ctx.fillStyle = gradient
+        ctx.beginPath()
+        ctx.arc(centerX, centerY, pulseSize, 0, Math.PI * 2)
         ctx.fill()
 
-        if (isNewBeat) {
-          ctx.strokeStyle = isDownbeat
-            ? "rgba(255, 90, 130, 0.85)"
-            : "rgba(140, 110, 255, 0.7)"
-          ctx.lineWidth = isDownbeat ? 5.5 : 3.8
+        // Draw beat circle outline
+        if (isBeat) {
+          ctx.strokeStyle = isDownbeat ? 'rgba(255, 100, 100, 0.8)' : 'rgba(100, 100, 255, 0.6)'
+          ctx.lineWidth = 3
           ctx.beginPath()
-          ctx.arc(centerX, centerY, size * 0.65 + 25, 0, Math.PI * 2)
+          ctx.arc(centerX, centerY, 40, 0, Math.PI * 2)
           ctx.stroke()
         }
+      }
+
+      // Draw frequency band indicators
+      if (isPlaying) {
+        const bandHeight = height / 6
+        
+        // Bass indicator (bottom)
+        ctx.fillStyle = `rgba(255, 100, 100, ${0.2 + bassEnergy * 0.3})`
+        ctx.fillRect(0, height - bandHeight, width * bassEnergy, bandHeight)
+        
+        // Mid indicator (middle)
+        ctx.fillStyle = `rgba(100, 255, 100, ${0.2 + midEnergy * 0.3})`
+        ctx.fillRect(0, height - bandHeight * 2, width * midEnergy, bandHeight)
+        
+        // High indicator (top)
+        ctx.fillStyle = `rgba(100, 100, 255, ${0.2 + highEnergy * 0.3})`
+        ctx.fillRect(0, height - bandHeight * 3, width * highEnergy, bandHeight)
       }
 
       animationFrameRef.current = requestAnimationFrame(render)
     }
 
     animationFrameRef.current = requestAnimationFrame(render)
-    return () => cancelAnimationFrame(animationFrameRef.current!)
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+    }
   }, [isPlaying, currentTime, volume, bpm])
 
-  // Resize logic (unchanged)
+  // Handle resize
   useEffect(() => {
     const handleResize = () => {
-      const canvas = canvasRef.current
-      if (!canvas || !canvas.parentElement) return
-
+      if (!canvasRef.current || !canvasRef.current.parentElement) return
+      
+      const container = canvasRef.current.parentElement
       const dpr = window.devicePixelRatio || 1
-      canvas.width = canvas.parentElement.clientWidth * dpr
-      canvas.height = canvas.parentElement.clientHeight * dpr
-
-      const ctx = canvas.getContext("2d")
-      ctx?.scale(dpr, dpr)
+      
+      canvasRef.current.width = container.clientWidth * dpr
+      canvasRef.current.height = container.clientHeight * dpr
+      
+      const ctx = canvasRef.current.getContext('2d')
+      if (ctx) {
+        ctx.scale(dpr, dpr)
+      }
     }
 
     handleResize()
-    window.addEventListener("resize", handleResize)
-    return () => window.removeEventListener("resize", handleResize)
+    window.addEventListener('resize', handleResize)
+    
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
   }, [])
 
   return (
-    <canvas
+    <canvas 
       ref={canvasRef}
       className="w-full h-full"
       style={{
-        position: "absolute",
-        inset: 0,
-        display: "block",
-        background: "radial-gradient(circle at 50% 50%, #0c0015 0%, #000 70%)",
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'block',
+        background: 'linear-gradient(135deg, #000000 0%, #0a001a 50%, #000000 100%)',
       }}
     />
   )
