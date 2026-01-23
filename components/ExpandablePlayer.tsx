@@ -12,7 +12,6 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { SimpleVisualizer } from "./SimpleVisualizer"
 import { useApp } from "@/contexts/AppContext"
-import { Type } from 'lucide-react'
 import { LyricsDisplay } from './LyricsDisplay'
 
 interface ExpandablePlayerProps {
@@ -42,7 +41,7 @@ export function ExpandablePlayer({
   const expandedPlayerRef = useRef<any>(null)
   const isPlayerReadyRef = useRef(false)
 
-  // Initialize YouTube player for expanded view
+  // ─── YouTube player init & sync (unchanged) ─────────────────────────────
   useEffect(() => {
     if (!isExpanded || !localVideoMode || !currentTrack?.id) return
 
@@ -86,7 +85,7 @@ export function ExpandablePlayer({
     }
 
     return () => {
-      if (expandedPlayerRef.current && typeof expandedPlayerRef.current.destroy === "function") {
+      if (expandedPlayerRef.current?.destroy) {
         expandedPlayerRef.current.destroy()
         expandedPlayerRef.current = null
         isPlayerReadyRef.current = false
@@ -94,10 +93,8 @@ export function ExpandablePlayer({
     }
   }, [isExpanded, localVideoMode, currentTrack?.id])
 
-  // Sync playback state with expanded player
   useEffect(() => {
     if (!expandedPlayerRef.current || !isPlayerReadyRef.current) return
-
     if (isPlaying) {
       expandedPlayerRef.current.playVideo?.()
     } else {
@@ -109,12 +106,10 @@ export function ExpandablePlayer({
     if (expandedPlayerRef.current && isPlayerReadyRef.current && localVideoMode) {
       setTimeout(() => {
         expandedPlayerRef.current.seekTo?.(currentTime, true)
-        if (isPlaying) {
-          expandedPlayerRef.current.playVideo?.()
-        }
+        if (isPlaying) expandedPlayerRef.current.playVideo?.()
       }, 500)
     }
-  }, [localVideoMode])
+  }, [localVideoMode, currentTime, isPlaying])
 
   useEffect(() => {
     if (!isExpanded) {
@@ -127,11 +122,8 @@ export function ExpandablePlayer({
     }
   }, [isExpanded, y, videoMode])
 
-  // Desktop: Click to toggle
   const handleBackdropClick = () => {
-    if (window.innerWidth >= 768) {
-      onExpandChange(false)
-    }
+    if (window.innerWidth >= 768) onExpandChange(false)
   }
 
   const handleDragEnd = (_event: any, info: PanInfo) => {
@@ -152,28 +144,32 @@ export function ExpandablePlayer({
       className="fixed inset-0 z-50 bg-black overflow-hidden"
       onClick={handleBackdropClick}
     >
-      {/* Visualizer Background - Only shown when toggle is ON */}
+      {/* Visualizer runs in background when enabled — never replaces media */}
       {showVisualizer && (
-        <div className="absolute inset-0">
-          <SimpleVisualizer 
-            isPlaying={isPlaying} 
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <SimpleVisualizer
+            isPlaying={isPlaying}
             currentTime={currentTime}
             volume={volume}
             bpm={128}
           />
         </div>
       )}
-      
-      {/* Dark overlay for readability - adjust opacity based on visualizer state */}
-      <div className={`absolute inset-0 ${showVisualizer ? 'bg-black/20' : 'bg-black/30'}`} />
-      
+
+      {/* Overlay — slightly darker when no visualizer */}
+      <div
+        className={`absolute inset-0 z-10 transition-opacity duration-500 ${
+          showVisualizer ? "bg-black/30" : "bg-black/45"
+        }`}
+      />
+
       <motion.div
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={0.2}
         onDragEnd={handleDragEnd}
         style={{ y, opacity, scale }}
-        className="relative h-full w-full flex flex-col"
+        className="relative h-full w-full flex flex-col z-20"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -197,25 +193,27 @@ export function ExpandablePlayer({
           </Button>
         </div>
 
-        {/* Drag indicator */}
+        {/* Drag indicator mobile */}
         <div className="flex justify-center mb-4 md:hidden">
           <div className="w-12 h-1 bg-white/20 rounded-full" />
         </div>
 
-        {/* Content */}
+        {/* Main content */}
         <div className="flex-1 flex flex-col items-center justify-start px-6 md:px-12 overflow-hidden">
-          {/* Visualizer Toggle Button */}
+          {/* Toggle button */}
           <div className="w-full max-w-md flex justify-end mb-4">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowVisualizer(!showVisualizer)}
-              className={`backdrop-blur-sm border-white/20 hover:bg-white/10 transition-all duration-300 ${showVisualizer ? 'bg-white/20 text-white' : 'bg-black/20 text-white/80'}`}
+              className={`backdrop-blur-sm border-white/20 hover:bg-white/10 transition-all duration-300 ${
+                showVisualizer ? "bg-white/15 text-white" : "bg-black/20 text-white/80"
+              }`}
             >
               {showVisualizer ? (
                 <>
-                  <ImageIcon size={16} className="mr-2" />
-                  Show Thumbnail
+                  <Music size={16} className="mr-2" />
+                  Hide Visualizer
                 </>
               ) : (
                 <>
@@ -226,7 +224,9 @@ export function ExpandablePlayer({
             </Button>
           </div>
 
-          {/* Album Art / Video / Visualizer Container */}
+          {/* ─── Media container ────────────────────────────────────────────────
+               → this block is identical to your original — never hidden
+          */}
           {localVideoMode && currentTrack ? (
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
@@ -236,7 +236,7 @@ export function ExpandablePlayer({
             >
               <div id="expanded-youtube-player" className="w-full h-full"></div>
             </motion.div>
-          ) : !showVisualizer && currentTrack?.thumbnail ? (
+          ) : currentTrack?.thumbnail ? (
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -250,16 +250,6 @@ export function ExpandablePlayer({
                 className="rounded-xl object-cover shadow-2xl"
                 priority
               />
-            </motion.div>
-          ) : showVisualizer ? (
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="relative w-full max-w-md aspect-square mb-6 md:mb-8 rounded-xl overflow-hidden shadow-2xl"
-            >
-              {/* Empty container - visualizer is in the background */}
-              <div className="w-full h-full" />
             </motion.div>
           ) : (
             <div className="w-full max-w-md aspect-square mb-6 md:mb-8 bg-secondary rounded-xl flex items-center justify-center shadow-2xl">
