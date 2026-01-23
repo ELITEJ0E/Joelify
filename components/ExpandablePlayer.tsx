@@ -41,7 +41,7 @@ export function ExpandablePlayer({
   const expandedPlayerRef = useRef<any>(null)
   const isPlayerReadyRef = useRef(false)
 
-  // ─── YouTube player init & sync (unchanged) ─────────────────────────────
+  // YouTube player init & sync (unchanged)
   useEffect(() => {
     if (!isExpanded || !localVideoMode || !currentTrack?.id) return
 
@@ -144,7 +144,7 @@ export function ExpandablePlayer({
       className="fixed inset-0 z-50 bg-black overflow-hidden"
       onClick={handleBackdropClick}
     >
-      {/* Visualizer runs in background when enabled — never replaces media */}
+      {/* Visualizer in background – full strength when enabled */}
       {showVisualizer && (
         <div className="absolute inset-0 z-0 pointer-events-none">
           <SimpleVisualizer
@@ -156,10 +156,10 @@ export function ExpandablePlayer({
         </div>
       )}
 
-      {/* Overlay — slightly darker when no visualizer */}
+      {/* Overlay – almost none when visualizer is on */}
       <div
-        className={`absolute inset-0 z-10 transition-opacity duration-500 ${
-          showVisualizer ? "bg-black/30" : "bg-black/45"
+        className={`absolute inset-0 z-10 transition-opacity duration-600 ${
+          showVisualizer ? "bg-black/8" : "bg-black/50"
         }`}
       />
 
@@ -193,12 +193,10 @@ export function ExpandablePlayer({
           </Button>
         </div>
 
-        {/* Drag indicator mobile */}
         <div className="flex justify-center mb-4 md:hidden">
           <div className="w-12 h-1 bg-white/20 rounded-full" />
         </div>
 
-        {/* Main content */}
         <div className="flex-1 flex flex-col items-center justify-start px-6 md:px-12 overflow-hidden">
           {/* Toggle button */}
           <div className="w-full max-w-md flex justify-end mb-4">
@@ -224,9 +222,7 @@ export function ExpandablePlayer({
             </Button>
           </div>
 
-          {/* ─── Media container ────────────────────────────────────────────────
-               → this block is identical to your original — never hidden
-          */}
+          {/* Media – exactly the same as before, never hidden */}
           {localVideoMode && currentTrack ? (
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
@@ -265,7 +261,7 @@ export function ExpandablePlayer({
             <p className="text-lg md:text-xl text-white/60">{currentTrack?.artist || "Unknown Artist"}</p>
           </div>
 
-          {/* Player Controls */}
+          {/* Controls */}
           <div className="w-full max-w-2xl">{children}</div>
         </div>
       </motion.div>
