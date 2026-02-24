@@ -55,7 +55,12 @@ export function SpotifyPlayer({ onPlayerReady, onStateChange, onError }: Spotify
 
     const initializePlayer = async () => {
       try {
+        // Check if user is authenticated before trying to init
         const token = await getValidAccessToken()
+        if (!token) {
+          console.log("[Spotify] No valid token, skipping player init")
+          return
+        }
 
         console.log("[Spotify] Initializing player")
 
@@ -140,7 +145,12 @@ export function SpotifyPlayer({ onPlayerReady, onStateChange, onError }: Spotify
           console.error("[Spotify] Failed to connect player")
           onError({ message: "Failed to connect player" })
         }
-      } catch (error) {
+      } catch (error: any) {
+        // Don't show error if simply not authenticated
+        if (error?.message === "Not authenticated") {
+          console.log("[Spotify] User not authenticated, skipping player init")
+          return
+        }
         console.error("[Spotify] Player initialization failed:", error)
         onError({ message: "Player initialization failed" })
       }
@@ -168,11 +178,34 @@ export const SpotifyPlayerControls = {
 
     try {
       if (uris && uris.length > 0) {
-        // Play specific tracks
+        // Play specific tracks - get device ID from player state
         const token = await getValidAccessToken()
-        const deviceId = await player._options.id
+        const state = await player.getCurrentState()
+        
+        // Get device ID - try from state first, then from internal player
+        let deviceId: string | null = null
+        if (player._options?.id) {
+          deviceId = player._options.id
+        }
+        
+        if (!deviceId) {
+          // Fallback: get active devices
+          const devicesRes = await fetch("https://api.spotify.com/v1/me/player/devices", {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (devicesRes.ok) {
+            const devices = await devicesRes.json()
+            const activeDevice = devices.devices?.find((d: any) => d.name === "Joelify Music Player")
+            deviceId = activeDevice?.id
+          }
+        }
 
-        await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        if (!deviceId) {
+          console.error("[Spotify] No device ID found")
+          return
+        }
+
+        const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -180,6 +213,12 @@ export const SpotifyPlayerControls = {
           },
           body: JSON.stringify({ uris }),
         })
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          console.error("[Spotify] Play API error:", res.status, errData)
+          return
+        }
 
         console.log("[Spotify] Playing tracks:", uris)
       } else {

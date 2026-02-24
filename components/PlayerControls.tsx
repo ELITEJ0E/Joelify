@@ -108,18 +108,27 @@ export function PlayerControls() {
   const handleRepeatOne = useCallback(() => {
     if (!currentTrack) return
 
-    console.log("[Player] Repeat one - restarting track")
-    trackEndHandledRef.current = false // Reset immediately
+    console.log("[v0] Repeat one - restarting track")
+    // Keep trackEndHandledRef true to prevent re-triggering during seek
+    trackEndHandledRef.current = true
 
     if (playbackSource === "youtube" && youtubePlayer) {
       youtubePlayer.seekTo(0, true)
       youtubePlayer.playVideo()
       setIsPlaying(true)
+      // Reset flag after a delay to allow YouTube to transition through states
+      setTimeout(() => {
+        trackEndHandledRef.current = false
+        console.log("[v0] Repeat one - flag reset, ready for next end")
+      }, 1500)
     } else if (playbackSource === "spotify" && spotifyPlayer) {
       SpotifyPlayerControls.seek(spotifyPlayer, 0)
       SpotifyPlayerControls.play(spotifyPlayer)
       setIsPlaying(true)
       setShouldAutoPlaySpotify(true)
+      setTimeout(() => {
+        trackEndHandledRef.current = false
+      }, 1500)
     }
 
     setCurrentTime(0)
@@ -149,24 +158,23 @@ export function PlayerControls() {
     }
 
     if (queue.length > 0) {
-      console.log("[Player] Playing next from queue")
+      console.log("[v0] Playing next from queue")
       const nextTrack = queue[0]
       setCurrentTrack(nextTrack)
       setQueue(queue.slice(1))
       setCurrentTime(0)
       setPlaybackPosition(0)
 
-      if (playbackSource === "youtube" && youtubePlayer) {
-        setTimeout(() => {
-          if (youtubePlayer.playVideo) {
-            youtubePlayer.playVideo()
-            setIsPlaying(true)
-            console.log("[Player] Auto-playing queue track (YouTube)")
-          }
-        }, 500)
+      if (playbackSource === "youtube") {
+        // YouTube auto-play is handled by the YouTubePlayer component
+        // which loads the new video via useEffect on currentTrack.id change
+        // and triggers onStateChange(1) when it starts playing
+        // We just need to ensure isPlaying is set
+        setIsPlaying(true)
+        console.log("[v0] Queue track set, YouTube will auto-load and play")
       } else if (playbackSource === "spotify") {
         setShouldAutoPlaySpotify(true)
-        console.log("[Player] Auto-playing queue track (Spotify)")
+        console.log("[v0] Auto-playing queue track (Spotify)")
       }
       return
     }
@@ -214,22 +222,18 @@ export function PlayerControls() {
         }
 
         if (nextTrack) {
-          console.log("[Player] Playing next track:", nextTrack.title)
+          console.log("[v0] Playing next track:", nextTrack.title)
           setCurrentTrack(nextTrack)
           setCurrentTime(0)
           setPlaybackPosition(0)
 
-          if (playbackSource === "youtube" && youtubePlayer) {
-            setTimeout(() => {
-              if (youtubePlayer.playVideo) {
-                youtubePlayer.playVideo()
-                setIsPlaying(true)
-                console.log("[Player] Auto-playing next track (YouTube)")
-              }
-            }, 500)
+          if (playbackSource === "youtube") {
+            // YouTube auto-loads and auto-plays via loadVideoById in YouTubePlayer
+            setIsPlaying(true)
+            console.log("[v0] Playlist track set, YouTube will auto-load and play")
           } else if (playbackSource === "spotify") {
             setShouldAutoPlaySpotify(true)
-            console.log("[Player] Auto-playing next track (Spotify)")
+            console.log("[v0] Auto-playing next track (Spotify)")
           }
           return
         }
@@ -501,8 +505,10 @@ export function PlayerControls() {
       switch (playerState) {
         case 1: // Playing
           setIsPlaying(true)
-          if (trackEndHandledRef.current) {
-            console.log("[Player] Track started playing, resetting end flag")
+          // Only reset end flag if NOT in repeat-one mode
+          // In repeat-one, handleRepeatOne manages the flag with its own timeout
+          if (trackEndHandledRef.current && repeat !== "one") {
+            console.log("[v0] Track started playing, resetting end flag")
             trackEndHandledRef.current = false
           }
           if (youtubePlayer && audioSettings.youtubeQuality !== "audio") {
@@ -519,13 +525,15 @@ export function PlayerControls() {
           break
         case 0: // Ended
           if (!trackEndHandledRef.current) {
-            console.log("[Player] Track ended")
+            console.log("[v0] Track ended, repeat mode:", repeat)
             trackEndHandledRef.current = true
             if (repeat === "one") {
               handleRepeatOne()
             } else {
               handleNext()
             }
+          } else {
+            console.log("[v0] Track ended but already handled, ignoring")
           }
           break
         case -1: // Unstarted
