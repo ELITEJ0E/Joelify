@@ -6,7 +6,12 @@ import { AppProvider } from "@/contexts/AppContext"
 import "./globals.css"
 import { Suspense } from "react"
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: "Joelify",
@@ -30,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} antialiased`}>
       <head>
         <script src="https://www.youtube.com/iframe_api" async></script>
         <meta name="mobile-web-app-capable" content="yes" />
@@ -39,7 +44,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Joelify" />
         <meta name="theme-color" content="#000000" />
       </head>
-      <body className={inter.className}>
+      <body className="font-sans">
         <Suspense fallback={null}>
           <AppProvider>{children}</AppProvider>
         </Suspense>

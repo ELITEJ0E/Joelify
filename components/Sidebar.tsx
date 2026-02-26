@@ -175,18 +175,18 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} aria-hidden="true" />}
 
       <div
-        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
+        className={`fixed lg:relative inset-y-0 left-0 z-50 w-72 bg-[hsl(var(--surface-1))] text-foreground flex flex-col transform transition-transform duration-300 ease-out lg:transform-none border-r border-border/50 ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         <div className="flex flex-col h-full">
           {/* HEADER */}
-          <div className="p-4 flex-shrink-0 border-b border-gray-800/30">
+          <div className="px-5 py-4 flex-shrink-0 border-b border-border/40">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70 tracking-tight">
-                Joelify
+              <h1 className="text-xl font-bold tracking-tight">
+                <span className="text-primary">Joelify</span>
               </h1>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <AudioSettings settings={audioSettings} onChange={setAudioSettings} />
                 <KeyboardShortcuts />
                 <ThemeSettings />
@@ -194,17 +194,17 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                   size="icon"
                   variant="ghost"
                   onClick={toggleTheme}
-                  className="text-gray-400 hover:text-white hover:bg-primary h-8 w-8 transition-all duration-300 ease-in-out"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 >
-                  {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+                  {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
                 </Button>
                 <Button
                   size="icon"
                   variant="ghost"
                   onClick={onClose}
-                  className="text-gray-400 hover:text-white hover:bg-primary h-8 w-8 transition-all duration-300 ease-in-out lg:hidden"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground lg:hidden"
                 >
-                  <X size={18} />
+                  <X size={16} />
                 </Button>
               </div>
             </div>
@@ -213,33 +213,33 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           {/* MAIN CONTENT */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
-              <div className="p-4 space-y-2">
+              <div className="px-3 py-3 space-y-1">
                 <nav>
-                  <ul className="space-y-1">
+                  <ul className="space-y-0.5">
                     <li>
                       <button
                         onClick={() => handleNavigate("home")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                        className={`group flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 ease-out text-sm font-medium ${
                           activeView === "home"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                         }`}
                       >
-                        <Home size={20} className="transition-transform duration-300 group-hover:scale-105" />
-                        <span className="font-medium text-sm">Home</span>
+                        <Home size={17} className={activeView === "home" ? "text-primary" : ""} />
+                        <span>Home</span>
                       </button>
                     </li>
                     <li>
                       <button
                         onClick={() => handleNavigate("search")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                        className={`group flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 ease-out text-sm font-medium ${
                           activeView === "search"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                         }`}
                       >
-                        <Search size={20} className="transition-transform duration-300 group-hover:scale-105" />
-                        <span className="font-medium text-sm">Search</span>
+                        <Search size={17} className={activeView === "search" ? "text-primary" : ""} />
+                        <span>Search</span>
                       </button>
                     </li>
                     <li>
@@ -249,52 +249,46 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                           setIsLibraryExpanded(!isLibraryExpanded)
                           onNavigate("library")
                         }}
-                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                        className={`group flex items-center justify-between w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 ease-out text-sm font-medium ${
                           activeView === "library"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                         }`}
                       >
-                        <div className="flex items-center space-x-3">
-                          <Library size={20} className="transition-transform duration-300 group-hover:scale-105" />
-                          <span className="font-medium text-sm">Your Library</span>
+                        <div className="flex items-center gap-3">
+                          <Library size={17} className={activeView === "library" ? "text-primary" : ""} />
+                          <span>Your Library</span>
                         </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 p-0 transition-transform duration-300 ease-in-out hover:bg-primary/10 hover:text-primary rounded-full"
+                        <button
+                          className="p-0.5 rounded-lg hover:bg-white/10 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation()
                             setIsLibraryExpanded(!isLibraryExpanded)
                           }}
                         >
-                          {isLibraryExpanded ? (
-                            <ChevronDown size={16} className="transition-transform duration-300" />
-                          ) : (
-                            <ChevronRight size={16} className="transition-transform duration-300" />
-                          )}
-                        </Button>
+                          <ChevronDown
+                            size={14}
+                            className={`transition-transform duration-200 ${isLibraryExpanded ? "rotate-0" : "-rotate-90"}`}
+                          />
+                        </button>
                       </button>
 
                       {isLibraryExpanded && (
-                        <div className="ml-6 mt-2 space-y-1 animate-slideDown">
-                          <ScrollArea className="w-full pr-4 max-h-96">
-                            <ul className="space-y-1">
+                        <div className="ml-4 mt-1 space-y-0.5 animate-slideDown">
+                          <ScrollArea className="w-full pr-2 max-h-80">
+                            <ul className="space-y-0.5">
                               <li>
                                 <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                                   <DialogTrigger asChild>
-                                    <button className="flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out hover:bg-primary/10 hover:text-primary">
-                                      <PlusSquare
-                                        size={20}
-                                        className="transition-transform duration-300 group-hover:scale-105"
-                                      />
-                                      <span className="font-medium text-sm">Create Playlist</span>
+                                    <button className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-xl transition-all duration-200 text-sm text-muted-foreground hover:text-foreground hover:bg-white/5">
+                                      <PlusSquare size={15} />
+                                      <span>Create Playlist</span>
                                     </button>
                                   </DialogTrigger>
-                                  <DialogContent>
+                                  <DialogContent className="border-border/50 bg-card shadow-glass">
                                     <DialogHeader>
-                                      <DialogTitle className="text-primary">Create New Playlist</DialogTitle>
-                                      <DialogDescription className="text-gray-300">
+                                      <DialogTitle>Create New Playlist</DialogTitle>
+                                      <DialogDescription className="text-muted-foreground">
                                         Give your playlist a name to get started.
                                       </DialogDescription>
                                     </DialogHeader>
@@ -303,21 +297,13 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                       value={newPlaylistName}
                                       onChange={(e) => setNewPlaylistName(e.target.value)}
                                       onKeyDown={(e) => e.key === "Enter" && handleCreatePlaylist()}
-                                      className="border-primary bg-gray-800/50 text-gray-100 focus:ring-2 focus:ring-primary transition-all duration-200"
+                                      className="border-border/60 bg-secondary/50 focus:ring-1 focus:ring-primary"
                                     />
                                     <DialogFooter>
-                                      <Button
-                                        variant="outline"
-                                        onClick={() => setIsCreateDialogOpen(false)}
-                                        className="border-primary text-gray-300 hover:bg-gray-800/50"
-                                      >
+                                      <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                                         Cancel
                                       </Button>
-                                      <Button
-                                        onClick={handleCreatePlaylist}
-                                        disabled={!newPlaylistName.trim()}
-                                        className="bg-primary hover:bg-primary/90 text-white"
-                                      >
+                                      <Button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}>
                                         Create
                                       </Button>
                                     </DialogFooter>
@@ -327,14 +313,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
 
                               {playlists.map((playlist) => (
                                 <li key={playlist.id} className="group">
-                                  <div className="flex items-center justify-between py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
+                                  <div className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-200 ${
+                                    currentPlaylistId === playlist.id
+                                      ? "bg-primary/12 text-primary"
+                                      : "hover:bg-white/5"
+                                  }`}>
                                     <button
                                       onClick={() => handlePlaylistClick(playlist.id)}
-                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${
-                                        currentPlaylistId === playlist.id
-                                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
-                                          : "hover:bg-primary/10 hover:text-primary"
-                                      }`}
+                                      className="flex-1 text-left text-sm font-medium truncate"
                                     >
                                       {playlist.name}
                                     </button>
@@ -343,17 +329,17 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                         <Button
                                           size="icon"
                                           variant="ghost"
-                                          className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-full transition-all duration-200"
+                                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity duration-150 rounded-lg"
                                         >
-                                          <MoreVertical size={14} />
+                                          <MoreVertical size={12} />
                                         </Button>
                                       </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className=" border-gray-800/50">
+                                      <DropdownMenuContent align="end" className="border-border/50 bg-popover shadow-glass">
                                         <DropdownMenuItem
                                           onClick={() => openRenameDialog(playlist.id, playlist.name)}
-                                          className="text-gray-200 hover:bg-primary/10 hover:text-primary"
+                                          className="text-sm cursor-pointer"
                                         >
-                                          <Edit2 size={14} className="mr-2" />
+                                          <Edit2 size={13} className="mr-2" />
                                           Rename
                                         </DropdownMenuItem>
                                         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -361,30 +347,27 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                             <DropdownMenuItem
                                               onSelect={(e) => e.preventDefault()}
                                               onClick={() => openDeleteDialog(playlist.id, playlist.name)}
-                                              className="text-red-400 hover:bg-primary/10 hover:text-red-300"
+                                              className="text-destructive text-sm cursor-pointer"
                                             >
-                                              <Trash2 size={14} className="mr-2" />
+                                              <Trash2 size={13} className="mr-2" />
                                               Delete
                                             </DropdownMenuItem>
                                           </DialogTrigger>
-                                          <DialogContent>
+                                          <DialogContent className="border-border/50 bg-card shadow-glass">
                                             <DialogHeader>
-                                              <DialogTitle className="text-primary">Delete Playlist</DialogTitle>
-                                              <DialogDescription className="text-gray-300">
-                                                Are you sure you want to delete {playlistToDelete?.name}?
+                                              <DialogTitle>Delete Playlist</DialogTitle>
+                                              <DialogDescription className="text-muted-foreground">
+                                                Are you sure you want to delete{" "}
+                                                <span className="font-medium text-foreground">{playlistToDelete?.name}</span>?
                                               </DialogDescription>
                                             </DialogHeader>
                                             <DialogFooter>
-                                              <Button
-                                                variant="outline"
-                                                onClick={() => setIsDeleteDialogOpen(false)}
-                                                className="border-primary text-gray-300 hover:bg-gray-800/50"
-                                              >
+                                              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
                                                 Cancel
                                               </Button>
                                               <Button
                                                 onClick={handleDeletePlaylist}
-                                                className="bg-red-500 hover:bg-red-600 text-white"
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                               >
                                                 Delete
                                               </Button>
@@ -404,16 +387,16 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("liked")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${
+                        className={`group flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 ease-out text-sm font-medium relative ${
                           activeView === "liked"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                         }`}
                       >
-                        <Heart size={20} className="transition-transform duration-300 group-hover:scale-105" />
-                        <span className="font-medium text-sm">Liked Songs</span>
+                        <Heart size={17} className={activeView === "liked" ? "text-primary" : ""} />
+                        <span>Liked Songs</span>
                         {likedSongs.length > 0 && (
-                          <span className="ml-auto text-xs bg-primary text-white px-2 py-0.5 rounded-full">
+                          <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium tabular-nums">
                             {likedSongs.length}
                           </span>
                         )}
@@ -432,10 +415,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                         <span className="font-medium text-sm">Statistics</span>
                       </button>
                     </li>
-                    <li className="mt-4 pt-4 border-t border-gray-800/30">
+                    <li className="mt-3 pt-3 border-t border-border/40">
                       <SpotifyLogin />
                       {isSpotifyAuth && (
-                        <div className="mt-3">
+                        <div className="mt-2">
                           <SpotifyQuota />
                         </div>
                       )}
@@ -446,58 +429,50 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
             </ScrollArea>
 
             {/* FOOTER */}
-            <div className="mt-auto p-4 border-t border-gray-800/30 flex-shrink-0 bg-gradient-to-t from-gray-950/80 to-gray-900/80">
-              <div className="flex items-center justify-center mb-2 space-x-4">
+            <div className="mt-auto px-4 py-3 border-t border-border/40 flex-shrink-0">
+              <div className="flex items-center justify-center gap-4 mb-2">
                 <button
                   onClick={handleExportPlaylists}
-                  className="flex items-center space-x-2 text-gray-300 hover:text-primary text-left transition-all duration-300 ease-in-out text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={playlists.length === 0}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Download size={16} />
+                  <Download size={13} />
                   <span>Export</span>
                 </button>
-                <span className="text-gray-600">|</span>
+                <span className="text-border">·</span>
                 <button
                   onClick={handleImportPlaylists}
-                  className="flex items-center space-x-2 text-gray-300 hover:text-primary text-left transition-all duration-300 ease-in-out text-sm"
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-150"
                 >
-                  <Upload size={16} />
+                  <Upload size={13} />
                   <span>Import</span>
                 </button>
               </div>
-              <div className="text-xs text-primary text-center">© 2025 Joel Tan, v1.0.0</div>
+              <p className="text-xs text-muted-foreground/50 text-center">© 2025 Joel Tan · v1.0.0</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* DIALOGS */}
+      {/* RENAME DIALOG */}
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
-        <DialogContent>
+        <DialogContent className="border-border/50 bg-card shadow-glass">
           <DialogHeader>
-            <DialogTitle className="text-primary">Rename Playlist</DialogTitle>
-            <DialogDescription className="text-gray-300">Enter a new name for your playlist.</DialogDescription>
+            <DialogTitle>Rename Playlist</DialogTitle>
+            <DialogDescription className="text-muted-foreground">Enter a new name for your playlist.</DialogDescription>
           </DialogHeader>
           <Input
             placeholder="Playlist name"
             value={renamePlaylistName}
             onChange={(e) => setRenamePlaylistName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleRenamePlaylist()}
-            className="border-primary bg-gray-800/50 text-gray-100 focus:ring-2 focus:ring-primary transition-all duration-200"
+            className="border-border/60 bg-secondary/50 focus:ring-1 focus:ring-primary"
           />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsRenameDialogOpen(false)}
-              className="border-primary text-gray-300 hover:bg-gray-800/50"
-            >
+            <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleRenamePlaylist}
-              disabled={!renamePlaylistName.trim()}
-              className="bg-primary hover:bg-primary/90 text-white"
-            >
+            <Button onClick={handleRenamePlaylist} disabled={!renamePlaylistName.trim()}>
               Rename
             </Button>
           </DialogFooter>

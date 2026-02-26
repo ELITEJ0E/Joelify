@@ -90,6 +90,22 @@ const config: Config = {
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'slideDown': 'slideDown 0.3s cubic-bezier(0.16,1,0.3,1)',
+        'scaleIn': 'scaleIn 0.25s cubic-bezier(0.16,1,0.3,1)',
+        'fadeUp': 'fadeUp 0.3s cubic-bezier(0.16,1,0.3,1)',
+        'pulseRing': 'pulseRing 1.4s cubic-bezier(0.4,0,0.6,1) infinite',
+        'shimmer': 'shimmer 2s linear infinite',
+      },
+      fontFamily: {
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+      },
+      boxShadow: {
+        'glow-sm': '0 0 12px -2px hsl(var(--primary) / 0.3)',
+        'glow':    '0 0 20px -4px hsl(var(--primary) / 0.35)',
+        'glow-lg': '0 0 32px -6px hsl(var(--primary) / 0.4)',
+        'glass':   '0 4px 24px -4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
+        'card':    '0 2px 12px -2px rgba(0,0,0,0.3)',
+        'card-hover': '0 6px 24px -4px rgba(0,0,0,0.5)',
       },
     },
   },
