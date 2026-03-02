@@ -6,68 +6,54 @@
 
 @layer base {
   :root {
-    --font-sans: var(--font-inter);
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
     --font-synthwave: 'VCR OSD Mono', monospace;
-
-    /* Light mode tokens */
-    --background: 0 0% 97%;
-    --foreground: 0 0% 8%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 8%;
+    --card-foreground: 0 0% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 8%;
-    --primary: 142 71% 35%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 142 76% 36%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 93%;
-    --secondary-foreground: 0 0% 12%;
-    --muted: 0 0% 93%;
-    --muted-foreground: 0 0% 42%;
-    --accent: 142 71% 35%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 142 76% 36%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 55%;
+    --destructive: 0 85% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 88%;
-    --input: 0 0% 88%;
-    --ring: 142 71% 35%;
-    --radius: 0.625rem;
-
-    /* Surface layers */
-    --surface-1: 0 0% 100%;
-    --surface-2: 0 0% 95%;
-    --surface-3: 0 0% 90%;
-    --glow: 142 71% 35%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 142 76% 36%;
+    --radius: 0.5rem;
   }
 
   .dark {
-    --font-sans: var(--font-inter);
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
     --font-synthwave: 'VCR OSD Mono', monospace;
-
-    /* Dark mode tokens — deep obsidian palette */
-    --background: 0 0% 5%;
-    --foreground: 0 0% 92%;
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 92%;
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 92%;
-    --primary: 142 71% 40%;
+    --background: 0 0% 7%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 142 76% 36%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 88%;
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 55%;
-    --accent: 142 71% 40%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 142 76% 36%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 55%;
+    --destructive: 0 85% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 13%;
-    --input: 0 0% 13%;
-    --ring: 142 71% 40%;
-
-    /* Surface layers */
-    --surface-1: 0 0% 8%;
-    --surface-2: 0 0% 11%;
-    --surface-3: 0 0% 15%;
-    --glow: 142 71% 40%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 142 76% 36%;
   }
 
   * {
@@ -75,92 +61,40 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground;
     overflow-y: scroll;
-    font-feature-settings: "kern" 1, "liga" 1;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Hide scrollbars globally */
-  ::-webkit-scrollbar { width: 0; height: 0; }
-  ::-webkit-scrollbar-thumb { background: transparent; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  html, body { scrollbar-width: none; -ms-overflow-style: none; }
-}
-
-@layer components {
-  /* Glassmorphism surface */
-  .glass {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  /* Completely hide scrollbar on all browsers */
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
   }
 
-  /* Sleek pill button */
-  .btn-pill {
-    @apply inline-flex items-center justify-center rounded-full
-           px-5 py-2 text-sm font-medium tracking-wide
-           transition-all duration-200 ease-out
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
-  }
-
-  /* Subtle glow effect on interactive elements */
-  .glow-primary {
-    box-shadow: 0 0 20px -4px hsl(var(--primary) / 0.35);
-  }
-
-  /* Icon button — rounded, tight */
-  .icon-btn {
-    @apply inline-flex items-center justify-center rounded-xl
-           transition-all duration-200 ease-out
-           hover:bg-white/8 active:scale-95
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  html, body {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer and Edge */
   }
 }
 
 @layer utilities {
-  /* Slide-down entrance */
   @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
-  .animate-slideDown { animation: slideDown 0.3s cubic-bezier(0.16,1,0.3,1); }
-
-  /* Scale-in entrance */
-  @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.96); }
-    to   { opacity: 1; transform: scale(1); }
+  .animate-slideDown {
+    animation: slideDown 0.4s ease-out;
   }
-  .animate-scaleIn { animation: scaleIn 0.25s cubic-bezier(0.16,1,0.3,1); }
-
-  /* Fade-up */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .animate-fadeUp { animation: fadeUp 0.3s cubic-bezier(0.16,1,0.3,1); }
-
-  /* Pulse ring for active states */
-  @keyframes pulseRing {
-    0%   { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4); }
-    70%  { box-shadow: 0 0 0 8px hsl(var(--primary) / 0); }
-    100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
-  }
-  .animate-pulseRing { animation: pulseRing 1.4s cubic-bezier(0.4,0,0.6,1) infinite; }
-
-  /* Shimmer for loading */
-  @keyframes shimmer {
-    0%   { background-position: -200% center; }
-    100% { background-position:  200% center; }
-  }
-  .animate-shimmer {
-    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
-    background-size: 200% auto;
-    animation: shimmer 2s linear infinite;
-  }
-
-  .bg-white\/8 { background-color: rgb(255 255 255 / 0.08); }
-  .hover\:bg-white\/8:hover { background-color: rgb(255 255 255 / 0.08); }
 }
