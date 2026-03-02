@@ -27,11 +27,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+// Special sentinel ID so PlayerControls knows we're in "liked songs" context
+// and can loop/shuffle the full liked songs list on repeat-all / shuffle.
+export const LIKED_SONGS_PLAYLIST_ID = "__liked_songs__"
+
 export function LikedSongsView() {
   const { 
     likedSongs, 
     setCurrentTrack, 
-    setQueue, 
+    setQueue,
+    setCurrentPlaylistId,
     toggleLikedSong,
     playlists,
     addTrackToPlaylist,
@@ -43,11 +48,13 @@ export function LikedSongsView() {
 
   const handlePlayAll = () => {
     if (likedSongs.length === 0) return
+    setCurrentPlaylistId(LIKED_SONGS_PLAYLIST_ID)
     setCurrentTrack(likedSongs[0])
     setQueue(likedSongs.slice(1))
   }
 
   const handlePlayTrack = (index: number) => {
+    setCurrentPlaylistId(LIKED_SONGS_PLAYLIST_ID)
     setCurrentTrack(likedSongs[index])
     setQueue(likedSongs.slice(index + 1))
   }
@@ -58,17 +65,13 @@ export function LikedSongsView() {
   }
 
   const handleConfirmUnlike = () => {
-    if (trackToUnlike) {
-      toggleLikedSong(trackToUnlike)
-    }
+    if (trackToUnlike) toggleLikedSong(trackToUnlike)
     setIsDeleteDialogOpen(false)
     setTrackToUnlike(null)
   }
 
   const handleAddToPlaylist = (track: any, playlistId: string) => {
-    if (playlistId) {
-      addTrackToPlaylist(playlistId, track)
-    }
+    if (playlistId) addTrackToPlaylist(playlistId, track)
   }
 
   return (
@@ -104,7 +107,7 @@ export function LikedSongsView() {
               {likedSongs.map((track, index) => (
                 <div
                   key={`${track.id}-${index}`}
-                  className="flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-md hover:bg-secondary/50 group transition-colors"
+                  className="flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-md hover:bg-white/5 group transition-colors duration-150"
                 >
                   <span className="text-xs md:text-sm text-muted-foreground w-6 md:w-8 text-center flex-shrink-0">{index + 1}</span>
                   <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => handlePlayTrack(index)}>
@@ -131,7 +134,7 @@ export function LikedSongsView() {
                           handleAddToPlaylist(track, value)
                         }}
                       >
-                        <SelectTrigger className="h-8 w-8 p-0 border-none bg-transparent hover:bg-secondary">
+                        <SelectTrigger className="h-8 w-8 p-0 border-none bg-transparent hover:bg-white/10">
                           <Plus size={16} className="mx-auto" />
                         </SelectTrigger>
                         <SelectContent>
@@ -146,19 +149,12 @@ export function LikedSongsView() {
                     
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 flex-shrink-0"
-                        >
+                        <Button size="icon" variant="ghost" className="h-8 w-8 flex-shrink-0 hover:bg-white/10">
                           <MoreVertical size={16} />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => openDeleteDialog(track)}
-                          className="text-destructive"
-                        >
+                        <DropdownMenuItem onClick={() => openDeleteDialog(track)} className="text-destructive">
                           <Heart size={14} className="mr-2" />
                           Remove from Liked Songs
                         </DropdownMenuItem>
@@ -182,7 +178,6 @@ export function LikedSongsView() {
         )}
       </div>
 
-      {/* Unlike Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -192,12 +187,8 @@ export function LikedSongsView() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmUnlike}>
-              Remove
-            </Button>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmUnlike}>Remove</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
