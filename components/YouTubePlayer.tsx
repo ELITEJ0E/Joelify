@@ -32,13 +32,7 @@ export function YouTubePlayer({
   const progressRAFRef = useRef<number | null>(null)
   const { currentTrack, videoMode, audioSettings } = useApp()
 
-  // ─── CRITICAL FIX: keep refs to the latest callbacks ──────────────────────
-  // The YouTube IFrame player captures callback functions in a closure at
-  // creation time. Without refs, toggling repeat/shuffle after the player
-  // initialises means the player always calls stale handlers — the version
-  // from the very first render. Storing the latest handler in a ref and
-  // calling `ref.current(...)` inside the stable closure ensures the player
-  // always invokes the most-recent version.
+  // ── Stable callback refs (prevents stale closure on repeat/shuffle) ────────
   const onStateChangeRef = useRef(onStateChange)
   const onErrorRef = useRef(onError)
   const onPlayerReadyRef = useRef(onPlayerReady)
@@ -50,7 +44,7 @@ export function YouTubePlayer({
   useEffect(() => { onPlayerReadyRef.current = onPlayerReady }, [onPlayerReady])
   useEffect(() => { onDurationReadyRef.current = onDurationReady }, [onDurationReady])
   useEffect(() => { onTimeUpdateRef.current = onTimeUpdate }, [onTimeUpdate])
-  // ──────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
 
   const startDurationPolling = (player: any) => {
     if (durationPollIntervalRef.current) {
@@ -154,7 +148,6 @@ export function YouTubePlayer({
               isPlayerReadyRef.current = true
               event.target.setVolume(100)
               startDurationPolling(event.target)
-              // Call via ref so PlayerControls always gets the latest handler
               onPlayerReadyRef.current(event.target)
             },
             onStateChange: (event: any) => {
@@ -167,7 +160,6 @@ export function YouTubePlayer({
               } else if (playerState === 2 || playerState === 0) {
                 stopProgressTracking()
               }
-              // ← Always calls the CURRENT handler, never a stale one
               onStateChangeRef.current(event)
             },
             onError: (event: any) => {
@@ -240,12 +232,24 @@ export function YouTubePlayer({
   }, [videoMode])
 
   return (
-    <div
-      ref={containerRef}
-      className={`${videoMode ? "flex justify-center items-center bg-black p-2 w-full" : "hidden"} relative overflow-hidden`}
-      style={{ maxWidth: "640px", maxHeight: "360px", margin: "0 auto" }}
-    >
-      <div id="youtube-player" className="w-full h-full" style={{ aspectRatio: "16/9" }}></div>
+    /**
+     * STABLE ROOT — id="yt-player-root" is used by ExpandablePlayer to locate
+     * and re-parent the inner container (containerRef) into the expanded view
+     * thumbnail slot when video mode is active.  The inner div is the actual
+     * YT-managed element; moving it in the DOM does NOT break the IFrame API.
+     */
+    <div id="yt-player-root">
+      <div
+        ref={containerRef}
+        className={`${
+          videoMode
+            ? "flex justify-center items-center bg-black p-2 w-full"
+            : "hidden"
+        } relative overflow-hidden`}
+        style={{ maxWidth: "640px", maxHeight: "360px", margin: "0 auto" }}
+      >
+        <div id="youtube-player" className="w-full h-full" style={{ aspectRatio: "16/9" }}></div>
+      </div>
     </div>
   )
 }

@@ -4,6 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── CSS Custom Properties ──────────────────────────────────────────────── */
 @layer base {
   :root {
     --font-sans: var(--font-geist-sans);
@@ -65,36 +66,173 @@
     overflow-y: scroll;
   }
 
-  /* Completely hide scrollbar on all browsers */
-  ::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
+  /* ── Hide scrollbar globally ────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  ::-webkit-scrollbar-thumb { background: transparent; }
+  ::-webkit-scrollbar-track { background: transparent; }
   html, body {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* Internet Explorer and Edge */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 }
 
+/* ── Animations ─────────────────────────────────────────────────────────── */
 @layer utilities {
   @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
   .animate-slideDown {
-    animation: slideDown 0.4s ease-out;
+    animation: slideDown 0.35s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .animate-fadeIn {
+    animation: fadeIn 0.25s ease-out;
+  }
+
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  .animate-scaleIn {
+    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ── Hover utilities ──────────────────────────────────────────────────── */
+
+  /* Subtle row hover — used in track lists */
+  .list-hover-green {
+    @apply transition-colors duration-150;
+  }
+  .list-hover-green:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  /* Card hover lift — used in playlist / search result cards */
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+  .card-hover:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Icon button */
+  .icon-btn {
+    @apply rounded-full transition-all duration-150;
+  }
+  .icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply transition-all duration-200 rounded-lg;
+  }
+  .nav-item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* ── Glass morphism panel ─────────────────────────────────────────────── */
+  .glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  /* ── Glow on primary elements ─────────────────────────────────────────── */
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.35), 0 0 60px hsl(var(--primary) / 0.12);
+  }
+
+  .glow-primary-sm {
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.3);
+  }
+
+  /* ── Shimmer loading placeholder ─────────────────────────────────────── */
+  @keyframes shimmer {
+    0%   { background-position: -500px 0; }
+    100% { background-position: 500px 0; }
+  }
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255,255,255,0.03) 25%,
+      rgba(255,255,255,0.08) 50%,
+      rgba(255,255,255,0.03) 75%
+    );
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite linear;
+  }
+
+  /* ── Spotify-style progress bar hover ────────────────────────────────── */
+  .progress-container:hover [data-radix-slider-thumb] {
+    opacity: 1 !important;
+  }
+
+  /* ── Hover-reveal children ────────────────────────────────────────────── */
+  .hover-reveal-children .reveal-child {
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+  .hover-reveal-children:hover .reveal-child {
+    opacity: 1;
+  }
+
+  /* ── Subtle scale on small elements ──────────────────────────────────── */
+  .hover-scale-sm {
+    @apply transition-transform duration-150;
+  }
+  .hover-scale-sm:hover {
+    transform: scale(1.05);
+  }
+
+  /* ── Player bar border glow ───────────────────────────────────────────── */
+  .player-bar {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ── Expanded player drag handle pulse ───────────────────────────────── */
+  .drag-handle {
+    @apply w-10 h-1 rounded-full bg-white/20 mx-auto;
+    transition: background-color 200ms ease, width 200ms ease;
+  }
+  .drag-handle:hover {
+    background-color: rgba(255,255,255,0.4);
+    width: 48px;
+  }
+
+  /* ── Track thumbnail ring on play ────────────────────────────────────── */
+  .thumbnail-playing {
+    box-shadow: 0 0 0 2px hsl(var(--primary)), 0 0 20px hsl(var(--primary) / 0.4);
+  }
+
+  /* ── Sidebar active item ──────────────────────────────────────────────── */
+  .sidebar-active {
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.08));
+    border-left: 3px solid hsl(var(--primary));
+    color: hsl(var(--primary));
+  }
+
+  /* ── Hover scale smaller variant ─────────────────────────────────────── */
+  .hover-scale-smaller {
+    @apply transition-transform duration-200;
+  }
+  .hover-scale-smaller:hover {
+    transform: scale(1.04);
   }
 }

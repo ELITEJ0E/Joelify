@@ -1,18 +1,13 @@
 "use client"
 
-import { SheetTitle } from "@/components/ui/sheet"
-import { SheetHeader } from "@/components/ui/sheet"
-import { SheetContent } from "@/components/ui/sheet"
-import { Sheet } from "@/components/ui/sheet"
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown, Music, Image as ImageIcon } from 'lucide-react'
+import { X, ChevronDown, Music, Image as ImageIcon, Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { SimpleVisualizer } from "./SimpleVisualizer"
 import { useApp } from "@/contexts/AppContext"
-import { LyricsDisplay } from './LyricsDisplay'
 
 interface ExpandablePlayerProps {
   isExpanded: boolean
@@ -21,6 +16,57 @@ interface ExpandablePlayerProps {
   isPlaying: boolean
   volume?: number
   children?: React.ReactNode
+}
+
+/**
+ * Re-parents the YouTube iframe container into a slot div (or back) without
+ * destroying the IFrame API player instance.  We locate the inner managed div
+ * (first child of #yt-player-root) and move it between parents.
+ */
+function useYouTubeIframeSlot(isExpanded: boolean, videoMode: boolean) {
+  const slotRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isExpanded || !videoMode) return
+
+    const root = document.getElementById("yt-player-root")
+    const playerEl = root?.firstElementChild as HTMLElement | null
+    const slot = slotRef.current
+
+    if (!playerEl || !slot) return
+
+    const originalParent = playerEl.parentElement
+    if (!originalParent || originalParent === slot) return
+
+    // Snapshot inline styles we're about to override
+    const prev = {
+      display: playerEl.style.display,
+      maxWidth: playerEl.style.maxWidth,
+      maxHeight: playerEl.style.maxHeight,
+      width: playerEl.style.width,
+      height: playerEl.style.height,
+      margin: playerEl.style.margin,
+    }
+
+    // Move into slot and make fully visible
+    playerEl.style.display = "flex"
+    playerEl.style.maxWidth = "100%"
+    playerEl.style.maxHeight = "100%"
+    playerEl.style.width = "100%"
+    playerEl.style.height = "100%"
+    playerEl.style.margin = "0"
+    slot.appendChild(playerEl)
+
+    return () => {
+      // Restore element to its original home
+      if (originalParent && playerEl) {
+        Object.assign(playerEl.style, prev)
+        originalParent.appendChild(playerEl)
+      }
+    }
+  }, [isExpanded, videoMode])
+
+  return slotRef
 }
 
 export function ExpandablePlayer({
@@ -32,107 +78,33 @@ export function ExpandablePlayer({
   children,
 }: ExpandablePlayerProps) {
   const { currentTrack, videoMode } = useApp()
-  const [localVideoMode, setLocalVideoMode] = useState(false)
-  const [showLyrics, setShowLyrics] = useState(false)
   const [showVisualizer, setShowVisualizer] = useState(false)
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
-  const scale = useTransform(y, [0, 300], [1, 0.8])
-  const expandedPlayerRef = useRef<any>(null)
-  const isPlayerReadyRef = useRef(false)
+  const scale = useTransform(y, [0, 300], [1, 0.95])
 
-  // YouTube player init & sync (unchanged)
-  useEffect(() => {
-    if (!isExpanded || !localVideoMode || !currentTrack?.id) return
-
-    const initExpandedPlayer = () => {
-      if (window.YT && window.YT.Player && !expandedPlayerRef.current) {
-        expandedPlayerRef.current = new window.YT.Player("expanded-youtube-player", {
-          height: "100%",
-          width: "100%",
-          videoId: currentTrack.id,
-          playerVars: {
-            autoplay: 0,
-            controls: 1,
-            disablekb: 0,
-            fs: 1,
-            modestbranding: 1,
-            playsinline: 1,
-            rel: 0,
-            iv_load_policy: 3,
-          },
-          events: {
-            onReady: () => {
-              isPlayerReadyRef.current = true
-              console.log("[ExpandedPlayer] Player ready")
-            },
-          },
-        })
-      }
-    }
-
-    if (window.YT && window.YT.Player) {
-      initExpandedPlayer()
-    } else {
-      const checkYT = setInterval(() => {
-        if (window.YT && window.YT.Player) {
-          clearInterval(checkYT)
-          initExpandedPlayer()
-        }
-      }, 100)
-
-      return () => clearInterval(checkYT)
-    }
-
-    return () => {
-      if (expandedPlayerRef.current?.destroy) {
-        expandedPlayerRef.current.destroy()
-        expandedPlayerRef.current = null
-        isPlayerReadyRef.current = false
-      }
-    }
-  }, [isExpanded, localVideoMode, currentTrack?.id])
-
-  useEffect(() => {
-    if (!expandedPlayerRef.current || !isPlayerReadyRef.current) return
-    if (isPlaying) {
-      expandedPlayerRef.current.playVideo?.()
-    } else {
-      expandedPlayerRef.current.pauseVideo?.()
-    }
-  }, [isPlaying])
-
-  useEffect(() => {
-    if (expandedPlayerRef.current && isPlayerReadyRef.current && localVideoMode) {
-      setTimeout(() => {
-        expandedPlayerRef.current.seekTo?.(currentTime, true)
-        if (isPlaying) expandedPlayerRef.current.playVideo?.()
-      }, 500)
-    }
-  }, [localVideoMode, currentTime, isPlaying])
+  // Shared iframe slot ref
+  const videoSlotRef = useYouTubeIframeSlot(isExpanded, videoMode)
 
   useEffect(() => {
     if (!isExpanded) {
       y.set(0)
-      setShowLyrics(false)
-      setLocalVideoMode(false)
       setShowVisualizer(false)
-    } else {
-      setLocalVideoMode(videoMode)
     }
-  }, [isExpanded, y, videoMode])
+  }, [isExpanded, y])
 
-  const handleBackdropClick = () => {
-    if (window.innerWidth >= 768) onExpandChange(false)
-  }
-
-  const handleDragEnd = (_event: any, info: PanInfo) => {
-    if (info.offset.y > 100 || info.velocity.y > 500) {
+  const handleDragEnd = useCallback((_event: any, info: PanInfo) => {
+    if (info.offset.y > 120 || info.velocity.y > 600) {
       onExpandChange(false)
     } else {
       y.set(0)
     }
-  }
+  }, [onExpandChange, y])
+
+  const handleBackdropClick = useCallback(() => {
+    // Only close on desktop backdrop click
+    if (window.innerWidth >= 1024) onExpandChange(false)
+  }, [onExpandChange])
 
   if (!isExpanded) return null
 
@@ -141,10 +113,29 @@ export function ExpandablePlayer({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black overflow-hidden"
+      transition={{ duration: 0.3 }}
+      className="fixed inset-0 z-50 overflow-hidden"
       onClick={handleBackdropClick}
     >
-      {/* Visualizer in background – full strength when enabled */}
+      {/* ── Dynamic background ──────────────────────────────────────────── */}
+      {/* Album-art blur backdrop */}
+      {currentTrack?.thumbnail && !showVisualizer && (
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: `url(${currentTrack.thumbnail})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: "blur(40px) brightness(0.25) saturate(1.4)",
+            transform: "scale(1.15)",
+          }}
+        />
+      )}
+
+      {/* Solid dark fallback */}
+      <div className="absolute inset-0 z-0 bg-zinc-950" style={{ opacity: currentTrack?.thumbnail && !showVisualizer ? 0 : 1 }} />
+
+      {/* Visualizer */}
       {showVisualizer && (
         <div className="absolute inset-0 z-0 pointer-events-none">
           <SimpleVisualizer
@@ -156,113 +147,144 @@ export function ExpandablePlayer({
         </div>
       )}
 
-      {/* Overlay – almost none when visualizer is on */}
-      <div
-        className={`absolute inset-0 z-10 transition-opacity duration-600 ${
-          showVisualizer ? "bg-black/8" : "bg-black/50"
-        }`}
-      />
+      {/* Gradient overlay for readability */}
+      <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/20 via-black/30 to-black/60 pointer-events-none" />
 
+      {/* ── Draggable content panel ────────────────────────────────────── */}
       <motion.div
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.2}
+        dragElastic={0.15}
         onDragEnd={handleDragEnd}
         style={{ y, opacity, scale }}
         className="relative h-full w-full flex flex-col z-20"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 md:p-6">
+        {/* ── Header ──────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-6 flex-shrink-0">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onExpandChange(false)}
-            className="text-white/80 hover:text-white"
+            className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all"
           >
-            <ChevronDown size={28} />
+            <ChevronDown size={24} />
           </Button>
-          <p className="text-sm text-white/60">Now Playing</p>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onExpandChange(false)}
-            className="text-white/80 hover:text-white"
-          >
-            <X size={24} />
-          </Button>
-        </div>
 
-        <div className="flex justify-center mb-4 md:hidden">
-          <div className="w-12 h-1 bg-white/20 rounded-full" />
-        </div>
+          <div className="flex flex-col items-center">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/50">Now Playing</p>
+          </div>
 
-        <div className="flex-1 flex flex-col items-center justify-start px-6 md:px-12 overflow-hidden">
-          {/* Toggle button */}
-          <div className="w-full max-w-md flex justify-end mb-4">
+          <div className="flex items-center gap-1">
             <Button
-              variant="outline"
-              size="sm"
+              variant="ghost"
+              size="icon"
               onClick={() => setShowVisualizer(!showVisualizer)}
-              className={`backdrop-blur-sm border-white/20 hover:bg-white/10 transition-all duration-300 ${
-                showVisualizer ? "bg-white/15 text-white" : "bg-black/20 text-white/80"
+              className={`rounded-full h-10 w-10 transition-all ${
+                showVisualizer
+                  ? "text-primary bg-primary/20 hover:bg-primary/30"
+                  : "text-white/50 hover:text-white hover:bg-white/10"
               }`}
+              title={showVisualizer ? "Hide Visualizer" : "Show Visualizer"}
             >
-              {showVisualizer ? (
-                <>
-                  <Music size={16} className="mr-2" />
-                  Hide Visualizer
-                </>
-              ) : (
-                <>
-                  <Music size={16} className="mr-2" />
-                  Show Visualizer
-                </>
-              )}
+              {showVisualizer ? <EyeOff size={18} /> : <Eye size={18} />}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onExpandChange(false)}
+              className="text-white/50 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all"
+            >
+              <X size={18} />
             </Button>
           </div>
+        </div>
 
-          {/* Media – exactly the same as before, never hidden */}
-          {localVideoMode && currentTrack ? (
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="relative w-full max-w-md aspect-video mb-6 md:mb-8 bg-black rounded-xl overflow-hidden shadow-2xl"
-            >
-              <div id="expanded-youtube-player" className="w-full h-full"></div>
-            </motion.div>
-          ) : currentTrack?.thumbnail ? (
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="relative w-full max-w-md aspect-square mb-6 md:mb-8"
-            >
-              <Image
-                src={currentTrack.thumbnail || "/placeholder.svg"}
-                alt={currentTrack.title}
-                fill
-                className="rounded-xl object-cover shadow-2xl"
-                priority
-              />
-            </motion.div>
-          ) : (
-            <div className="w-full max-w-md aspect-square mb-6 md:mb-8 bg-secondary rounded-xl flex items-center justify-center shadow-2xl">
-              <span className="text-9xl text-muted-foreground">♪</span>
-            </div>
-          )}
+        {/* Mobile drag handle */}
+        <div className="flex justify-center mb-2 lg:hidden">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
 
-          {/* Track Info */}
-          <div className="w-full max-w-2xl text-center mb-6">
-            <h1 className="text-2xl md:text-4xl font-bold text-white mb-2 line-clamp-2">
-              {currentTrack?.title || "No Track Playing"}
-            </h1>
-            <p className="text-lg md:text-xl text-white/60">{currentTrack?.artist || "Unknown Artist"}</p>
+        {/* ── Main content area ────────────────────────────────────────── */}
+        {/*
+          Mobile  (<lg): stacked column — thumbnail → info → controls
+          Desktop (≥lg): side-by-side row — left: thumbnail | right: info+controls
+        */}
+        <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-stretch justify-start lg:justify-center gap-6 lg:gap-12 px-5 md:px-10 lg:px-16 pb-6 overflow-y-auto min-h-0">
+
+          {/* ── LEFT: Album art / video thumbnail ─────────────────────── */}
+          <div className="flex-shrink-0 flex items-center justify-center w-full lg:w-auto">
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
+              className={`
+                relative overflow-hidden rounded-2xl shadow-2xl
+                ${videoMode
+                  ? "w-full max-w-sm lg:max-w-md xl:max-w-lg aspect-video"
+                  : "w-64 h-64 sm:w-72 sm:h-72 md:w-80 md:h-80 lg:w-72 lg:h-72 xl:w-80 xl:h-80"
+                }
+              `}
+            >
+              {videoMode ? (
+                /* ── Video slot: shared YT iframe is DOM-re-parented here ── */
+                <div
+                  ref={videoSlotRef}
+                  id="expanded-video-slot"
+                  className="w-full h-full bg-black"
+                  style={{ aspectRatio: "16/9" }}
+                />
+              ) : currentTrack?.thumbnail ? (
+                <>
+                  <Image
+                    src={currentTrack.thumbnail}
+                    alt={currentTrack.title || "Album art"}
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                  {/* Subtle vinyl-record shine */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/20 pointer-events-none" />
+                </>
+              ) : (
+                <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                  <Music size={64} className="text-zinc-600" />
+                </div>
+              )}
+            </motion.div>
           </div>
 
-          {/* Controls */}
-          <div className="w-full max-w-2xl">{children}</div>
+          {/* ── RIGHT: Track info + controls ──────────────────────────── */}
+          <div className="flex flex-col justify-center w-full lg:max-w-md xl:max-w-lg gap-4">
+            {/* Track name + artist */}
+            <motion.div
+              initial={{ y: 12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="text-center lg:text-left"
+            >
+              <h1 className="text-2xl md:text-3xl lg:text-3xl xl:text-4xl font-bold text-white leading-tight line-clamp-2 mb-1">
+                {currentTrack?.title || "No Track Playing"}
+              </h1>
+              <p className="text-base md:text-lg text-white/60 font-medium line-clamp-1">
+                {currentTrack?.artist || "Unknown Artist"}
+              </p>
+            </motion.div>
+
+            {/* Thin separator */}
+            <div className="hidden lg:block h-px bg-white/10 w-full" />
+
+            {/* Injected controls (progress bar + buttons from PlayerControls) */}
+            <motion.div
+              initial={{ y: 12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.18 }}
+              className="w-full"
+            >
+              {children}
+            </motion.div>
+          </div>
         </div>
       </motion.div>
     </motion.div>
