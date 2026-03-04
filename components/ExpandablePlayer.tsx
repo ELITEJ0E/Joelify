@@ -16,6 +16,8 @@ interface ExpandablePlayerProps {
   isPlaying: boolean
   volume?: number
   children?: React.ReactNode
+  /** Called with true when video player takes over audio, false when it releases */
+  onVideoActiveChange?: (videoActive: boolean) => void
 }
 
 export function ExpandablePlayer({
@@ -25,44 +27,50 @@ export function ExpandablePlayer({
   isPlaying,
   volume = 1,
   children,
+  onVideoActiveChange,
 }: ExpandablePlayerProps) {
   const { currentTrack } = useApp()
   const [showVisualizer, setShowVisualizer] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
 
-  // ── Expanded-player-local YouTube instance ────────────────────────────────
-  const expandedPlayerRef = useRef<any>(null)
-  const expandedPlayerReadyRef = useRef(false)
-  const hasSyncedRef = useRef(false)
+  // ── Local video YT instance (separate from the hidden audio player) ────────
+  const videoPlayerRef = useRef<any>(null)
+  const videoReadyRef = useRef(false)
+  const initialSyncDoneRef = useRef(false)
 
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.95])
 
-  // ── Reset state when closed ───────────────────────────────────────────────
+  // ── Destroy video player and reset state on close ─────────────────────────
   useEffect(() => {
     if (!isExpanded) {
       y.set(0)
       setShowVisualizer(false)
-      // Destroy local video player when panel closes
-      if (expandedPlayerRef.current?.destroy) {
-        expandedPlayerRef.current.destroy()
-        expandedPlayerRef.current = null
-        expandedPlayerReadyRef.current = false
-        hasSyncedRef.current = false
-      }
+      setShowVideo(false)
+      destroyVideoPlayer()
     }
   }, [isExpanded, y])
 
-  // ── Init / destroy expanded YT player when video is toggled ──────────────
+  const destroyVideoPlayer = () => {
+    if (videoPlayerRef.current?.destroy) {
+      videoPlayerRef.current.destroy()
+    }
+    videoPlayerRef.current = null
+    videoReadyRef.current = false
+    initialSyncDoneRef.current = false
+    onVideoActiveChange?.(false) // release audio back to hidden player
+  }
+
+  // ── Init video player when showVideo becomes true ──────────────────────────
   useEffect(() => {
     if (!isExpanded || !showVideo || !currentTrack?.id) return
 
-    const init = () => {
-      if (!window.YT?.Player) return
-      if (expandedPlayerRef.current) return // already created
+    // Small delay so the DOM slot is rendered before YT tries to attach
+    const timer = setTimeout(() => {
+      if (!window.YT?.Player || videoPlayerRef.current) return
 
-      expandedPlayerRef.current = new window.YT.Player("expanded-yt-player", {
+      videoPlayerRef.current = new window.YT.Player("expanded-yt-video", {
         height: "100%",
         width: "100%",
         videoId: currentTrack.id,
@@ -76,77 +84,45 @@ export function ExpandablePlayer({
         },
         events: {
           onReady: () => {
-            expandedPlayerReadyRef.current = true
-            hasSyncedRef.current = false
+            videoReadyRef.current = true
+            initialSyncDoneRef.current = false // trigger sync below
+            onVideoActiveChange?.(true) // tell PlayerControls to mute hidden player
           },
         },
       })
-    }
-
-    if (window.YT?.Player) {
-      init()
-    } else {
-      const prev = window.onYouTubeIframeAPIReady
-      window.onYouTubeIframeAPIReady = () => {
-        prev?.()
-        init()
-      }
-    }
+    }, 50)
 
     return () => {
-      if (expandedPlayerRef.current?.destroy) {
-        expandedPlayerRef.current.destroy()
-        expandedPlayerRef.current = null
-        expandedPlayerReadyRef.current = false
-        hasSyncedRef.current = false
-      }
+      clearTimeout(timer)
+      destroyVideoPlayer()
     }
   }, [isExpanded, showVideo, currentTrack?.id])
 
-  // ── Sync expanded player to main player's position once on ready ──────────
+  // ── One-time sync: seek to current position + mirror play state ───────────
+  // Runs every render but bails immediately once synced
   useEffect(() => {
-    if (!expandedPlayerReadyRef.current || hasSyncedRef.current) return
-    if (!expandedPlayerRef.current) return
-
-    hasSyncedRef.current = true
-
-    // Seek to current position
-    expandedPlayerRef.current.seekTo(currentTime, true)
-
-    // Mirror play state
-    if (isPlaying) {
-      expandedPlayerRef.current.playVideo()
-    } else {
-      expandedPlayerRef.current.pauseVideo()
-    }
+    if (!videoReadyRef.current || initialSyncDoneRef.current || !videoPlayerRef.current) return
+    initialSyncDoneRef.current = true
+    videoPlayerRef.current.seekTo(currentTime, true)
+    if (isPlaying) videoPlayerRef.current.playVideo()
+    else videoPlayerRef.current.pauseVideo()
   })
 
-  // ── Keep expanded player in sync with main play/pause ────────────────────
+  // ── Keep video in sync with audio play/pause ───────────────────────────────
   useEffect(() => {
-    if (!expandedPlayerRef.current || !expandedPlayerReadyRef.current) return
-    if (isPlaying) {
-      expandedPlayerRef.current.playVideo()
-    } else {
-      expandedPlayerRef.current.pauseVideo()
-    }
+    if (!videoPlayerRef.current || !videoReadyRef.current) return
+    if (isPlaying) videoPlayerRef.current.playVideo()
+    else videoPlayerRef.current.pauseVideo()
   }, [isPlaying])
 
-  // ── When video is turned off, destroy the local player ───────────────────
+  // ── Destroy video player when toggled off ─────────────────────────────────
   useEffect(() => {
-    if (!showVideo && expandedPlayerRef.current?.destroy) {
-      expandedPlayerRef.current.destroy()
-      expandedPlayerRef.current = null
-      expandedPlayerReadyRef.current = false
-      hasSyncedRef.current = false
-    }
+    if (!showVideo) destroyVideoPlayer()
   }, [showVideo])
 
-  const handleDragEnd = useCallback((_event: any, info: PanInfo) => {
-    if (info.offset.y > 120 || info.velocity.y > 600) {
-      onExpandChange(false)
-    } else {
-      y.set(0)
-    }
+  const handleDragEnd = useCallback((_: any, info: PanInfo) => {
+    if (info.offset.y > 120 || info.velocity.y > 600) onExpandChange(false)
+    else y.set(0)
   }, [onExpandChange, y])
 
   const handleBackdropClick = useCallback(() => {
@@ -164,7 +140,7 @@ export function ExpandablePlayer({
       className="fixed inset-0 z-50 overflow-hidden"
       onClick={handleBackdropClick}
     >
-      {/* ── Album-art blur backdrop ────────────────────────────────────────── */}
+      {/* ── Album-art blur backdrop ──────────────────────────────────────── */}
       {currentTrack?.thumbnail && !showVisualizer && (
         <div
           className="absolute inset-0 z-0"
@@ -179,7 +155,7 @@ export function ExpandablePlayer({
       )}
       <div className="absolute inset-0 z-0 bg-zinc-950" />
 
-      {/* ── Visualizer ────────────────────────────────────────────────────── */}
+      {/* ── Visualizer ──────────────────────────────────────────────────── */}
       {showVisualizer && (
         <div className="absolute inset-0 z-0 pointer-events-none">
           <SimpleVisualizer isPlaying={isPlaying} currentTime={currentTime} volume={volume} bpm={128} />
@@ -189,7 +165,7 @@ export function ExpandablePlayer({
       {/* Gradient overlay */}
       <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/20 via-black/25 to-black/55 pointer-events-none" />
 
-      {/* ── Draggable panel ───────────────────────────────────────────────── */}
+      {/* ── Draggable panel ─────────────────────────────────────────────── */}
       <motion.div
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
@@ -214,24 +190,24 @@ export function ExpandablePlayer({
           </p>
 
           <div className="flex items-center gap-1">
-            {/* Video toggle — lives here only, not in PlayerControls */}
+            {/* Video toggle — only here, never in PlayerControls */}
             <Button
               variant="ghost" size="icon"
-              onClick={() => setShowVideo(!showVideo)}
+              onClick={() => setShowVideo((v) => !v)}
+              disabled={!currentTrack}
               className={`rounded-full h-10 w-10 transition-all ${
                 showVideo
                   ? "text-primary bg-primary/20 hover:bg-primary/30"
                   : "text-white/45 hover:text-white hover:bg-white/10"
               }`}
               title={showVideo ? "Hide Video" : "Show Video"}
-              disabled={!currentTrack}
             >
               {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
             </Button>
 
             <Button
               variant="ghost" size="icon"
-              onClick={() => setShowVisualizer(!showVisualizer)}
+              onClick={() => setShowVisualizer((v) => !v)}
               className={`rounded-full h-10 w-10 transition-all ${
                 showVisualizer
                   ? "text-primary bg-primary/20 hover:bg-primary/30"
@@ -258,12 +234,12 @@ export function ExpandablePlayer({
         </div>
 
         {/* ── Main layout ─────────────────────────────────────────────────
-            Mobile (<lg) : vertical stack  — art/video → info → controls
-            Desktop (≥lg): horizontal row  — art/video | info + controls
+            Mobile (<lg): vertical stack — art/video → info → controls
+            Desktop (≥lg): horizontal — art/video | info + controls
         ────────────────────────────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-center justify-start lg:justify-center gap-6 lg:gap-14 px-5 md:px-10 lg:px-16 xl:px-20 pb-6 overflow-y-auto min-h-0">
 
-          {/* ── LEFT / TOP: artwork or video ──────────────────────────── */}
+          {/* ── LEFT / TOP: artwork or video ───────────────────────────── */}
           <div className="flex-shrink-0 flex items-center justify-center w-full lg:w-auto">
             <motion.div
               initial={{ scale: 0.88, opacity: 0 }}
@@ -277,11 +253,11 @@ export function ExpandablePlayer({
               ].join(" ")}
             >
               {showVideo ? (
-                /* Self-contained expanded YT player — completely separate from
-                   the hidden audio player in PlayerControls. Controls (play/pause/
-                   seek) are mirrored to this instance via the effects above. */
+                // Dedicated video instance — completely independent of the
+                // hidden audio player. No iframe clashing. Play/pause is
+                // mirrored via the useEffect hooks above.
                 <div className="w-full h-full bg-black">
-                  <div id="expanded-yt-player" className="w-full h-full" />
+                  <div id="expanded-yt-video" className="w-full h-full" />
                 </div>
               ) : currentTrack?.thumbnail ? (
                 <>
@@ -304,7 +280,6 @@ export function ExpandablePlayer({
 
           {/* ── RIGHT / BOTTOM: track info + controls ─────────────────── */}
           <div className="flex flex-col justify-center w-full lg:max-w-sm xl:max-w-md gap-5">
-
             <motion.div
               initial={{ y: 14, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle,
-  Volume2, VolumeX, List, Music, Video, Youtube, Music2,
+  Volume2, VolumeX, List, Youtube, Music2,
   Type, Minimize2, Maximize2,
 } from "lucide-react"
 import Image from "next/image"
@@ -25,11 +25,11 @@ import { LIKED_SONGS_PLAYLIST_ID } from "./LikedSongsView"
 export function PlayerControls() {
   const {
     currentTrack, queue, volume, shuffle, repeat, playbackPosition,
-    videoMode, currentPlaylistId, playlists, playbackSource, spotifyPlayer,
+    currentPlaylistId, playlists, playbackSource, spotifyPlayer,
     likedSongs,
     setSpotifyPlayer, setCurrentTrack, setQueue, setVolume, toggleShuffle,
-    toggleRepeat, setPlaybackPosition, toggleVideoMode, setPlaybackSource,
-    audioSettings, setAudioSettings,
+    toggleRepeat, setPlaybackPosition, setPlaybackSource,
+    audioSettings,
   } = useApp()
 
   const [youtubePlayer, setYoutubePlayer] = useState<any>(null)
@@ -51,7 +51,6 @@ export function PlayerControls() {
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
-  /** Returns the active track list for the current playback context */
   const getContextTracks = useCallback(() => {
     if (currentPlaylistId === LIKED_SONGS_PLAYLIST_ID) return likedSongs
     if (currentPlaylistId) {
@@ -104,7 +103,6 @@ export function PlayerControls() {
       playHistoryRef.current.push(currentTrack.id)
     }
 
-    // 1. Play next item in the manual queue
     if (queue.length > 0) {
       const nextTrack = queue[0]
       setCurrentTrack(nextTrack)
@@ -116,7 +114,6 @@ export function PlayerControls() {
       return
     }
 
-    // 2. Navigate within the active playlist / liked-songs context
     const contextTracks = getContextTracks()
     if (contextTracks.length > 0) {
       let nextTrack: typeof currentTrack = null
@@ -149,14 +146,12 @@ export function PlayerControls() {
       }
     }
 
-    // 3. Nothing to play
     setIsPlaying(false)
     setCurrentTime(0)
     setPlaybackPosition(0)
   }, [
     repeat, shuffle, currentTrack, queue, playbackSource, getContextTracks,
-    getNextShuffleTrack, handleRepeatOne, setCurrentTrack, setQueue,
-    setPlaybackPosition,
+    getNextShuffleTrack, handleRepeatOne, setCurrentTrack, setQueue, setPlaybackPosition,
   ])
 
   // ─── previous ───────────────────────────────────────────────────────────────
@@ -181,11 +176,8 @@ export function PlayerControls() {
       }
     }
 
-    if (playbackSource === "youtube" && youtubePlayer) {
-      youtubePlayer.seekTo(0, true)
-    } else if (playbackSource === "spotify" && spotifyPlayer) {
-      SpotifyPlayerControls.seek(spotifyPlayer, 0)
-    }
+    if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.seekTo(0, true)
+    else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.seek(spotifyPlayer, 0)
     setCurrentTime(0); setPlaybackPosition(0)
   }, [
     youtubePlayer, spotifyPlayer, setCurrentTrack, setPlaybackPosition,
@@ -259,21 +251,21 @@ export function PlayerControls() {
     if (playbackSource !== "youtube") return
     const state = event.data
     switch (state) {
-      case 1: // playing
+      case 1:
         setIsPlaying(true)
         if (trackEndHandledRef.current && repeat !== "one") trackEndHandledRef.current = false
         if (youtubePlayer && audioSettings.youtubeQuality !== "audio") {
           youtubePlayer.setPlaybackQuality(audioSettings.youtubeQuality)
         }
         break
-      case 2: // paused
+      case 2:
         setIsPlaying(false)
         if (youtubePlayer?.getCurrentTime) {
           const t = youtubePlayer.getCurrentTime()
           setCurrentTime(t); setPlaybackPosition(t)
         }
         break
-      case 0: // ended
+      case 0:
         if (!trackEndHandledRef.current) {
           trackEndHandledRef.current = true
           repeat === "one" ? handleRepeatOne() : handleNext()
@@ -300,6 +292,17 @@ export function PlayerControls() {
   }, [volume, isMuted])
 
   const handleYouTubeDurationReady = useCallback((d: number) => setDuration(d), [])
+
+  // Mute the hidden audio player when the expanded video player is active,
+  // so only one audio source plays at a time.
+  const handleVideoActiveChange = useCallback((videoActive: boolean) => {
+    if (!youtubePlayer) return
+    if (videoActive) {
+      youtubePlayer.mute()
+    } else {
+      if (!isMuted) youtubePlayer.unMute()
+    }
+  }, [youtubePlayer, isMuted])
 
   const handleYouTubeTimeUpdate = useCallback((ct: number, d: number) => {
     if (!isSeekingRef.current && playbackSource === "youtube") {
@@ -363,7 +366,6 @@ export function PlayerControls() {
     if (!playbackSource) setPlaybackSource("youtube")
   }, [playbackSource, setPlaybackSource])
 
-  // Spotify auto-play
   useEffect(() => {
     if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady || !shouldAutoPlaySpotify) return
     const playSpotifyTrack = async () => {
@@ -381,13 +383,14 @@ export function PlayerControls() {
     return () => clearTimeout(timer)
   }, [currentTrack, spotifyPlayer, playbackSource, isReady, shouldAutoPlaySpotify])
 
-  // Save listening history
   const saveToListeningHistory = useCallback((track: typeof currentTrack) => {
     if (!track) return
     const history = JSON.parse(localStorage.getItem("listening_history") || "[]")
-    history.push({ id: track.id, title: track.title, artist: track.artist,
+    history.push({
+      id: track.id, title: track.title, artist: track.artist,
       thumbnail: track.thumbnail, duration: duration || 0,
-      playedAt: new Date().toISOString(), source: playbackSource })
+      playedAt: new Date().toISOString(), source: playbackSource,
+    })
     if (history.length > 1000) history.shift()
     localStorage.setItem("listening_history", JSON.stringify(history))
   }, [duration, playbackSource])
@@ -396,7 +399,7 @@ export function PlayerControls() {
     if (currentTrack && isPlaying && currentTime > 5) saveToListeningHistory(currentTrack)
   }, [currentTrack, isPlaying, currentTime, saveToListeningHistory])
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — "v" key removed (video lives in expanded player only)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
@@ -412,13 +415,12 @@ export function PlayerControls() {
         case "p": e.preventDefault(); handlePrevious(); break
         case "s": e.preventDefault(); toggleShuffle(); break
         case "r": e.preventDefault(); toggleRepeat(); break
-        case "v": e.preventDefault(); toggleVideoMode(); break
       }
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [handlePlayPause, handleSeekForward, handleSeekBackward, handleNext, handlePrevious,
-    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat, toggleVideoMode])
+    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat])
 
   const handleSleepTimerEnd = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.pauseVideo()
@@ -433,8 +435,6 @@ export function PlayerControls() {
     setIsPlaying(false); setShouldAutoPlaySpotify(false)
     setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
   }
-
-  // ─── helpers ─────────────────────────────────────────────────────────────────
 
   const formatTime = (s: number) => {
     if (!s || isNaN(s)) return "0:00"
@@ -482,13 +482,13 @@ export function PlayerControls() {
       />
       <SpotifyPlayer onPlayerReady={handleSpotifyPlayerReady} onStateChange={handleSpotifyStateChange} onError={handleSpotifyError} />
 
-      {/* Expanded Player */}
       <ExpandablePlayer
         isExpanded={isExpandedPlayer}
         onExpandChange={setIsExpandedPlayer}
         currentTime={currentTime}
         isPlaying={isPlaying}
         volume={volume}
+        onVideoActiveChange={handleVideoActiveChange}
       >
         <div className="flex flex-col items-center w-full gap-4">
           <div className="flex items-center gap-2 w-full">
@@ -541,7 +541,7 @@ export function PlayerControls() {
         </div>
       </ExpandablePlayer>
 
-      {/* Collapsed Bar */}
+      {/* ── Collapsed bar ─────────────────────────────────────────────────── */}
       <div className="bg-zinc-950 border-t border-zinc-800/60 text-white p-3 md:p-4 w-full">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
 
@@ -660,7 +660,6 @@ export function PlayerControls() {
 
           {/* Playback controls */}
           <div className="flex-col items-center w-full md:flex-1 md:max-w-2xl">
-            {/* Progress bar */}
             <div className="flex items-center gap-2 w-full mb-3 md:mb-2">
               <span className="text-xs text-zinc-500 w-10 text-right">{formatTime(currentTime)}</span>
               <div className="flex-1">
@@ -674,7 +673,6 @@ export function PlayerControls() {
               <span className="text-xs text-zinc-500 w-10">{formatTime(duration)}</span>
             </div>
 
-            {/* Buttons */}
             <TooltipProvider>
               <div className="flex items-center justify-center w-full gap-3 md:gap-4 mb-2">
                 <Tooltip><TooltipTrigger asChild>
@@ -718,14 +716,6 @@ export function PlayerControls() {
                     {repeat === "one" && <span className="absolute text-[10px] font-bold bottom-1.5 right-1.5">1</span>}
                   </Button>
                 </TooltipTrigger><TooltipContent><p>{getRepeatLabel()}</p></TooltipContent></Tooltip>
-
-                <Tooltip><TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={toggleVideoMode} disabled={!currentTrack}
-                    aria-label={videoMode ? "Music mode" : "Video mode"}
-                    className={`h-10 w-10 transition-colors ${videoMode ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-white/10"}`}>
-                    {videoMode ? <Video size={20} /> : <Music size={20} />}
-                  </Button>
-                </TooltipTrigger><TooltipContent><p>{videoMode ? "Hide Video" : "Show Video"}</p></TooltipContent></Tooltip>
               </div>
             </TooltipProvider>
           </div>
