@@ -16,6 +16,8 @@ interface YouTubePlayerProps {
   onError: (event: any) => void
   onDurationReady?: (duration: number) => void
   onTimeUpdate?: (currentTime: number, duration: number) => void
+  /** When true, renders the iframe visibly in the bar. Same single player instance — no second iframe created. */
+  videoMode?: boolean
 }
 
 export function YouTubePlayer({
@@ -24,6 +26,7 @@ export function YouTubePlayer({
   onError,
   onDurationReady,
   onTimeUpdate,
+  videoMode = false,
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -171,11 +174,20 @@ export function YouTubePlayer({
     }
   }, [currentTrack?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Always hidden — purely an audio engine.
-  // Video playback lives exclusively inside ExpandablePlayer.
+  // Single player instance — shown or hidden based on videoMode prop.
+  // When ExpandablePlayer's video is active, PlayerControls mutes this player
+  // so there's never two audio sources playing simultaneously.
   return (
-    <div className="hidden" ref={containerRef} aria-hidden="true">
-      <div id="youtube-player" />
+    <div ref={containerRef}>
+      <div
+        className={videoMode
+          ? "flex justify-center items-center bg-black w-full overflow-hidden"
+          : "hidden"
+        }
+        style={videoMode ? { maxWidth: 640, maxHeight: 360, margin: "0 auto", aspectRatio: "16/9" } : undefined}
+      >
+        <div id="youtube-player" className="w-full h-full" style={{ aspectRatio: "16/9" }} />
+      </div>
     </div>
   )
 }

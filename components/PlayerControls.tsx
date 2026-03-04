@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle,
-  Volume2, VolumeX, List, Youtube, Music2,
+  Volume2, VolumeX, List, Youtube, Music2, Video, Music,
   Type, Minimize2, Maximize2,
 } from "lucide-react"
 import Image from "next/image"
@@ -42,6 +42,8 @@ export function PlayerControls() {
   const [shouldAutoPlaySpotify, setShouldAutoPlaySpotify] = useState(false)
   const [isMiniPlayer, setIsMiniPlayer] = useState(false)
   const [isExpandedPlayer, setIsExpandedPlayer] = useState(false)
+  // Local video toggle for the bar — separate from expanded player's video
+  const [barVideoMode, setBarVideoMode] = useState(false)
 
   const trackEndHandledRef = useRef(false)
   const isSeekingRef = useRef(false)
@@ -293,11 +295,13 @@ export function PlayerControls() {
 
   const handleYouTubeDurationReady = useCallback((d: number) => setDuration(d), [])
 
-  // Mute the hidden audio player when the expanded video player is active,
-  // so only one audio source plays at a time.
+  // Called by ExpandablePlayer when its video player activates or deactivates.
+  // When expanded video is ON  → mute the bar's audio player + hide bar video (avoid two sources)
+  // When expanded video is OFF → unmute bar player (restore previous mute state)
   const handleVideoActiveChange = useCallback((videoActive: boolean) => {
     if (!youtubePlayer) return
     if (videoActive) {
+      setBarVideoMode(false)   // hide bar iframe while expanded video is showing
       youtubePlayer.mute()
     } else {
       if (!isMuted) youtubePlayer.unMute()
@@ -415,6 +419,7 @@ export function PlayerControls() {
         case "p": e.preventDefault(); handlePrevious(); break
         case "s": e.preventDefault(); toggleShuffle(); break
         case "r": e.preventDefault(); toggleRepeat(); break
+        case "v": e.preventDefault(); setBarVideoMode((v) => !v); break
       }
     }
     window.addEventListener("keydown", handleKeyDown)
@@ -455,6 +460,7 @@ export function PlayerControls() {
           onError={handleError}
           onDurationReady={handleYouTubeDurationReady}
           onTimeUpdate={handleYouTubeTimeUpdate}
+          videoMode={barVideoMode}
         />
         <SpotifyPlayer onPlayerReady={handleSpotifyPlayerReady} onStateChange={handleSpotifyStateChange} onError={handleSpotifyError} />
         <MiniPlayer
@@ -479,6 +485,7 @@ export function PlayerControls() {
         onError={handleError}
         onDurationReady={handleYouTubeDurationReady}
         onTimeUpdate={handleYouTubeTimeUpdate}
+        videoMode={barVideoMode}
       />
       <SpotifyPlayer onPlayerReady={handleSpotifyPlayerReady} onStateChange={handleSpotifyStateChange} onError={handleSpotifyError} />
 
@@ -716,6 +723,17 @@ export function PlayerControls() {
                     {repeat === "one" && <span className="absolute text-[10px] font-bold bottom-1.5 right-1.5">1</span>}
                   </Button>
                 </TooltipTrigger><TooltipContent><p>{getRepeatLabel()}</p></TooltipContent></Tooltip>
+
+                {/* Video toggle — shows iframe in the bar. Muted automatically when expanded video is active. */}
+                <Tooltip><TooltipTrigger asChild>
+                  <Button size="icon" variant="ghost"
+                    onClick={() => setBarVideoMode((v) => !v)}
+                    disabled={!currentTrack}
+                    aria-label={barVideoMode ? "Hide video" : "Show video"}
+                    className={`h-10 w-10 transition-colors ${barVideoMode ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-white/10"}`}>
+                    {barVideoMode ? <Video size={20} /> : <Music size={20} />}
+                  </Button>
+                </TooltipTrigger><TooltipContent><p>{barVideoMode ? "Hide Video" : "Show Video"}</p></TooltipContent></Tooltip>
               </div>
             </TooltipProvider>
           </div>
