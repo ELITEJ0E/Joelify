@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown, Music, Eye, EyeOff, Video, VideoOff } from "lucide-react"
+import { X, ChevronDown, Music, AudioLinesIcon,Eye, AudioLinesIcon, Video, VideoOff } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { SimpleVisualizer } from "./SimpleVisualizer"
@@ -215,7 +215,7 @@ export function ExpandablePlayer({
               }`}
               title={showVisualizer ? "Hide Visualizer" : "Show Visualizer"}
             >
-              {showVisualizer ? <EyeOff size={18} /> : <Eye size={18} />}
+              {showVisualizer ? <AudioLinesIcon size={18} /> : <AudioLinesIcon size={18} />}
             </Button>
 
             <Button
