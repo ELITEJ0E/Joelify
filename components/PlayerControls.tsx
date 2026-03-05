@@ -523,7 +523,7 @@ export function PlayerControls() {
               </TooltipTrigger><TooltipContent><p>Previous</p></TooltipContent></Tooltip>
 
               <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 transition shadow-lg"
+                <Button size="icon" className="bg-white text-black rounded-full h-14 w-14 hover:scale-105 transition shadow-lg"
                   onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
                   {isPlaying ? <Pause fill="currentColor" size={32} /> : <Play fill="currentColor" size={32} />}
                 </Button>
@@ -700,10 +700,10 @@ export function PlayerControls() {
 
                 <Tooltip><TooltipTrigger asChild>
                   <Button size="icon"
-                    className="bg-white text-black rounded-full h-14 w-14 md:h-16 md:w-16 hover:scale-105 hover:bg-zinc-100 transition-all disabled:opacity-50 shadow-lg"
+                    className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 hover:bg-zinc-100 transition-all disabled:opacity-50"
                     onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                     aria-label={isPlaying ? "Pause" : "Play"}>
-                    {isPlaying ? <Pause fill="currentColor" size={28} className="md:w-8 md:h-8" /> : <Play fill="currentColor" size={28} className="md:w-8 md:h-8" />}
+                    {isPlaying ? <Pause fill="currentColor" size={24} /> : <Play fill="currentColor" size={24} />}
                   </Button>
                 </TooltipTrigger><TooltipContent><p>{isPlaying ? "Pause" : "Play"}</p></TooltipContent></Tooltip>
 
