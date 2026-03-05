@@ -523,9 +523,13 @@ export function PlayerControls() {
               </TooltipTrigger><TooltipContent><p>Previous</p></TooltipContent></Tooltip>
 
               <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" className="bg-white text-black rounded-full h-20 w-20 hover:scale-105 transition"
-                  onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
-                  {isPlaying ? <Pause fill="currentColor" size={40} /> : <Play fill="currentColor" size={40} />}
+                <Button 
+                  size="icon" 
+                  className="bg-white text-black rounded-full h-14 w-14 md:h-16 md:w-16 hover:scale-105 transition shadow-lg" 
+                  onClick={handlePlayPause} 
+                  disabled={!currentTrack || !isReady}
+                >
+                  {isPlaying ? <Pause fill="currentColor" size={28} className="md:w-8 md:h-8" /> : <Play fill="currentColor" size={28} className="md:w-8 md:h-8" />}
                 </Button>
               </TooltipTrigger><TooltipContent><p>{isPlaying ? "Pause" : "Play"}</p></TooltipContent></Tooltip>
 
@@ -699,11 +703,14 @@ export function PlayerControls() {
                 </TooltipTrigger><TooltipContent><p>Previous</p></TooltipContent></Tooltip>
 
                 <Tooltip><TooltipTrigger asChild>
-                  <Button size="icon"
-                    className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-zinc-100 transition-all disabled:opacity-50"
-                    onClick={handlePlayPause} disabled={!currentTrack || !isReady}
-                    aria-label={isPlaying ? "Pause" : "Play"}>
-                    {isPlaying ? <Pause fill="currentColor" size={24} /> : <Play fill="currentColor" size={24} />}
+                  <Button 
+                    size="icon"
+                    className="bg-white text-black rounded-full h-12 w-12 md:h-14 md:w-14 hover:scale-105 hover:bg-zinc-100 transition-all disabled:opacity-50 shadow-lg" 
+                    onClick={handlePlayPause} 
+                    disabled={!currentTrack || !isReady}
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                  >
+                    {isPlaying ? <Pause fill="currentColor" size={22} className="md:w-6 md:h-6" /> : <Play fill="currentColor" size={22} className="md:w-6 md:h-6" />}
                   </Button>
                 </TooltipTrigger><TooltipContent><p>{isPlaying ? "Pause" : "Play"}</p></TooltipContent></Tooltip>
 
