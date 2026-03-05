@@ -710,7 +710,7 @@ export function PlayerControls() {
                     disabled={!currentTrack || !isReady}
                     aria-label={isPlaying ? "Pause" : "Play"}
                   >
-                    {isPlaying ? <Pause fill="currentColor" size={22} className="md:w-6 md:h-6" /> : <Play fill="currentColor" size={22} className="md:w-6 md:h-6" />}
+                    {isPlaying ? <Pause fill="currentColor" size={28} className="md:w-6 md:h-6" /> : <Play fill="currentColor" size={28} className="md:w-6 md:h-6" />}
                   </Button>
                 </TooltipTrigger><TooltipContent><p>{isPlaying ? "Pause" : "Play"}</p></TooltipContent></Tooltip>
 
