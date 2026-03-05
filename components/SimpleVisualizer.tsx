@@ -287,6 +287,7 @@ export function SimpleVisualizer({
         right: 0,
         bottom: 0,
         display: 'block',
+        background: 'linear-gradient(135deg, #000000 0%, #0a001a 50%, #000000 100%)',
       }}
     />
   )
