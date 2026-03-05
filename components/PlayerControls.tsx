@@ -700,7 +700,7 @@ export function PlayerControls() {
 
                 <Tooltip><TooltipTrigger asChild>
                   <Button size="icon"
-                    className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 hover:bg-zinc-100 transition-all disabled:opacity-50"
+                    className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-zinc-100 transition-all disabled:opacity-50"
                     onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                     aria-label={isPlaying ? "Pause" : "Play"}>
                     {isPlaying ? <Pause fill="currentColor" size={24} /> : <Play fill="currentColor" size={24} />}

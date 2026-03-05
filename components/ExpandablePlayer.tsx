@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown, Music, AudioLinesIcon,Eye, Video, VideoOff } from "lucide-react"
+import { X, ChevronDown, Music, AudioLinesIcon, Video, VideoOff } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { SimpleVisualizer } from "./SimpleVisualizer"
@@ -33,7 +33,7 @@ export function ExpandablePlayer({
   const [showVisualizer, setShowVisualizer] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
 
-  // ── Local video YT instance (separate from the hidden audio player) ────────
+  // ── Local video YT instance ────────
   const videoPlayerRef = useRef<any>(null)
   const videoReadyRef = useRef(false)
   const initialSyncDoneRef = useRef(false)
@@ -59,14 +59,13 @@ export function ExpandablePlayer({
     videoPlayerRef.current = null
     videoReadyRef.current = false
     initialSyncDoneRef.current = false
-    onVideoActiveChange?.(false) // release audio back to hidden player
+    onVideoActiveChange?.(false)
   }
 
   // ── Init video player when showVideo becomes true ──────────────────────────
   useEffect(() => {
     if (!isExpanded || !showVideo || !currentTrack?.id) return
 
-    // Small delay so the DOM slot is rendered before YT tries to attach
     const timer = setTimeout(() => {
       if (!window.YT?.Player || videoPlayerRef.current) return
 
@@ -85,8 +84,8 @@ export function ExpandablePlayer({
         events: {
           onReady: () => {
             videoReadyRef.current = true
-            initialSyncDoneRef.current = false // trigger sync below
-            onVideoActiveChange?.(true) // tell PlayerControls to mute hidden player
+            initialSyncDoneRef.current = false
+            onVideoActiveChange?.(true)
           },
         },
       })
@@ -98,8 +97,7 @@ export function ExpandablePlayer({
     }
   }, [isExpanded, showVideo, currentTrack?.id])
 
-  // ── One-time sync: seek to current position + mirror play state ───────────
-  // Runs every render but bails immediately once synced
+  // ── One-time sync ───────────
   useEffect(() => {
     if (!videoReadyRef.current || initialSyncDoneRef.current || !videoPlayerRef.current) return
     initialSyncDoneRef.current = true
@@ -108,7 +106,7 @@ export function ExpandablePlayer({
     else videoPlayerRef.current.pauseVideo()
   })
 
-  // ── Keep video in sync with audio play/pause ───────────────────────────────
+  // ── Keep video in sync ───────────────────────────────
   useEffect(() => {
     if (!videoPlayerRef.current || !videoReadyRef.current) return
     if (isPlaying) videoPlayerRef.current.playVideo()
@@ -190,7 +188,7 @@ export function ExpandablePlayer({
           </p>
 
           <div className="flex items-center gap-1">
-            {/* Video toggle — only here, never in PlayerControls */}
+            {/* Video toggle */}
             <Button
               variant="ghost" size="icon"
               onClick={() => setShowVideo((v) => !v)}
@@ -215,7 +213,7 @@ export function ExpandablePlayer({
               }`}
               title={showVisualizer ? "Hide Visualizer" : "Show Visualizer"}
             >
-              {showVisualizer ? <AudioLinesIcon size={18} /> : <AudioLinesIcon size={18} />}
+              <AudioLinesIcon size={18} />
             </Button>
 
             <Button
@@ -229,80 +227,87 @@ export function ExpandablePlayer({
         </div>
 
         {/* Mobile drag handle */}
-        <div className="flex justify-center mb-1 lg:hidden">
-          <div className="drag-handle" />
+        <div className="flex justify-center mb-2 lg:hidden">
+          <div className="w-12 h-1 bg-white/20 rounded-full" />
         </div>
 
-        {/* ── Main layout ─────────────────────────────────────────────────
-            Mobile (<lg): vertical stack — art/video → info → controls
-            Desktop (≥lg): horizontal — art/video | info + controls
-        ────────────────────────────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-center justify-start lg:justify-center gap-6 lg:gap-14 px-5 md:px-10 lg:px-16 xl:px-20 pb-6 overflow-y-auto min-h-0">
-
-          {/* ── LEFT / TOP: artwork or video ───────────────────────────── */}
-          <div className="flex-shrink-0 flex items-center justify-center w-full lg:w-auto">
+        {/* ── Main content with responsive layout ───────────────────── */}
+        {/* Mobile: vertical stack | Desktop: horizontal split */}
+        <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-4 md:px-8 lg:px-12 pb-6 overflow-y-auto">
+          
+          {/* ── LEFT: Media container ───────────────────────────────── */}
+          <div className="flex justify-center lg:flex-1 lg:justify-end">
             <motion.div
-              initial={{ scale: 0.88, opacity: 0 }}
+              initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.42, ease: [0.34, 1.18, 0.64, 1] }}
-              className={[
-                "relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10",
-                showVideo
-                  ? "w-full max-w-xs sm:max-w-sm lg:max-w-md xl:max-w-lg aspect-video"
-                  : "w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-64 lg:h-64 xl:w-80 xl:h-80",
-              ].join(" ")}
+              transition={{ duration: 0.5 }}
+              className="flex justify-center"
             >
-              {showVideo ? (
-                // Dedicated video instance — completely independent of the
-                // hidden audio player. No iframe clashing. Play/pause is
-                // mirrored via the useEffect hooks above.
-                <div className="w-full h-full bg-black">
-                  <div id="expanded-yt-video" className="w-full h-full" />
-                </div>
-              ) : currentTrack?.thumbnail ? (
-                <>
+              <div
+                className={[
+                  "relative overflow-hidden rounded-xl shadow-2xl",
+                  // Mobile sizing
+                  showVideo
+                    ? "w-full max-w-md aspect-video" // Video on mobile
+                    : "w-64 h-64 sm:w-72 sm:h-72", // Artwork on mobile
+                  // Desktop sizing - slightly larger
+                  "lg:max-w-none lg:w-80 lg:h-80 lg:rounded-2xl",
+                  showVideo && "lg:w-[32rem] lg:h-[18rem] xl:w-[40rem] xl:h-[22.5rem] lg:rounded-2xl",
+                ].join(" ")}
+              >
+                {showVideo ? (
+                  <div className="w-full h-full bg-black rounded-xl lg:rounded-2xl overflow-hidden">
+                    <div id="expanded-yt-video" className="w-full h-full" />
+                  </div>
+                ) : currentTrack?.thumbnail ? (
                   <Image
                     src={currentTrack.thumbnail}
                     alt={currentTrack.title || "Album art"}
                     fill
-                    className="object-cover"
+                    className="object-cover rounded-xl lg:rounded-2xl"
                     priority
                   />
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/20 pointer-events-none" />
-                </>
-              ) : (
-                <div className="w-full h-full bg-zinc-800/80 flex items-center justify-center">
-                  <Music size={56} className="text-zinc-600" />
-                </div>
-              )}
+                ) : (
+                  <div className="w-full h-full bg-zinc-800/80 rounded-xl lg:rounded-2xl flex items-center justify-center">
+                    <Music size={56} className="text-zinc-600" />
+                  </div>
+                )}
+              </div>
             </motion.div>
           </div>
 
-          {/* ── RIGHT / BOTTOM: track info + controls ─────────────────── */}
-          <div className="flex flex-col justify-center w-full lg:max-w-sm xl:max-w-md gap-5">
+          {/* ── RIGHT: Track info + controls ────────────────────────── */}
+          <div className="lg:flex-1 lg:max-w-md xl:max-w-lg mt-6 lg:mt-0">
+            {/* Track info - centered on mobile, left-aligned on desktop */}
             <motion.div
-              initial={{ y: 14, opacity: 0 }}
+              initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.38, delay: 0.08 }}
-              className="text-center lg:text-left"
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="text-center lg:text-left mb-6"
             >
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-2xl xl:text-3xl font-bold text-white leading-snug line-clamp-2 mb-1">
+              <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-2 line-clamp-2">
                 {currentTrack?.title || "No Track Playing"}
               </h1>
-              <p className="text-sm md:text-base text-white/55 font-medium line-clamp-1">
+              <p className="text-base md:text-lg text-white/60">
                 {currentTrack?.artist || "Unknown Artist"}
               </p>
             </motion.div>
 
-            <div className="hidden lg:block h-px bg-white/10 w-full" />
+            {/* Desktop divider */}
+            <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
 
+            {/* Controls container with smaller play/pause buttons */}
             <motion.div
-              initial={{ y: 14, opacity: 0 }}
+              initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.38, delay: 0.15 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
               className="w-full"
             >
-              {children}
+              {/* We need to modify the play/pause button size in the children */}
+              {/* The children (PlayerControls) will need to accept a size prop or we can wrap and override */}
+              <div className="[&_.play-pause-button]:w-10 [&_.play-pause-button]:h-10 [&_.play-pause-button]:sm:w-12 [&_.play-pause-button]:sm:h-12">
+                {children}
+              </div>
             </motion.div>
           </div>
         </div>
