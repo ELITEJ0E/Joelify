@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown, Music, AudioLinesIcon,Eye, Video, VideoOff } from "lucide-react"
+import { X, ChevronDown, Music, AudioLinesIcon, Eye, Video, VideoOff } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { SimpleVisualizer } from "./SimpleVisualizer"
@@ -16,7 +16,6 @@ interface ExpandablePlayerProps {
   isPlaying: boolean
   volume?: number
   children?: React.ReactNode
-  /** Called with true when video player takes over audio, false when it releases */
   onVideoActiveChange?: (videoActive: boolean) => void
 }
 
@@ -33,7 +32,6 @@ export function ExpandablePlayer({
   const [showVisualizer, setShowVisualizer] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
 
-  // ── Local video YT instance (separate from the hidden audio player) ────────
   const videoPlayerRef = useRef<any>(null)
   const videoReadyRef = useRef(false)
   const initialSyncDoneRef = useRef(false)
@@ -42,7 +40,6 @@ export function ExpandablePlayer({
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.95])
 
-  // ── Destroy video player and reset state on close ─────────────────────────
   useEffect(() => {
     if (!isExpanded) {
       y.set(0)
@@ -59,14 +56,12 @@ export function ExpandablePlayer({
     videoPlayerRef.current = null
     videoReadyRef.current = false
     initialSyncDoneRef.current = false
-    onVideoActiveChange?.(false) // release audio back to hidden player
+    onVideoActiveChange?.(false)
   }
 
-  // ── Init video player when showVideo becomes true ──────────────────────────
   useEffect(() => {
     if (!isExpanded || !showVideo || !currentTrack?.id) return
 
-    // Small delay so the DOM slot is rendered before YT tries to attach
     const timer = setTimeout(() => {
       if (!window.YT?.Player || videoPlayerRef.current) return
 
@@ -85,8 +80,8 @@ export function ExpandablePlayer({
         events: {
           onReady: () => {
             videoReadyRef.current = true
-            initialSyncDoneRef.current = false // trigger sync below
-            onVideoActiveChange?.(true) // tell PlayerControls to mute hidden player
+            initialSyncDoneRef.current = false
+            onVideoActiveChange?.(true)
           },
         },
       })
@@ -98,8 +93,6 @@ export function ExpandablePlayer({
     }
   }, [isExpanded, showVideo, currentTrack?.id])
 
-  // ── One-time sync: seek to current position + mirror play state ───────────
-  // Runs every render but bails immediately once synced
   useEffect(() => {
     if (!videoReadyRef.current || initialSyncDoneRef.current || !videoPlayerRef.current) return
     initialSyncDoneRef.current = true
@@ -108,14 +101,12 @@ export function ExpandablePlayer({
     else videoPlayerRef.current.pauseVideo()
   })
 
-  // ── Keep video in sync with audio play/pause ───────────────────────────────
   useEffect(() => {
     if (!videoPlayerRef.current || !videoReadyRef.current) return
     if (isPlaying) videoPlayerRef.current.playVideo()
     else videoPlayerRef.current.pauseVideo()
   }, [isPlaying])
 
-  // ── Destroy video player when toggled off ─────────────────────────────────
   useEffect(() => {
     if (!showVideo) destroyVideoPlayer()
   }, [showVideo])
@@ -140,7 +131,7 @@ export function ExpandablePlayer({
       className="fixed inset-0 z-50 overflow-hidden"
       onClick={handleBackdropClick}
     >
-      {/* ── Album-art blur backdrop ──────────────────────────────────────── */}
+      {/* Backdrop */}
       {currentTrack?.thumbnail && !showVisualizer && (
         <div
           className="absolute inset-0 z-0"
@@ -155,17 +146,16 @@ export function ExpandablePlayer({
       )}
       <div className="absolute inset-0 z-0 bg-zinc-950" />
 
-      {/* ── Visualizer ──────────────────────────────────────────────────── */}
+      {/* Visualizer */}
       {showVisualizer && (
         <div className="absolute inset-0 z-0 pointer-events-none">
           <SimpleVisualizer isPlaying={isPlaying} currentTime={currentTime} volume={volume} bpm={128} />
         </div>
       )}
 
-      {/* Gradient overlay */}
       <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/20 via-black/25 to-black/55 pointer-events-none" />
 
-      {/* ── Draggable panel ─────────────────────────────────────────────── */}
+      {/* Draggable panel */}
       <motion.div
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
@@ -175,90 +165,85 @@ export function ExpandablePlayer({
         className="relative h-full w-full flex flex-col z-20"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Header ────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
+        {/* Header – bigger buttons on mobile */}
+        <div className="flex items-center justify-between px-4 pt-5 pb-3 md:px-8 md:pt-6 flex-shrink-0">
           <Button
-            variant="ghost" size="icon"
+            variant="ghost"
+            size="icon"
             onClick={() => onExpandChange(false)}
-            className="text-white/60 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all"
+            className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-11 w-11 md:h-10 md:w-10 transition-all"
           >
-            <ChevronDown size={24} />
+            <ChevronDown size={28} className="md:size-24" />
           </Button>
 
-          <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none">
+          <p className="text-sm font-semibold uppercase tracking-widest text-white/50 select-none">
             Now Playing
           </p>
 
-          <div className="flex items-center gap-1">
-            {/* Video toggle — only here, never in PlayerControls */}
+          <div className="flex items-center gap-2 md:gap-1">
             <Button
-              variant="ghost" size="icon"
+              variant="ghost"
+              size="icon"
               onClick={() => setShowVideo((v) => !v)}
               disabled={!currentTrack}
-              className={`rounded-full h-10 w-10 transition-all ${
+              className={`rounded-full h-11 w-11 md:h-10 md:w-10 transition-all text-xl md:text-base ${
                 showVideo
-                  ? "text-primary bg-primary/20 hover:bg-primary/30"
-                  : "text-white/45 hover:text-white hover:bg-white/10"
+                  ? "text-primary bg-primary/25 hover:bg-primary/40"
+                  : "text-white/60 hover:text-white hover:bg-white/10"
               }`}
               title={showVideo ? "Hide Video" : "Show Video"}
             >
-              {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
+              {showVideo ? <VideoOff size={24} className="md:size-20" /> : <Video size={24} className="md:size-20" />}
             </Button>
 
             <Button
-              variant="ghost" size="icon"
+              variant="ghost"
+              size="icon"
               onClick={() => setShowVisualizer((v) => !v)}
-              className={`rounded-full h-10 w-10 transition-all ${
+              className={`rounded-full h-11 w-11 md:h-10 md:w-10 transition-all text-xl md:text-base ${
                 showVisualizer
-                  ? "text-primary bg-primary/20 hover:bg-primary/30"
-                  : "text-white/45 hover:text-white hover:bg-white/10"
+                  ? "text-primary bg-primary/25 hover:bg-primary/40"
+                  : "text-white/60 hover:text-white hover:bg-white/10"
               }`}
               title={showVisualizer ? "Hide Visualizer" : "Show Visualizer"}
             >
-              {showVisualizer ? <AudioLinesIcon size={18} /> : <AudioLinesIcon size={18} />}
+              <AudioLinesIcon size={24} className="md:size-20" />
             </Button>
 
             <Button
-              variant="ghost" size="icon"
+              variant="ghost"
+              size="icon"
               onClick={() => onExpandChange(false)}
-              className="text-white/45 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all"
+              className="text-white/60 hover:text-white hover:bg-white/10 rounded-full h-11 w-11 md:h-10 md:w-10 transition-all"
             >
-              <X size={18} />
+              <X size={24} className="md:size-20" />
             </Button>
           </div>
         </div>
 
         {/* Mobile drag handle */}
-        <div className="flex justify-center mb-1 lg:hidden">
-          <div className="drag-handle" />
+        <div className="flex justify-center mb-2 lg:hidden">
+          <div className="drag-handle h-1.5 w-10 bg-white/30 rounded-full" />
         </div>
 
-        {/* ── Main layout ─────────────────────────────────────────────────
-            Mobile (<lg): vertical stack — art/video → info → controls
-            Desktop (≥lg): horizontal — art/video | info + controls
-        ────────────────────────────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-center justify-start lg:justify-center gap-6 lg:gap-14 px-5 md:px-10 lg:px-16 xl:px-20 pb-6 overflow-y-auto min-h-0">
+        {/* ── Main content ─────────────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-center justify-center gap-6 lg:gap-16 xl:gap-20 px-5 sm:px-8 md:px-12 lg:px-16 xl:px-24 pb-8 lg:pb-0 overflow-y-auto">
 
-          {/* ── LEFT / TOP: artwork or video ───────────────────────────── */}
-          <div className="flex-shrink-0 flex items-center justify-center w-full lg:w-auto">
+          {/* Artwork / Video – much bigger on desktop */}
+          <div className="flex-shrink-0 flex items-center justify-center w-full max-w-md lg:max-w-2xl xl:max-w-3xl">
             <motion.div
-              initial={{ scale: 0.88, opacity: 0 }}
+              initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.42, ease: [0.34, 1.18, 0.64, 1] }}
+              transition={{ duration: 0.45, ease: [0.34, 1.18, 0.64, 1] }}
               className={[
-                "relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10",
+                "relative overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10 bg-black",
                 showVideo
-                  ? "w-full max-w-xs sm:max-w-sm lg:max-w-md xl:max-w-lg aspect-video"
-                  : "w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-64 lg:h-64 xl:w-80 xl:h-80",
+                  ? "w-full aspect-video"
+                  : "w-64 h-64 sm:w-72 sm:h-72 md:w-80 md:h-80 lg:w-[420px] lg:h-[420px] xl:w-[520px] xl:h-[520px]",
               ].join(" ")}
             >
               {showVideo ? (
-                // Dedicated video instance — completely independent of the
-                // hidden audio player. No iframe clashing. Play/pause is
-                // mirrored via the useEffect hooks above.
-                <div className="w-full h-full bg-black">
-                  <div id="expanded-yt-video" className="w-full h-full" />
-                </div>
+                <div id="expanded-yt-video" className="w-full h-full" />
               ) : currentTrack?.thumbnail ? (
                 <>
                   <Image
@@ -268,38 +253,38 @@ export function ExpandablePlayer({
                     className="object-cover"
                     priority
                   />
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/20 pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/25 pointer-events-none" />
                 </>
               ) : (
-                <div className="w-full h-full bg-zinc-800/80 flex items-center justify-center">
-                  <Music size={56} className="text-zinc-600" />
+                <div className="w-full h-full bg-zinc-900/80 flex items-center justify-center">
+                  <Music size={72} className="text-zinc-600" />
                 </div>
               )}
             </motion.div>
           </div>
 
-          {/* ── RIGHT / BOTTOM: track info + controls ─────────────────── */}
-          <div className="flex flex-col justify-center w-full lg:max-w-sm xl:max-w-md gap-5">
+          {/* Track info + controls */}
+          <div className="flex flex-col items-center lg:items-start w-full lg:w-auto lg:max-w-md xl:max-w-lg gap-6 lg:gap-8 mt-4 lg:mt-0">
             <motion.div
-              initial={{ y: 14, opacity: 0 }}
+              initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.38, delay: 0.08 }}
-              className="text-center lg:text-left"
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="text-center lg:text-left w-full max-w-md"
             >
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-2xl xl:text-3xl font-bold text-white leading-snug line-clamp-2 mb-1">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-3xl xl:text-4xl font-bold text-white leading-tight line-clamp-2 mb-2">
                 {currentTrack?.title || "No Track Playing"}
               </h1>
-              <p className="text-sm md:text-base text-white/55 font-medium line-clamp-1">
+              <p className="text-base sm:text-lg md:text-xl lg:text-lg xl:text-xl text-white/60 font-medium line-clamp-1">
                 {currentTrack?.artist || "Unknown Artist"}
               </p>
             </motion.div>
 
-            <div className="hidden lg:block h-px bg-white/10 w-full" />
+            <div className="hidden lg:block h-px bg-white/10 w-full max-w-xs" />
 
             <motion.div
-              initial={{ y: 14, opacity: 0 }}
+              initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.38, delay: 0.15 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
               className="w-full"
             >
               {children}
