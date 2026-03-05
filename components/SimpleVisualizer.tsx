@@ -277,17 +277,16 @@ export function SimpleVisualizer({
   }, [])
 
   return (
-    <canvas 
+    <canvas
       ref={canvasRef}
       className="w-full h-full"
       style={{
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        inset: 0,
         display: 'block',
-        background: 'linear-gradient(135deg, #000000 0%, #0a001a 50%, #000000 100%)',
+        background: 'linear-gradient(135deg, #000000 0%, #0a001a 60%, #000000 100%)',
+        // Optional: slightly more saturated/vivid on desktop
+        // filter: window.innerWidth >= 1024 ? 'saturate(1.4)' : 'saturate(1.1)',
       }}
     />
   )
