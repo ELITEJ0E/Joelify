@@ -233,65 +233,67 @@ export function ExpandablePlayer({
         </div>
 
         {/* ── Main content with responsive layout ───────────────────── */}
-        {/* Mobile: full-height column with content spread top↔bottom
-            Desktop: horizontal split centred in remaining space       */}
+        {/* Fixed height container to prevent shifting */}
         <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-5 md:px-8 lg:px-12 pb-safe overflow-y-auto">
-          {/* Left section with fixed height to maintain consistency */}
-          <div className="flex flex-col lg:flex-1 lg:justify-end lg:pt-0">
-            {/* Media container - fixed height to prevent shifting */}
-            <div className="flex justify-center">
+          {/* LEFT SIDE - Fixed height container */}
+          <div className="lg:flex-1 lg:flex lg:justify-end">
+            <div className="flex flex-col items-center">
+              {/* Media container with fixed dimensions */}
               <motion.div
                 initial={{ scale: 0.85, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.45 }}
-                className="flex justify-center w-full lg:w-auto"
+                className="w-full flex justify-center"
               >
                 <div
                   className={[
                     "relative overflow-hidden rounded-2xl shadow-2xl transition-all duration-300",
-                    // Mobile: consistent height between audio and video modes
-                    showVideo
-                      ? "w-full aspect-video max-h-[45vh]"
-                      : "w-full max-w-[min(85vw,380px)] aspect-square",
-                    // Desktop overrides - same height for both modes
-                    "lg:max-w-none lg:w-96 lg:h-96",
-                    showVideo && "lg:w-[36rem] lg:h-96", // Fixed height to match audio mode
+                    // Fixed dimensions that don't change between modes
+                    "w-full max-w-[min(85vw,380px)] aspect-square",
+                    // Desktop fixed size
+                    "lg:w-96 lg:h-96",
+                    // Video mode maintains same container size, just changes content aspect
+                    showVideo && "lg:w-96 lg:h-96", // Keep same dimensions
                   ].join(" ")}
                 >
-                  {showVideo ? (
-                    <div className="w-full h-full bg-black rounded-2xl overflow-hidden">
-                      <div id="expanded-yt-video" className="w-full h-full" />
-                    </div>
-                  ) : currentTrack?.thumbnail ? (
-                    <Image
-                      src={currentTrack.thumbnail}
-                      alt={currentTrack.title || "Album art"}
-                      fill
-                      className="object-cover rounded-2xl"
-                      priority
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-zinc-800/80 rounded-2xl flex items-center justify-center">
-                      <Music size={56} className="text-zinc-600" />
-                    </div>
-                  )}
+                  {/* Content that adapts but container stays same size */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    {showVideo ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-full aspect-video max-h-full">
+                          <div id="expanded-yt-video" className="w-full h-full" />
+                        </div>
+                      </div>
+                    ) : currentTrack?.thumbnail ? (
+                      <Image
+                        src={currentTrack.thumbnail}
+                        alt={currentTrack.title || "Album art"}
+                        fill
+                        className="object-cover rounded-2xl"
+                        priority
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-800/80 rounded-2xl flex items-center justify-center">
+                        <Music size={56} className="text-zinc-600" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </motion.div>
-            </div>
 
-            {/* Spacer to maintain layout when video is shorter */}
-            {showVideo && <div className="hidden lg:block flex-1 min-h-[2rem]" />}
+              {/* Spacer that maintains consistent height */}
+              <div className="h-4 lg:h-6" />
+            </div>
           </div>
 
-          {/* ── RIGHT / BOTTOM: Track info + controls ───────────────── */}
-          {/* Fixed position controls that don't move */}
-          <div className="lg:flex-1 lg:max-w-md xl:max-w-lg flex flex-col justify-end lg:justify-center min-h-[200px] lg:min-h-0">
-            {/* Track info */}
+          {/* ── RIGHT SIDE: Track info + controls - FIXED POSITION ───────────────── */}
+          <div className="lg:flex-1 lg:max-w-md xl:max-w-lg">
+            {/* Track info - always in same position */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="text-center lg:text-left mt-6 mb-8"
+              className="text-center lg:text-left mb-8"
             >
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance">
                 {currentTrack?.title || "No Track Playing"}
@@ -304,17 +306,20 @@ export function ExpandablePlayer({
             {/* Desktop divider */}
             <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
 
-            {/* Controls — rendered by PlayerControls children */}
+            {/* Controls — ALWAYS in same position regardless of video mode */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="w-full pb-16 lg:pb-0"
+              className="w-full"
             >
               <div className="[&_.play-pause-button]:w-16 [&_.play-pause-button]:h-16 [&_.play-pause-button]:sm:w-20 [&_.play-pause-button]:sm:h-20">
                 {children}
               </div>
             </motion.div>
+
+            {/* Extra bottom padding for mobile */}
+            <div className="h-16 lg:h-0" />
           </div>
         </div>
       </motion.div>
