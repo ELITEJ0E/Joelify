@@ -192,7 +192,7 @@ export function ExpandablePlayer({
             <ChevronDown size={24} />
           </Button>
 
-          <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none">
+          <p className="text-xs font-semibold uppercase pl-4 tracking-widest text-white/45 select-none">
             Now Playing
           </p>
 
