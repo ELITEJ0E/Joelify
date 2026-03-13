@@ -524,7 +524,7 @@ export function PlayerControls() {
 
               <Tooltip><TooltipTrigger asChild>
                 <Button size="icon" 
-                  className="bg-white text-black rounded-full h-24 w-24 hover:scale-105 transition shadow-xl"
+                  className="bg-white text-black rounded-full h-20 w-20 hover:scale-105 transition shadow-xl"
                   onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
                   {isPlaying ? 
                     <Pause fill="currentColor" size={48} className="stroke-[1.5]" /> : 
