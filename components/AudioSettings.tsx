@@ -82,7 +82,7 @@ export function AudioSettings({ settings, onChange }: AudioSettingsProps) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="xs" className="p-2 text-gray-400 hover:text-white">
+        <Button variant="ghost" size="sm" className="p-2 text-gray-400 hover:text-white">
           <Settings size={18} />
         </Button>
       </SheetTrigger>
