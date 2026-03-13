@@ -236,51 +236,56 @@ export function ExpandablePlayer({
         {/* Mobile: full-height column with content spread top↔bottom
             Desktop: horizontal split centred in remaining space       */}
         <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-5 md:px-8 lg:px-12 pb-safe overflow-y-auto">
-
-          {/* ── LEFT / TOP: Media container ─────────────────────────── */}
-          <div className="flex justify-center lg:flex-1 lg:justify-end lg:pt-0">
-            <motion.div
-              initial={{ scale: 0.85, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.45 }}
-              className="flex justify-center w-full lg:w-auto"
-            >
-              <div
-                className={[
-                  "relative overflow-hidden rounded-2xl shadow-2xl",
-                  // Mobile: larger thumbnail that fills width with minimal padding
-                  showVideo
-                    ? "w-full aspect-video max-h-[45vh]"
-                    : "w-full max-w-[min(85vw,380px)] aspect-square",
-                  // Desktop overrides - larger on desktop too
-                  "lg:max-w-none lg:w-96 lg:h-96",
-                  showVideo && "lg:w-[36rem] lg:h-[20.25rem] xl:w-[44rem] xl:h-[24.75rem]",
-                ].join(" ")}
+          {/* Left section with fixed height to maintain consistency */}
+          <div className="flex flex-col lg:flex-1 lg:justify-end lg:pt-0">
+            {/* Media container - fixed height to prevent shifting */}
+            <div className="flex justify-center">
+              <motion.div
+                initial={{ scale: 0.85, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.45 }}
+                className="flex justify-center w-full lg:w-auto"
               >
-                {showVideo ? (
-                  <div className="w-full h-full bg-black rounded-2xl overflow-hidden">
-                    <div id="expanded-yt-video" className="w-full h-full" />
-                  </div>
-                ) : currentTrack?.thumbnail ? (
-                  <Image
-                    src={currentTrack.thumbnail}
-                    alt={currentTrack.title || "Album art"}
-                    fill
-                    className="object-cover rounded-2xl"
-                    priority
-                  />
-                ) : (
-                  <div className="w-full h-full bg-zinc-800/80 rounded-2xl flex items-center justify-center">
-                    <Music size={56} className="text-zinc-600" />
-                  </div>
-                )}
-              </div>
-            </motion.div>
+                <div
+                  className={[
+                    "relative overflow-hidden rounded-2xl shadow-2xl transition-all duration-300",
+                    // Mobile: consistent height between audio and video modes
+                    showVideo
+                      ? "w-full aspect-video max-h-[45vh]"
+                      : "w-full max-w-[min(85vw,380px)] aspect-square",
+                    // Desktop overrides - same height for both modes
+                    "lg:max-w-none lg:w-96 lg:h-96",
+                    showVideo && "lg:w-[36rem] lg:h-96", // Fixed height to match audio mode
+                  ].join(" ")}
+                >
+                  {showVideo ? (
+                    <div className="w-full h-full bg-black rounded-2xl overflow-hidden">
+                      <div id="expanded-yt-video" className="w-full h-full" />
+                    </div>
+                  ) : currentTrack?.thumbnail ? (
+                    <Image
+                      src={currentTrack.thumbnail}
+                      alt={currentTrack.title || "Album art"}
+                      fill
+                      className="object-cover rounded-2xl"
+                      priority
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-zinc-800/80 rounded-2xl flex items-center justify-center">
+                      <Music size={56} className="text-zinc-600" />
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Spacer to maintain layout when video is shorter */}
+            {showVideo && <div className="hidden lg:block flex-1 min-h-[2rem]" />}
           </div>
 
           {/* ── RIGHT / BOTTOM: Track info + controls ───────────────── */}
-          {/* On mobile this sits naturally below the thumbnail */}
-          <div className="lg:flex-1 lg:max-w-md xl:max-w-lg">
+          {/* Fixed position controls that don't move */}
+          <div className="lg:flex-1 lg:max-w-md xl:max-w-lg flex flex-col justify-end lg:justify-center min-h-[200px] lg:min-h-0">
             {/* Track info */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
