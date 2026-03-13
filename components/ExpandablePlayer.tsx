@@ -229,7 +229,7 @@ export function ExpandablePlayer({
 
         {/* Mobile drag handle */}
         <div className="flex justify-center mb-2 lg:hidden">
-          <div className="w-12 h-1 bg-white/20 rounded-full" />
+          <div className="w-14 h-14 bg-white/20 rounded-full" />
         </div>
 
         {/* ── Main content with responsive layout ───────────────────── */}
