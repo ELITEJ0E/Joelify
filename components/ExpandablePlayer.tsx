@@ -287,8 +287,8 @@ export function ExpandablePlayer({
           </div>
 
           {/* ── RIGHT / BOTTOM: Track info + controls ───────────────── */}
-          {/* On mobile this section is pushed toward the bottom via mt-auto  */}
-          <div className="mt-auto lg:mt-0 lg:flex-1 lg:max-w-md xl:max-w-lg">
+          {/* On mobile this sits naturally below the thumbnail */}
+          <div className="lg:flex-1 lg:max-w-md xl:max-w-lg">
             {/* Track info */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
@@ -312,7 +312,7 @@ export function ExpandablePlayer({
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="w-full pb-8 lg:pb-0"
+              className="w-full"
             >
               <div className="[&_.play-pause-button]:w-10 [&_.play-pause-button]:h-10 [&_.play-pause-button]:sm:w-12 [&_.play-pause-button]:sm:h-12">
                 {children}
