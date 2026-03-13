@@ -490,67 +490,101 @@ export function PlayerControls() {
       <SpotifyPlayer onPlayerReady={handleSpotifyPlayerReady} onStateChange={handleSpotifyStateChange} onError={handleSpotifyError} />
 
       <ExpandablePlayer
-        isExpanded={isExpandedPlayer}
-        onExpandChange={setIsExpandedPlayer}
-        currentTime={currentTime}
-        isPlaying={isPlaying}
-        volume={volume}
-        onVideoActiveChange={handleVideoActiveChange}
-      >
-        <div className="flex flex-col items-center w-full gap-4">
-          <div className="flex items-center gap-2 w-full">
-            <span className="text-xs text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
-            <div className="flex-1">
-              <Slider value={[currentTime]} max={duration > 0 ? duration : 1} step={0.1}
-                onValueChange={handleSeek} disabled={!currentTrack || duration === 0 || !isReady} />
-            </div>
-            <span className="text-xs text-white/60 w-10">{formatTime(duration)}</span>
-          </div>
-          <TooltipProvider>
-            <div className="flex items-center justify-center gap-6">
-              <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
-                  className={`h-12 w-12 ${shuffle ? "text-primary" : "text-white/60 hover:text-white"}`}>
-                  <Shuffle size={24} />
-                </Button>
-              </TooltipTrigger><TooltipContent><p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p></TooltipContent></Tooltip>
+  isExpanded={isExpandedPlayer}
+  onExpandChange={setIsExpandedPlayer}
+  currentTime={currentTime}
+  isPlaying={isPlaying}
+  volume={volume}
+  onVideoActiveChange={handleVideoActiveChange}
+>
+  <div className="flex flex-col items-center w-full gap-3 sm:gap-4">
+    {/* Progress bar - responsive */}
+    <div className="flex items-center gap-1 sm:gap-2 w-full max-w-2xl mx-auto">
+      <span className="text-[10px] sm:text-xs text-white/60 w-8 sm:w-10 text-right">{formatTime(currentTime)}</span>
+      <div className="flex-1">
+        <Slider value={[currentTime]} max={duration > 0 ? duration : 1} step={0.1}
+          onValueChange={handleSeek} disabled={!currentTrack || duration === 0 || !isReady} 
+          className="[&_.slider-thumb]:h-3 [&_.slider-thumb]:w-3 [&_.slider-thumb]:sm:h-4 [&_.slider-thumb]:sm:w-4"
+        />
+      </div>
+      <span className="text-[10px] sm:text-xs text-white/60 w-8 sm:w-10">{formatTime(duration)}</span>
+    </div>
 
-              <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
-                  className="h-12 w-12 text-white/80 hover:text-white">
-                  <SkipBack size={28} />
-                </Button>
-              </TooltipTrigger><TooltipContent><p>Previous</p></TooltipContent></Tooltip>
+    {/* Controls - fully responsive */}
+    <TooltipProvider>
+      <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 flex-wrap px-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
+              className={`h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 ${shuffle ? "text-primary" : "text-white/60 hover:text-white"}`}>
+              <Shuffle size={18} className="sm:size-20 md:size-22" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
+          </TooltipContent>
+        </Tooltip>
 
-              <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" 
-                  className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 transition shadow-lg"
-                  onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
-                  {isPlaying ? 
-                    <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
-                    <Play fill="currentColor" size={32} className="stroke-[1.5]" />
-                  }
-                </Button>
-              </TooltipTrigger><TooltipContent><p>{isPlaying ? "Pause" : "Play"}</p></TooltipContent></Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
+              className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/80 hover:text-white">
+              <SkipBack size={20} className="sm:size-22 md:size-24" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">Previous</p>
+          </TooltipContent>
+        </Tooltip>
 
-              <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
-                  className="h-12 w-12 text-white/80 hover:text-white">
-                  <SkipForward size={28} />
-                </Button>
-              </TooltipTrigger><TooltipContent><p>Next</p></TooltipContent></Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="icon" 
+              className="bg-white text-black rounded-full h-12 w-12 sm:h-14 sm:w-14 md:h-14 md:w-14 hover:scale-105 transition shadow-lg mx-1"
+              onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
+              {isPlaying ? 
+                <Pause fill="currentColor" size={24} className="sm:size-28 md:size-28 stroke-[1.5]" /> : 
+                <Play fill="currentColor" size={24} className="sm:size-28 md:size-28 stroke-[1.5]" />
+              }
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">{isPlaying ? "Pause" : "Play"}</p>
+          </TooltipContent>
+        </Tooltip>
 
-              <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
-                  className={`h-12 w-12 relative ${repeat !== "off" ? "text-primary" : "text-white/60 hover:text-white"}`}>
-                  <Repeat size={24} />
-                  {repeat === "one" && <span className="absolute text-xs font-bold bottom-1.5 right-1.5">1</span>}
-                </Button>
-              </TooltipTrigger><TooltipContent><p>{getRepeatLabel()}</p></TooltipContent></Tooltip>
-            </div>
-          </TooltipProvider>
-        </div>
-      </ExpandablePlayer>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
+              className="h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 text-white/80 hover:text-white">
+              <SkipForward size={20} className="sm:size-22 md:size-24" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">Next</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
+              className={`h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 relative ${repeat !== "off" ? "text-primary" : "text-white/60 hover:text-white"}`}>
+              <Repeat size={18} className="sm:size-20 md:size-22" />
+              {repeat === "one" && (
+                <span className="absolute text-[8px] sm:text-[10px] font-bold bottom-1 right-1 sm:bottom-1.5 sm:right-1.5">1</span>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">
+              {repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </TooltipProvider>
+  </div>
+</ExpandablePlayer>
 
       {/* ── Collapsed bar ─────────────────────────────────────────────────── */}
       <div className="bg-zinc-950 border-t border-zinc-800/60 text-white p-3 md:p-4 w-full">
