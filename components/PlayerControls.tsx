@@ -507,40 +507,44 @@ export function PlayerControls() {
             <span className="text-xs text-white/60 w-10">{formatTime(duration)}</span>
           </div>
           <TooltipProvider>
-            <div className="flex items-center justify-center gap-6">
+            <div className="flex items-center justify-center gap-8">
               <Tooltip><TooltipTrigger asChild>
                 <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
-                  className={`h-12 w-12 ${shuffle ? "text-primary" : "text-white/60 hover:text-white"}`}>
-                  <Shuffle size={24} />
+                  className={`h-14 w-14 ${shuffle ? "text-primary" : "text-white/60 hover:text-white"}`}>
+                  <Shuffle size={28} />
                 </Button>
               </TooltipTrigger><TooltipContent><p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p></TooltipContent></Tooltip>
 
               <Tooltip><TooltipTrigger asChild>
                 <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
-                  className="h-12 w-12 text-white/80 hover:text-white">
-                  <SkipBack size={28} />
+                  className="h-14 w-14 text-white/80 hover:text-white">
+                  <SkipBack size={32} />
                 </Button>
               </TooltipTrigger><TooltipContent><p>Previous</p></TooltipContent></Tooltip>
 
               <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" className="bg-white text-black rounded-full h-20 w-20 hover:scale-105 transition shadow-lg"
+                <Button size="icon" 
+                  className="bg-white text-black rounded-full h-24 w-24 hover:scale-105 transition shadow-xl"
                   onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
-                  {isPlaying ? <Pause fill="currentColor" size={40} /> : <Play fill="currentColor" size={40} />}
+                  {isPlaying ? 
+                    <Pause fill="currentColor" size={48} className="stroke-[1.5]" /> : 
+                    <Play fill="currentColor" size={48} className="stroke-[1.5]" />
+                  }
                 </Button>
               </TooltipTrigger><TooltipContent><p>{isPlaying ? "Pause" : "Play"}</p></TooltipContent></Tooltip>
 
               <Tooltip><TooltipTrigger asChild>
                 <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
-                  className="h-12 w-12 text-white/80 hover:text-white">
-                  <SkipForward size={28} />
+                  className="h-14 w-14 text-white/80 hover:text-white">
+                  <SkipForward size={32} />
                 </Button>
               </TooltipTrigger><TooltipContent><p>Next</p></TooltipContent></Tooltip>
 
               <Tooltip><TooltipTrigger asChild>
                 <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
-                  className={`h-12 w-12 relative ${repeat !== "off" ? "text-primary" : "text-white/60 hover:text-white"}`}>
-                  <Repeat size={24} />
-                  {repeat === "one" && <span className="absolute text-xs font-bold">1</span>}
+                  className={`h-14 w-14 relative ${repeat !== "off" ? "text-primary" : "text-white/60 hover:text-white"}`}>
+                  <Repeat size={28} />
+                  {repeat === "one" && <span className="absolute text-sm font-bold bottom-2 right-2">1</span>}
                 </Button>
               </TooltipTrigger><TooltipContent><p>{getRepeatLabel()}</p></TooltipContent></Tooltip>
             </div>
