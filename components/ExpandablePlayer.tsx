@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { X, ChevronDown, Music, AudioLinesIcon, Video, VideoOff } from "lucide-react"
+import { ChevronDown, Music, AudioLinesIcon, Video, VideoOff } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { SimpleVisualizer } from "./SimpleVisualizer"
@@ -192,7 +192,7 @@ export function ExpandablePlayer({
             <ChevronDown size={24} />
           </Button>
 
-          <p className="text-xs font-semibold uppercase pl-4 tracking-widest text-white/45 select-none">
+          <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none translate-x-3 lg:translate-x-0">
             Now Playing
           </p>
 
@@ -229,7 +229,7 @@ export function ExpandablePlayer({
 
         {/* Mobile drag handle */}
         <div className="flex justify-center mb-2 lg:hidden">
-          <div className="w-14 h-14 bg-white/20 rounded-full" />
+          <div className="w-12 h-1 bg-white/20 rounded-full" />
         </div>
 
         {/* ── Main content with responsive layout ───────────────────── */}
@@ -238,7 +238,7 @@ export function ExpandablePlayer({
         <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-5 md:px-8 lg:px-12 pb-safe overflow-y-auto">
 
           {/* ── LEFT / TOP: Media container ─────────────────────────── */}
-          <div className="flex justify-center lg:flex-1 lg:justify-end pt-2 lg:pt-0">
+          <div className="flex justify-center lg:flex-1 lg:justify-end lg:pt-0">
             <motion.div
               initial={{ scale: 0.85, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -248,13 +248,13 @@ export function ExpandablePlayer({
               <div
                 className={[
                   "relative overflow-hidden rounded-2xl shadow-2xl",
-                  // Mobile: square that fills most of the viewport width, capped height
+                  // Mobile: larger thumbnail that fills width with minimal padding
                   showVideo
-                    ? "w-full aspect-video max-h-[40vh]"
-                    : "w-full max-w-[min(72vw,320px)] aspect-square",
-                  // Desktop overrides
-                  "lg:max-w-none lg:w-80 lg:h-80",
-                  showVideo && "lg:w-[32rem] lg:h-[18rem] xl:w-[40rem] xl:h-[22.5rem]",
+                    ? "w-full aspect-video max-h-[45vh]"
+                    : "w-full max-w-[min(85vw,380px)] aspect-square",
+                  // Desktop overrides - larger on desktop too
+                  "lg:max-w-none lg:w-96 lg:h-96",
+                  showVideo && "lg:w-[36rem] lg:h-[20.25rem] xl:w-[44rem] xl:h-[24.75rem]",
                 ].join(" ")}
               >
                 {showVideo ? (
@@ -286,7 +286,7 @@ export function ExpandablePlayer({
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="text-center lg:text-left pt-8 mb-5"
+              className="text-center lg:text-left mt-6 mb-8"
             >
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance">
                 {currentTrack?.title || "No Track Playing"}
@@ -304,9 +304,9 @@ export function ExpandablePlayer({
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="w-full pb-8 lg:pb-0"
+              className="w-full pb-16 lg:pb-0"
             >
-              <div className="[&_.play-pause-button]:w-12 [&_.play-pause-button]:h-12 [&_.play-pause-button]:sm:w-14 [&_.play-pause-button]:sm:h-14">
+              <div className="[&_.play-pause-button]:w-16 [&_.play-pause-button]:h-16 [&_.play-pause-button]:sm:w-20 [&_.play-pause-button]:sm:h-20">
                 {children}
               </div>
             </motion.div>
