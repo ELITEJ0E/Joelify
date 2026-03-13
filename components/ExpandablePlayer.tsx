@@ -127,6 +127,15 @@ export function ExpandablePlayer({
     if (window.innerWidth >= 1024) onExpandChange(false)
   }, [onExpandChange])
 
+  // Escape key closes the player
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onExpandChange(false)
+    }
+    if (isExpanded) window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isExpanded, onExpandChange])
+
   if (!isExpanded) return null
 
   return (
@@ -232,31 +241,32 @@ export function ExpandablePlayer({
         </div>
 
         {/* ── Main content with responsive layout ───────────────────── */}
-        {/* Mobile: vertical stack | Desktop: horizontal split */}
-        <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-4 md:px-8 lg:px-12 pb-6 overflow-y-auto">
-          
-          {/* ── LEFT: Media container ───────────────────────────────── */}
-          <div className="flex justify-center lg:flex-1 lg:justify-end">
+        {/* Mobile: full-height column with content spread top↔bottom
+            Desktop: horizontal split centred in remaining space       */}
+        <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-5 md:px-8 lg:px-12 pb-safe overflow-y-auto">
+
+          {/* ── LEFT / TOP: Media container ─────────────────────────── */}
+          <div className="flex justify-center lg:flex-1 lg:justify-end pt-2 lg:pt-0">
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
+              initial={{ scale: 0.85, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="flex justify-center"
+              transition={{ duration: 0.45 }}
+              className="flex justify-center w-full lg:w-auto"
             >
               <div
                 className={[
-                  "relative overflow-hidden rounded-xl shadow-2xl",
-                  // Mobile sizing
+                  "relative overflow-hidden rounded-2xl shadow-2xl",
+                  // Mobile: square that fills most of the viewport width, capped height
                   showVideo
-                    ? "w-full max-w-md aspect-video" // Video on mobile
-                    : "w-64 h-64 sm:w-72 sm:h-72", // Artwork on mobile
-                  // Desktop sizing - slightly larger
-                  "lg:max-w-none lg:w-80 lg:h-80 lg:rounded-2xl",
-                  showVideo && "lg:w-[32rem] lg:h-[18rem] xl:w-[40rem] xl:h-[22.5rem] lg:rounded-2xl",
+                    ? "w-full aspect-video max-h-[40vh]"
+                    : "w-full max-w-[min(72vw,320px)] aspect-square",
+                  // Desktop overrides
+                  "lg:max-w-none lg:w-80 lg:h-80",
+                  showVideo && "lg:w-[32rem] lg:h-[18rem] xl:w-[40rem] xl:h-[22.5rem]",
                 ].join(" ")}
               >
                 {showVideo ? (
-                  <div className="w-full h-full bg-black rounded-xl lg:rounded-2xl overflow-hidden">
+                  <div className="w-full h-full bg-black rounded-2xl overflow-hidden">
                     <div id="expanded-yt-video" className="w-full h-full" />
                   </div>
                 ) : currentTrack?.thumbnail ? (
@@ -264,11 +274,11 @@ export function ExpandablePlayer({
                     src={currentTrack.thumbnail}
                     alt={currentTrack.title || "Album art"}
                     fill
-                    className="object-cover rounded-xl lg:rounded-2xl"
+                    className="object-cover rounded-2xl"
                     priority
                   />
                 ) : (
-                  <div className="w-full h-full bg-zinc-800/80 rounded-xl lg:rounded-2xl flex items-center justify-center">
+                  <div className="w-full h-full bg-zinc-800/80 rounded-2xl flex items-center justify-center">
                     <Music size={56} className="text-zinc-600" />
                   </div>
                 )}
@@ -276,19 +286,20 @@ export function ExpandablePlayer({
             </motion.div>
           </div>
 
-          {/* ── RIGHT: Track info + controls ────────────────────────── */}
-          <div className="lg:flex-1 lg:max-w-md xl:max-w-lg mt-6 lg:mt-0">
-            {/* Track info - centered on mobile, left-aligned on desktop */}
+          {/* ── RIGHT / BOTTOM: Track info + controls ───────────────── */}
+          {/* On mobile this section is pushed toward the bottom via mt-auto  */}
+          <div className="mt-auto lg:mt-0 lg:flex-1 lg:max-w-md xl:max-w-lg">
+            {/* Track info */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="text-center lg:text-left mb-6"
+              className="text-center lg:text-left mb-5"
             >
-              <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-2 line-clamp-2">
+              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance">
                 {currentTrack?.title || "No Track Playing"}
               </h1>
-              <p className="text-base md:text-lg text-white/60">
+              <p className="text-sm sm:text-base md:text-lg text-white/55">
                 {currentTrack?.artist || "Unknown Artist"}
               </p>
             </motion.div>
@@ -296,15 +307,13 @@ export function ExpandablePlayer({
             {/* Desktop divider */}
             <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
 
-            {/* Controls container with smaller play/pause buttons */}
+            {/* Controls — rendered by PlayerControls children */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="w-full"
+              className="w-full pb-8 lg:pb-0"
             >
-              {/* We need to modify the play/pause button size in the children */}
-              {/* The children (PlayerControls) will need to accept a size prop or we can wrap and override */}
               <div className="[&_.play-pause-button]:w-10 [&_.play-pause-button]:h-10 [&_.play-pause-button]:sm:w-12 [&_.play-pause-button]:sm:h-12">
                 {children}
               </div>
