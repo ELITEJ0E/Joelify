@@ -224,14 +224,6 @@ export function ExpandablePlayer({
             >
               <AudioLinesIcon size={18} />
             </Button>
-
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => onExpandChange(false)}
-              className="text-white/45 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all"
-            >
-              <X size={18} />
-            </Button>
           </div>
         </div>
 
@@ -294,7 +286,7 @@ export function ExpandablePlayer({
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="text-center lg:text-left mb-5"
+              className="text-center lg:text-left mt-4 mb-5"
             >
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance">
                 {currentTrack?.title || "No Track Playing"}
@@ -312,9 +304,9 @@ export function ExpandablePlayer({
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="w-full"
+              className="w-full pb-8 lg:pb-0"
             >
-              <div className="[&_.play-pause-button]:w-10 [&_.play-pause-button]:h-10 [&_.play-pause-button]:sm:w-12 [&_.play-pause-button]:sm:h-12">
+              <div className="[&_.play-pause-button]:w-12 [&_.play-pause-button]:h-12 [&_.play-pause-button]:sm:w-14 [&_.play-pause-button]:sm:h-14">
                 {children}
               </div>
             </motion.div>
