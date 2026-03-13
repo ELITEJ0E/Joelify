@@ -93,6 +93,19 @@ const config: Config = {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [
+    require('tailwindcss-animate'),
+    // Safe-area inset padding for iPhone notch/home bar
+    function ({ addUtilities }: any) {
+      addUtilities({
+        '.pb-safe': {
+          paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+        },
+        '.pt-safe': {
+          paddingTop: 'max(0px, env(safe-area-inset-top))',
+        },
+      })
+    },
+  ],
 }
 export default config
