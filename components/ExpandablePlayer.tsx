@@ -192,7 +192,7 @@ export function ExpandablePlayer({
             <ChevronDown size={24} />
           </Button>
 
-          <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none">
+          <p className="text-xs font-semibold uppercase pl-4 tracking-widest text-white/45 select-none">
             Now Playing
           </p>
 
@@ -229,7 +229,7 @@ export function ExpandablePlayer({
 
         {/* Mobile drag handle */}
         <div className="flex justify-center mb-2 lg:hidden">
-          <div className="w-12 h-1 bg-white/20 rounded-full" />
+          <div className="w-14 h-14 bg-white/20 rounded-full" />
         </div>
 
         {/* ── Main content with responsive layout ───────────────────── */}
@@ -286,7 +286,7 @@ export function ExpandablePlayer({
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="text-center lg:text-left mt-4 mb-5"
+              className="text-center lg:text-left pt-8 mb-5"
             >
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance">
                 {currentTrack?.title || "No Track Playing"}
