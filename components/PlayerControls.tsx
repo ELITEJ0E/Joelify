@@ -523,7 +523,7 @@ export function PlayerControls() {
               </TooltipTrigger><TooltipContent><p>Previous</p></TooltipContent></Tooltip>
 
               <Tooltip><TooltipTrigger asChild>
-                <Button size="icon" className="bg-white text-black rounded-full h-14 w-14 hover:scale-105 transition shadow-lg"
+                <Button size="icon" className="bg-white text-black rounded-full h-20 w-20 hover:scale-105 transition shadow-lg"
                   onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
                   {isPlaying ? <Pause fill="currentColor" size={40} /> : <Play fill="currentColor" size={40} />}
                 </Button>
