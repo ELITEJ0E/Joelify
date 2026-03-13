@@ -68,7 +68,7 @@ export function KeyboardShortcuts() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="xs" className="p-2 text-gray-400 hover:text-white">
+        <Button variant="ghost" size="sm" className="p-2 text-gray-400 hover:text-white">
           <Keyboard size={18} />
         </Button>
       </DialogTrigger>
