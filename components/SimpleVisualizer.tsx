@@ -118,12 +118,12 @@ export function SimpleVisualizer({
         bars[i] = bars[i] * 0.85 + baseValue * 0.15
       }
 
-      // Draw bars with gradient
+      // Draw bars with gradient - INCREASED BRIGHTNESS and MAX BAR HEIGHT
       const barWidth = width / bars.length
       const centerY = height / 2
 
       for (let i = 0; i < bars.length; i++) {
-        const barHeight = bars[i] * height * 0.7
+        const barHeight = bars[i] * height * 0.8 // INCREASED from 0.7 to 0.8
         
         // Create colorful gradient based on frequency band
         let hue
@@ -138,10 +138,11 @@ export function SimpleVisualizer({
           hue = 240 + ((i - (bars.length * 2) / 3) / (bars.length / 3)) * 60 + currentTime * 20
         }
 
+        // INCREASED BRIGHTNESS - higher lightness values
         const gradient = ctx.createLinearGradient(0, centerY - barHeight, 0, centerY + barHeight)
-        gradient.addColorStop(0, `hsla(${hue}, 100%, 60%, 0.9)`)
-        gradient.addColorStop(0.5, `hsla(${hue + 60}, 100%, 50%, 0.6)`)
-        gradient.addColorStop(1, `hsla(${hue + 120}, 100%, 40%, 0.3)`)
+        gradient.addColorStop(0, `hsla(${hue}, 100%, 70%, 0.95)`) // Increased from 60% to 70%
+        gradient.addColorStop(0.5, `hsla(${hue + 60}, 100%, 65%, 0.8)`) // Increased from 50% to 65%
+        gradient.addColorStop(1, `hsla(${hue + 120}, 100%, 55%, 0.5)`) // Increased from 40% to 55%
 
         ctx.fillStyle = gradient
         
@@ -155,7 +156,7 @@ export function SimpleVisualizer({
         
         // Draw glow effect (stronger on beats)
         const glowIntensity = isBeat ? 20 : 10
-        ctx.shadowColor = `hsla(${hue}, 100%, 60%, ${isBeat ? 0.8 : 0.5})`
+        ctx.shadowColor = `hsla(${hue}, 100%, 70%, ${isBeat ? 0.8 : 0.5})` // Increased lightness
         ctx.shadowBlur = glowIntensity
         ctx.fillRect(x, y, barW, barHeight)
         ctx.shadowBlur = 0
@@ -287,7 +288,6 @@ export function SimpleVisualizer({
         right: 0,
         bottom: 0,
         display: 'block',
-        background: 'linear-gradient(135deg, #000000 0%, #0a001a 50%, #000000 100%)',
       }}
     />
   )
