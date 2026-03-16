@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
 import { 
-  ChevronDown, Music, AudioLinesIcon, Video, VideoOff, X,
+  ChevronDown, Music, AudioLinesIcon, Video, VideoOff,
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle 
 } from "lucide-react"
 import Image from "next/image"
@@ -64,6 +64,10 @@ export function ExpandablePlayer({
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.95])
+
+  const getRepeatLabel = () => {
+    return repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"
+  }
 
   // ── Destroy video player and reset state on close ─────────────────────────
   useEffect(() => {
@@ -159,10 +163,6 @@ export function ExpandablePlayer({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isExpanded, onExpandChange])
 
-  const getRepeatLabel = () => {
-    return repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"
-  }
-
   if (!isExpanded) return null
 
   return (
@@ -212,13 +212,13 @@ export function ExpandablePlayer({
         {/* ── Header ────────────────────────────────────────────────────── */}
         <TooltipProvider>
           <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
-            {/* Collapse / close */}
+            {/* Collapse / close with ChevronDown - updated hover style */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost" size="icon"
                   onClick={() => onExpandChange(false)}
-                  className="text-white/60 hover:text-white hover:bg-white/10 h-10 w-10 transition-colors"
+                  className="text-white/60 hover:text-white hover:bg-primary h-10 w-10 transition-colors"
                   aria-label="Close player"
                 >
                   <ChevronDown size={20} />
@@ -232,7 +232,7 @@ export function ExpandablePlayer({
             </p>
 
             <div className="flex items-center gap-1">
-              {/* Video toggle */}
+              {/* Video toggle - updated hover style */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -243,7 +243,7 @@ export function ExpandablePlayer({
                     className={`h-10 w-10 transition-colors ${
                       showVideo
                         ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-white/60 hover:text-white hover:bg-white/10"
+                        : "text-white/60 hover:text-white hover:bg-primary"
                     }`}
                   >
                     {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
@@ -252,7 +252,7 @@ export function ExpandablePlayer({
                 <TooltipContent side="bottom"><p>{showVideo ? "Hide Video" : "Show Video"}</p></TooltipContent>
               </Tooltip>
 
-              {/* Visualizer toggle */}
+              {/* Visualizer toggle - updated hover style */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -262,28 +262,13 @@ export function ExpandablePlayer({
                     className={`h-10 w-10 transition-colors ${
                       showVisualizer
                         ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-white/60 hover:text-white hover:bg-white/10"
+                        : "text-white/60 hover:text-white hover:bg-primary"
                     }`}
                   >
                     <AudioLinesIcon size={18} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom"><p>{showVisualizer ? "Hide Visualizer" : "Show Visualizer"}</p></TooltipContent>
-              </Tooltip>
-
-              {/* Close (X) — desktop only, matches the ghost icon pattern */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost" size="icon"
-                    onClick={() => onExpandChange(false)}
-                    aria-label="Close"
-                    className="hidden lg:inline-flex h-10 w-10 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-                  >
-                    <X size={18} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom"><p>Close</p></TooltipContent>
               </Tooltip>
             </div>
           </div>
