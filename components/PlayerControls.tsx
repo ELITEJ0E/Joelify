@@ -494,108 +494,19 @@ export function PlayerControls() {
         onExpandChange={setIsExpandedPlayer}
         currentTime={currentTime}
         isPlaying={isPlaying}
+        duration={duration}
         volume={volume}
+        shuffle={shuffle}
+        repeat={repeat}
+        onPlayPause={handlePlayPause}
+        onPrevious={handlePrevious}
+        onNext={handleNext}
+        onToggleShuffle={toggleShuffle}
+        onToggleRepeat={toggleRepeat}
+        onSeek={handleSeek}
+        formatTime={formatTime}
         onVideoActiveChange={handleVideoActiveChange}
-      >
-        <div className="flex flex-col items-center w-full gap-4">
-          {/* Progress bar */}
-          <div className="flex items-center gap-2 w-full max-w-2xl mx-auto">
-            <span className="text-sm text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
-            <div className="flex-1">
-              <Slider value={[currentTime]} max={duration > 0 ? duration : 1} step={0.1}
-                onValueChange={handleSeek} disabled={!currentTrack || duration === 0 || !isReady} />
-            </div>
-            <span className="text-sm text-white/60 w-10">{formatTime(duration)}</span>
-          </div>
-
-          {/* Controls - unified design */}
-          <TooltipProvider>
-            <div className="flex items-center justify-center gap-4">
-              {/* Shuffle */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
-                    className={`h-14 w-14 transition-colors ${
-                      shuffle 
-                        ? "text-primary bg-primary/10" 
-                        : "text-white/60 hover:text-white hover:bg-primary"
-                    }`}>
-                    <Shuffle size={24} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Previous */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
-                    className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary transition-colors">
-                    <SkipBack size={28} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Previous</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Play/Pause - keep as special primary button with hover:bg-primary */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="icon" 
-                    className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
-                    onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
-                    {isPlaying ? 
-                      <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
-                      <Play fill="currentColor" size={32} className="stroke-[1.5] ml-0.5" />
-                    }
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>{isPlaying ? "Pause" : "Play"}</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Next */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
-                    className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary transition-colors">
-                    <SkipForward size={28} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Next</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Repeat */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
-                    className={`h-14 w-14 relative transition-colors ${
-                      repeat !== "off" 
-                        ? "text-primary bg-primary/10" 
-                        : "text-white/60 hover:text-white hover:bg-primary"
-                    }`}>
-                    <Repeat size={24} />
-                    {repeat === "one" && (
-                      <span className="absolute text-xs font-bold bg-primary text-white w-4 h-4 flex items-center justify-center -top-1 -right-1">
-                        1
-                      </span>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>{repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"}</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
-        </div>
-      </ExpandablePlayer>
+      />
 
       {/* ── Collapsed bar ─────────────────────────────────────────────────── */}
       <div className="bg-zinc-950 border-t border-zinc-800/60 text-white p-3 md:p-4 w-full">
