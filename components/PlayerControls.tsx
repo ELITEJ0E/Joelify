@@ -843,24 +843,33 @@ export function PlayerControls() {
 
           {/* Desktop: right side controls */}
           <div className="hidden md:flex items-center gap-2 flex-1 justify-end">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button size="icon" variant="ghost"
-                  className="text-zinc-400 hover:text-white hover:bg-primary h-10 w-10 relative transition-colors"
-                  aria-label="Queue">
-                  <List size={20} />
-                  {queue.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center">
-                      {queue.length}
-                    </span>
-                  )}
-                </Button>
-              </SheetTrigger>
-              <SheetContent className="w-96">
-                <SheetHeader><SheetTitle>Queue</SheetTitle></SheetHeader>
-                <div className="mt-6 h-[calc(100vh-8rem)]"><QueueSheet /></div>
-              </SheetContent>
-            </Sheet>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Sheet>
+                    <SheetTrigger asChild>
+                      <Button size="icon" variant="ghost"
+                        className="text-zinc-400 hover:text-white hover:bg-primary h-10 w-10 relative transition-colors"
+                        aria-label="Queue">
+                        <List size={20} />
+                        {queue.length > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center">
+                            {queue.length}
+                          </span>
+                        )}
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent className="w-96">
+                      <SheetHeader><SheetTitle>Queue</SheetTitle></SheetHeader>
+                      <div className="mt-6 h-[calc(100vh-8rem)]"><QueueSheet /></div>
+                    </SheetContent>
+                  </Sheet>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Queue</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             <TooltipProvider>
               <Tooltip>
@@ -898,7 +907,18 @@ export function PlayerControls() {
               </Tooltip>
             </TooltipProvider>
 
-            <SleepTimer onTimerEnd={handleSleepTimerEnd} isPlaying={isPlaying} />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <SleepTimer onTimerEnd={handleSleepTimerEnd} isPlaying={isPlaying} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Sleep Timer</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             <TooltipProvider>
               <Tooltip>
