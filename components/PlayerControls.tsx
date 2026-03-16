@@ -717,21 +717,21 @@ export function PlayerControls() {
             </div>
 
             <TooltipProvider>
-              <div className="flex items-center justify-center w-full gap-2 md:gap-3 mb-2">
+              <div className="flex items-center justify-center w-full gap-3 md:gap-4 mb-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
                       aria-label="Toggle shuffle"
-                      className={`h-10 w-10 rounded-full transition-all ${
+                      className={`h-10 w-10 transition-colors ${
                         shuffle 
-                          ? "text-primary bg-primary/10 hover:bg-primary/20" 
+                          ? "text-primary" 
                           : "text-zinc-400 hover:text-white hover:bg-white/10"
                       }`}>
-                      <Shuffle size={18} />
+                      <Shuffle size={20} />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
+                  <TooltipContent>
+                    <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -739,29 +739,29 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
                       aria-label="Previous"
-                      className="h-10 w-10 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-all">
-                      <SkipBack size={20} />
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+                      <SkipBack size={22} />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">Previous</p>
+                  <TooltipContent>
+                    <p>Previous</p>
                   </TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon"
-                      className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 hover:bg-zinc-100 transition-all shadow-md disabled:opacity-50"
+                      className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 hover:bg-zinc-100 transition-all disabled:opacity-50"
                       onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                       aria-label={isPlaying ? "Pause" : "Play"}>
                       {isPlaying ? 
-                        <Pause fill="currentColor" size={22} className="stroke-[1.5]" /> : 
-                        <Play fill="currentColor" size={22} className="stroke-[1.5] ml-0.5" />
+                        <Pause fill="currentColor" size={24} /> : 
+                        <Play fill="currentColor" size={24} className="ml-0.5" />
                       }
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">{isPlaying ? "Pause" : "Play"}</p>
+                  <TooltipContent>
+                    <p>{isPlaying ? "Pause" : "Play"}</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -769,12 +769,12 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
                       aria-label="Next"
-                      className="h-10 w-10 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-all">
-                      <SkipForward size={20} />
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+                      <SkipForward size={22} />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">Next</p>
+                  <TooltipContent>
+                    <p>Next</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -782,23 +782,19 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
                       aria-label={`Repeat: ${repeat}`}
-                      className={`h-10 w-10 rounded-full relative transition-all ${
+                      className={`h-10 w-10 relative transition-colors ${
                         repeat !== "off" 
-                          ? "text-primary bg-primary/10 hover:bg-primary/20" 
+                          ? "text-primary" 
                           : "text-zinc-400 hover:text-white hover:bg-white/10"
                       }`}>
-                      <Repeat size={18} />
+                      <Repeat size={20} />
                       {repeat === "one" && (
-                        <span className="absolute text-[9px] font-bold bg-primary text-white rounded-full w-3.5 h-3.5 flex items-center justify-center -top-0.5 -right-0.5">
-                          1
-                        </span>
+                        <span className="absolute text-[10px] font-bold bottom-1.5 right-1.5">1</span>
                       )}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">
-                      {repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"}
-                    </p>
+                  <TooltipContent>
+                    <p>{getRepeatLabel()}</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -809,16 +805,16 @@ export function PlayerControls() {
                       onClick={() => setBarVideoMode((v) => !v)}
                       disabled={!currentTrack}
                       aria-label={barVideoMode ? "Hide video" : "Show video"}
-                      className={`h-10 w-10 rounded-full transition-all ${
+                      className={`h-10 w-10 transition-colors ${
                         barVideoMode 
-                          ? "text-primary bg-primary/10 hover:bg-primary/20" 
+                          ? "text-primary" 
                           : "text-zinc-400 hover:text-white hover:bg-white/10"
                       }`}>
-                      {barVideoMode ? <Video size={18} /> : <Music size={18} />}
+                      {barVideoMode ? <Video size={20} /> : <Music size={20} />}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">{barVideoMode ? "Hide Video" : "Show Video"}</p>
+                  <TooltipContent>
+                    <p>{barVideoMode ? "Hide Video" : "Show Video"}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
