@@ -508,14 +508,14 @@ export function PlayerControls() {
             <span className="text-sm text-white/60 w-10">{formatTime(duration)}</span>
           </div>
 
-          {/* Controls - fixed larger size */}
+          {/* Controls - unified design */}
           <TooltipProvider>
-            <div className="flex items-center justify-center gap-6">
+            <div className="flex items-center justify-center gap-4">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
-                    className={`h-14 w-14 ${shuffle ? "text-primary" : "text-white/60 hover:text-white"}`}>
-                    <Shuffle size={28} />
+                    className={`h-14 w-14 rounded-full ${shuffle ? "text-primary bg-primary/10" : "text-white/60 hover:text-white hover:bg-white/10"}`}>
+                    <Shuffle size={24} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
@@ -526,8 +526,8 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
-                    className="h-14 w-14 text-white/80 hover:text-white">
-                    <SkipBack size={32} />
+                    className="h-14 w-14 rounded-full text-white/80 hover:text-white hover:bg-white/10">
+                    <SkipBack size={28} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
@@ -538,11 +538,11 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" 
-                    className="bg-white text-black rounded-full h-20 w-20 hover:scale-105 transition shadow-xl"
+                    className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 transition-all shadow-lg hover:bg-zinc-100"
                     onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
                     {isPlaying ? 
-                      <Pause fill="currentColor" size={40} className="stroke-[1.5]" /> : 
-                      <Play fill="currentColor" size={40} className="stroke-[1.5]" />
+                      <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
+                      <Play fill="currentColor" size={32} className="stroke-[1.5] ml-0.5" />
                     }
                   </Button>
                 </TooltipTrigger>
@@ -554,8 +554,8 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
-                    className="h-14 w-14 text-white/80 hover:text-white">
-                    <SkipForward size={32} />
+                    className="h-14 w-14 rounded-full text-white/80 hover:text-white hover:bg-white/10">
+                    <SkipForward size={28} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
@@ -566,10 +566,12 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
-                    className={`h-14 w-14 relative ${repeat !== "off" ? "text-primary" : "text-white/60 hover:text-white"}`}>
-                    <Repeat size={28} />
+                    className={`h-14 w-14 rounded-full relative ${repeat !== "off" ? "text-primary bg-primary/10" : "text-white/60 hover:text-white hover:bg-white/10"}`}>
+                    <Repeat size={24} />
                     {repeat === "one" && (
-                      <span className="absolute text-sm font-bold bottom-2 right-2">1</span>
+                      <span className="absolute text-xs font-bold bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center -top-1 -right-1">
+                        1
+                      </span>
                     )}
                   </Button>
                 </TooltipTrigger>
