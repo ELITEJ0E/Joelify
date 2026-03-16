@@ -511,10 +511,15 @@ export function PlayerControls() {
           {/* Controls - unified design */}
           <TooltipProvider>
             <div className="flex items-center justify-center gap-4">
+              {/* Shuffle */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
-                    className={`h-14 w-14 rounded-full ${shuffle ? "text-primary bg-primary/10" : "text-white/60 hover:text-white hover:bg-white/10"}`}>
+                    className={`h-14 w-14 rounded-full transition-colors ${
+                      shuffle 
+                        ? "text-primary bg-primary/10" 
+                        : "text-white/60 hover:text-white hover:bg-white/10"
+                    }`}>
                     <Shuffle size={24} />
                   </Button>
                 </TooltipTrigger>
@@ -523,10 +528,11 @@ export function PlayerControls() {
                 </TooltipContent>
               </Tooltip>
 
+              {/* Previous */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
-                    className="h-14 w-14 rounded-full text-white/80 hover:text-white hover:bg-white/10">
+                    className="h-14 w-14 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors">
                     <SkipBack size={28} />
                   </Button>
                 </TooltipTrigger>
@@ -535,10 +541,11 @@ export function PlayerControls() {
                 </TooltipContent>
               </Tooltip>
 
+              {/* Play/Pause - keep as special primary button */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" 
-                    className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 transition-all shadow-lg hover:bg-zinc-100"
+                    className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
                     onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
                     {isPlaying ? 
                       <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
@@ -551,10 +558,11 @@ export function PlayerControls() {
                 </TooltipContent>
               </Tooltip>
 
+              {/* Next */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
-                    className="h-14 w-14 rounded-full text-white/80 hover:text-white hover:bg-white/10">
+                    className="h-14 w-14 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors">
                     <SkipForward size={28} />
                   </Button>
                 </TooltipTrigger>
@@ -563,10 +571,15 @@ export function PlayerControls() {
                 </TooltipContent>
               </Tooltip>
 
+              {/* Repeat */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
-                    className={`h-14 w-14 rounded-full relative ${repeat !== "off" ? "text-primary bg-primary/10" : "text-white/60 hover:text-white hover:bg-white/10"}`}>
+                    className={`h-14 w-14 rounded-full relative transition-colors ${
+                      repeat !== "off" 
+                        ? "text-primary bg-primary/10" 
+                        : "text-white/60 hover:text-white hover:bg-white/10"
+                    }`}>
                     <Repeat size={24} />
                     {repeat === "one" && (
                       <span className="absolute text-xs font-bold bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center -top-1 -right-1">
@@ -718,6 +731,7 @@ export function PlayerControls() {
 
             <TooltipProvider>
               <div className="flex items-center justify-center w-full gap-3 md:gap-4 mb-2">
+                {/* Shuffle */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
@@ -735,12 +749,13 @@ export function PlayerControls() {
                   </TooltipContent>
                 </Tooltip>
 
+                {/* Previous */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
                       aria-label="Previous"
-                      className="h-12 w-12 text-white hover:bg-primary/80 transition-colors">
-                      <SkipBack size={24} />
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+                      <SkipBack size={20} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -748,15 +763,16 @@ export function PlayerControls() {
                   </TooltipContent>
                 </Tooltip>
 
+                {/* Play/Pause - keep as special primary button */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon"
-                      className="bg-white text-black h-14 w-14 hover:scale-105 hover:bg-primary transition-all shadow-md disabled:opacity-50"
+                      className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
                       onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                       aria-label={isPlaying ? "Pause" : "Play"}>
                       {isPlaying ? 
-                        <Pause fill="currentColor" size={28} className="stroke-[1.5]" /> : 
-                        <Play fill="currentColor" size={28} className="stroke-[1.5] ml-0.5" />
+                        <Pause fill="currentColor" size={24} /> : 
+                        <Play fill="currentColor" size={24} className="ml-0.5" />
                       }
                     </Button>
                   </TooltipTrigger>
@@ -765,12 +781,13 @@ export function PlayerControls() {
                   </TooltipContent>
                 </Tooltip>
 
+                {/* Next */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
                       aria-label="Next"
-                      className="h-12 w-12 text-white hover:bg-primary/80 transition-colors">
-                      <SkipForward size={24} />
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+                      <SkipForward size={20} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -778,6 +795,7 @@ export function PlayerControls() {
                   </TooltipContent>
                 </Tooltip>
 
+                {/* Repeat */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
@@ -826,11 +844,11 @@ export function PlayerControls() {
             <Sheet>
               <SheetTrigger asChild>
                 <Button size="icon" variant="ghost"
-                  className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 rounded-full relative transition-all"
+                  className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 relative transition-colors"
                   aria-label="Queue">
-                  <List size={18} />
+                  <List size={20} />
                   {queue.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] rounded-full h-4 w-4 flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
                       {queue.length}
                     </span>
                   )}
@@ -846,19 +864,19 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handleSwitch}
-                    className={`h-10 w-10 rounded-full transition-all ${
+                    className={`h-10 w-10 transition-colors ${
                       !isSpotifyAuth && playbackSource === "youtube" 
                         ? "text-zinc-600" 
                         : playbackSource === "youtube" 
-                          ? "text-primary bg-primary/10 hover:bg-primary/20" 
+                          ? "text-primary" 
                           : "text-zinc-400 hover:text-white hover:bg-white/10"
                     }`}
                     disabled={!currentTrack || (!isSpotifyAuth && playbackSource === "youtube")}>
-                    {playbackSource === "youtube" ? <Music2 size={18} /> : <Youtube size={18} />}
+                    {playbackSource === "youtube" ? <Music2 size={20} /> : <Youtube size={20} />}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p className="text-xs">{playbackSource === "youtube" ? "Switch to Spotify" : "Switch to YouTube"}</p>
+                <TooltipContent>
+                  <p>{playbackSource === "youtube" ? "Switch to Spotify" : "Switch to YouTube"}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -867,13 +885,13 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={() => setIsMiniPlayer(true)}
-                    className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 rounded-full transition-all"
+                    className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 transition-colors"
                     disabled={!currentTrack} aria-label="Mini player">
-                    <Minimize2 size={18} />
+                    <Minimize2 size={20} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p className="text-xs">Mini Player</p>
+                <TooltipContent>
+                  <p>Mini Player</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -884,13 +902,13 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={toggleMute}
-                    className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 rounded-full transition-all"
+                    className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 transition-colors"
                     aria-label={isMuted ? "Unmute" : "Mute"}>
-                    {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                    {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p className="text-xs">{isMuted ? "Unmute" : "Mute"}</p>
+                <TooltipContent>
+                  <p>{isMuted ? "Unmute" : "Mute"}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
