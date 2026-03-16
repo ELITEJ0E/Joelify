@@ -515,10 +515,10 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
-                    className={`h-14 w-14 rounded-full transition-colors ${
+                    className={`h-14 w-14 transition-colors ${
                       shuffle 
                         ? "text-primary bg-primary/10" 
-                        : "text-white/60 hover:text-white hover:bg-white/10"
+                        : "text-white/60 hover:text-white hover:bg-primary"
                     }`}>
                     <Shuffle size={24} />
                   </Button>
@@ -532,7 +532,7 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
-                    className="h-14 w-14 text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+                    className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary transition-colors">
                     <SkipBack size={28} />
                   </Button>
                 </TooltipTrigger>
@@ -541,11 +541,11 @@ export function PlayerControls() {
                 </TooltipContent>
               </Tooltip>
 
-              {/* Play/Pause - keep as special primary button */}
+              {/* Play/Pause - keep as special primary button with hover:bg-primary */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" 
-                    className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
+                    className="bg-white text-black h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
                     onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
                     {isPlaying ? 
                       <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
@@ -562,7 +562,7 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
-                    className="h-14 w-14 text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+                    className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary transition-colors">
                     <SkipForward size={28} />
                   </Button>
                 </TooltipTrigger>
@@ -575,14 +575,14 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
-                    className={`h-14 w-14 rounded-full relative transition-colors ${
+                    className={`h-14 w-14 relative transition-colors ${
                       repeat !== "off" 
                         ? "text-primary bg-primary/10" 
-                        : "text-white/60 hover:text-white hover:bg-white/10"
+                        : "text-white/60 hover:text-white hover:bg-primary"
                     }`}>
                     <Repeat size={24} />
                     {repeat === "one" && (
-                      <span className="absolute text-xs font-bold bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center -top-1 -right-1">
+                      <span className="absolute text-xs font-bold bg-primary text-white w-4 h-4 flex items-center justify-center -top-1 -right-1">
                         1
                       </span>
                     )}
@@ -739,7 +739,7 @@ export function PlayerControls() {
                       className={`h-10 w-10 transition-colors ${
                         shuffle 
                           ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-white/10"
+                          : "text-zinc-400 hover:text-white hover:bg-primary"
                       }`}>
                       <Shuffle size={20} />
                     </Button>
@@ -754,7 +754,7 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
                       aria-label="Previous"
-                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary transition-colors">
                       <SkipBack size={20} />
                     </Button>
                   </TooltipTrigger>
@@ -767,7 +767,7 @@ export function PlayerControls() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon"
-                      className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
+                      className="bg-white text-black h-12 w-12 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
                       onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                       aria-label={isPlaying ? "Pause" : "Play"}>
                       {isPlaying ? 
@@ -786,7 +786,7 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
                       aria-label="Next"
-                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary transition-colors">
                       <SkipForward size={20} />
                     </Button>
                   </TooltipTrigger>
@@ -803,11 +803,13 @@ export function PlayerControls() {
                       className={`h-10 w-10 relative transition-colors ${
                         repeat !== "off" 
                           ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-white/10"
+                          : "text-zinc-400 hover:text-white hover:bg-primary"
                       }`}>
                       <Repeat size={20} />
                       {repeat === "one" && (
-                        <span className="absolute text-[10px] font-bold bottom-1.5 right-1.5">1</span>
+                        <span className="absolute text-[10px] font-bold bg-primary text-white w-3.5 h-3.5 flex items-center justify-center bottom-1.5 right-1.5">
+                          1
+                        </span>
                       )}
                     </Button>
                   </TooltipTrigger>
@@ -826,7 +828,7 @@ export function PlayerControls() {
                       className={`h-10 w-10 transition-colors ${
                         barVideoMode 
                           ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-white/10"
+                          : "text-zinc-400 hover:text-white hover:bg-primary"
                       }`}>
                       {barVideoMode ? <Video size={20} /> : <Music size={20} />}
                     </Button>
