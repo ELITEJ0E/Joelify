@@ -545,7 +545,7 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" 
-                    className="bg-white text-black h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
+                    className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
                     onClick={handlePlayPause} disabled={!currentTrack || !isReady}>
                     {isPlaying ? 
                       <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
@@ -767,7 +767,7 @@ export function PlayerControls() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon"
-                      className="bg-white text-black h-12 w-12 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
+                      className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
                       onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                       aria-label={isPlaying ? "Pause" : "Play"}>
                       {isPlaying ? 
@@ -846,11 +846,11 @@ export function PlayerControls() {
             <Sheet>
               <SheetTrigger asChild>
                 <Button size="icon" variant="ghost"
-                  className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 relative transition-colors"
+                  className="text-zinc-400 hover:text-white hover:bg-primary h-10 w-10 relative transition-colors"
                   aria-label="Queue">
                   <List size={20} />
                   {queue.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center">
                       {queue.length}
                     </span>
                   )}
@@ -871,7 +871,7 @@ export function PlayerControls() {
                         ? "text-zinc-600" 
                         : playbackSource === "youtube" 
                           ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-white/10"
+                          : "text-zinc-400 hover:text-white hover:bg-primary"
                     }`}
                     disabled={!currentTrack || (!isSpotifyAuth && playbackSource === "youtube")}>
                     {playbackSource === "youtube" ? <Music2 size={20} /> : <Youtube size={20} />}
@@ -887,7 +887,7 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={() => setIsMiniPlayer(true)}
-                    className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 transition-colors"
+                    className="text-zinc-400 hover:text-white hover:bg-primary h-10 w-10 transition-colors"
                     disabled={!currentTrack} aria-label="Mini player">
                     <Minimize2 size={20} />
                   </Button>
@@ -904,7 +904,7 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={toggleMute}
-                    className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10 transition-colors"
+                    className="text-zinc-400 hover:text-white hover:bg-primary h-10 w-10 transition-colors"
                     aria-label={isMuted ? "Unmute" : "Mute"}>
                     {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
                   </Button>
