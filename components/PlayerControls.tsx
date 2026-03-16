@@ -739,7 +739,7 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
                       aria-label="Previous"
-                      className="h-12 w-12 text-white hover:text-white hover:bg-primary/80 transition-colors rounded-full">
+                      className="h-12 w-12 text-white hover:bg-primary/80 transition-colors">
                       <SkipBack size={24} />
                     </Button>
                   </TooltipTrigger>
@@ -751,7 +751,7 @@ export function PlayerControls() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon"
-                      className="bg-white text-black rounded-full h-14 w-14 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
+                      className="bg-white text-black h-14 w-14 hover:scale-105 hover:bg-primary transition-all shadow-md disabled:opacity-50"
                       onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                       aria-label={isPlaying ? "Pause" : "Play"}>
                       {isPlaying ? 
@@ -769,7 +769,7 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
                       aria-label="Next"
-                      className="h-12 w-12 text-white hover:text-white hover:bg-primary/80 transition-colors rounded-full">
+                      className="h-12 w-12 text-white hover:bg-primary/80 transition-colors">
                       <SkipForward size={24} />
                     </Button>
                   </TooltipTrigger>
