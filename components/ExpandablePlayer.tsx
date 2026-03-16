@@ -3,9 +3,10 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { ChevronDown, Music, AudioLinesIcon, Video, VideoOff } from "lucide-react"
+import { ChevronDown, Music, AudioLinesIcon, Video, VideoOff, X } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { SimpleVisualizer } from "./SimpleVisualizer"
 import { useApp } from "@/contexts/AppContext"
 
@@ -183,49 +184,84 @@ export function ExpandablePlayer({
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
-          <Button
-            variant="ghost" size="icon"
-            onClick={() => onExpandChange(false)}
-            className="text-white/60 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all"
-          >
-            <ChevronDown size={24} />
-          </Button>
+        <TooltipProvider>
+          <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
+            {/* Collapse / close */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost" size="icon"
+                  onClick={() => onExpandChange(false)}
+                  className="text-white/60 hover:text-white hover:bg-white/10 h-10 w-10 transition-colors"
+                  aria-label="Close player"
+                >
+                  <ChevronDown size={20} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p>Close</p></TooltipContent>
+            </Tooltip>
 
-          <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none translate-x-3 lg:translate-x-0">
-            Now Playing
-          </p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none">
+              Now Playing
+            </p>
 
-          <div className="flex items-center gap-1">
-            {/* Video toggle */}
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => setShowVideo((v) => !v)}
-              disabled={!currentTrack}
-              className={`rounded-full h-10 w-10 transition-all ${
-                showVideo
-                  ? "text-primary bg-primary/20 hover:bg-primary/30"
-                  : "text-white/45 hover:text-white hover:bg-white/10"
-              }`}
-              title={showVideo ? "Hide Video" : "Show Video"}
-            >
-              {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
-            </Button>
+            <div className="flex items-center gap-1">
+              {/* Video toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={() => setShowVideo((v) => !v)}
+                    disabled={!currentTrack}
+                    aria-label={showVideo ? "Hide video" : "Show video"}
+                    className={`h-10 w-10 transition-colors ${
+                      showVideo
+                        ? "text-primary bg-primary/10 hover:bg-primary/20"
+                        : "text-white/60 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>{showVideo ? "Hide Video" : "Show Video"}</p></TooltipContent>
+              </Tooltip>
 
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => setShowVisualizer((v) => !v)}
-              className={`rounded-full h-10 w-10 transition-all ${
-                showVisualizer
-                  ? "text-primary bg-primary/20 hover:bg-primary/30"
-                  : "text-white/45 hover:text-white hover:bg-white/10"
-              }`}
-              title={showVisualizer ? "Hide Visualizer" : "Show Visualizer"}
-            >
-              <AudioLinesIcon size={18} />
-            </Button>
+              {/* Visualizer toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={() => setShowVisualizer((v) => !v)}
+                    aria-label={showVisualizer ? "Hide visualizer" : "Show visualizer"}
+                    className={`h-10 w-10 transition-colors ${
+                      showVisualizer
+                        ? "text-primary bg-primary/10 hover:bg-primary/20"
+                        : "text-white/60 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <AudioLinesIcon size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>{showVisualizer ? "Hide Visualizer" : "Show Visualizer"}</p></TooltipContent>
+              </Tooltip>
+
+              {/* Close (X) — desktop only, matches the ghost icon pattern */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={() => onExpandChange(false)}
+                    aria-label="Close"
+                    className="hidden lg:inline-flex h-10 w-10 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <X size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>Close</p></TooltipContent>
+              </Tooltip>
+            </div>
           </div>
-        </div>
+        </TooltipProvider>
 
         {/* Mobile drag handle */}
         <div className="flex justify-center mb-2 lg:hidden">
