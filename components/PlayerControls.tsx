@@ -739,8 +739,8 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
                       aria-label="Previous"
-                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
-                      <SkipBack size={22} />
+                      className="h-12 w-12 text-white hover:text-white hover:bg-primary/80 transition-colors rounded-full">
+                      <SkipBack size={24} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -751,12 +751,12 @@ export function PlayerControls() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon"
-                      className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 hover:bg-zinc-100 transition-all disabled:opacity-50"
+                      className="bg-white text-black rounded-full h-14 w-14 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
                       onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                       aria-label={isPlaying ? "Pause" : "Play"}>
                       {isPlaying ? 
-                        <Pause fill="currentColor" size={24} /> : 
-                        <Play fill="currentColor" size={24} className="ml-0.5" />
+                        <Pause fill="currentColor" size={28} className="stroke-[1.5]" /> : 
+                        <Play fill="currentColor" size={28} className="stroke-[1.5] ml-0.5" />
                       }
                     </Button>
                   </TooltipTrigger>
@@ -769,8 +769,8 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
                       aria-label="Next"
-                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors">
-                      <SkipForward size={22} />
+                      className="h-12 w-12 text-white hover:text-white hover:bg-primary/80 transition-colors rounded-full">
+                      <SkipForward size={24} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
