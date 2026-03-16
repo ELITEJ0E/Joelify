@@ -3,9 +3,14 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { ChevronDown, Music, AudioLinesIcon, Video, VideoOff } from "lucide-react"
+import { 
+  ChevronDown, Music, AudioLinesIcon, Video, VideoOff,
+  Play, Pause, SkipBack, SkipForward, Repeat, Shuffle 
+} from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { Slider } from "@/components/ui/slider"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { SimpleVisualizer } from "./SimpleVisualizer"
 import { useApp } from "@/contexts/AppContext"
 
@@ -14,8 +19,17 @@ interface ExpandablePlayerProps {
   onExpandChange: (expanded: boolean) => void
   currentTime: number
   isPlaying: boolean
+  duration: number
   volume?: number
-  children?: React.ReactNode
+  shuffle: boolean
+  repeat: "off" | "all" | "one"
+  onPlayPause: () => void
+  onPrevious: () => void
+  onNext: () => void
+  onToggleShuffle: () => void
+  onToggleRepeat: () => void
+  onSeek: (value: number[]) => void
+  formatTime: (time: number) => string
   /** Called with true when video player takes over audio, false when it releases */
   onVideoActiveChange?: (videoActive: boolean) => void
 }
@@ -25,8 +39,17 @@ export function ExpandablePlayer({
   onExpandChange,
   currentTime,
   isPlaying,
+  duration,
   volume = 1,
-  children,
+  shuffle,
+  repeat,
+  onPlayPause,
+  onPrevious,
+  onNext,
+  onToggleShuffle,
+  onToggleRepeat,
+  onSeek,
+  formatTime,
   onVideoActiveChange,
 }: ExpandablePlayerProps) {
   const { currentTrack } = useApp()
@@ -41,6 +64,10 @@ export function ExpandablePlayer({
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.95])
+
+  const getRepeatLabel = () => {
+    return repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"
+  }
 
   // ── Destroy video player and reset state on close ─────────────────────────
   useEffect(() => {
@@ -183,49 +210,69 @@ export function ExpandablePlayer({
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
-          <Button
-            variant="ghost" size="icon"
-            onClick={() => onExpandChange(false)}
-            className="text-white/60 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all"
-          >
-            <ChevronDown size={24} />
-          </Button>
+        <TooltipProvider>
+          <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
+            {/* Collapse / close with ChevronDown - updated hover style */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost" size="icon"
+                  onClick={() => onExpandChange(false)}
+                  className="text-white/60 hover:text-white hover:bg-primary h-10 w-10 transition-colors"
+                  aria-label="Close player"
+                >
+                  <ChevronDown size={20} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p>Close</p></TooltipContent>
+            </Tooltip>
 
-          <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none translate-x-3 lg:translate-x-0">
-            Now Playing
-          </p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none">
+              Now Playing
+            </p>
 
-          <div className="flex items-center gap-1">
-            {/* Video toggle */}
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => setShowVideo((v) => !v)}
-              disabled={!currentTrack}
-              className={`rounded-full h-10 w-10 transition-all ${
-                showVideo
-                  ? "text-primary bg-primary/20 hover:bg-primary/30"
-                  : "text-white/45 hover:text-white hover:bg-white/10"
-              }`}
-              title={showVideo ? "Hide Video" : "Show Video"}
-            >
-              {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
-            </Button>
+            <div className="flex items-center gap-1">
+              {/* Video toggle - updated hover style */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={() => setShowVideo((v) => !v)}
+                    disabled={!currentTrack}
+                    aria-label={showVideo ? "Hide video" : "Show video"}
+                    className={`h-10 w-10 transition-colors ${
+                      showVideo
+                        ? "text-primary bg-primary/10 hover:bg-primary/20"
+                        : "text-white/60 hover:text-white hover:bg-primary"
+                    }`}
+                  >
+                    {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>{showVideo ? "Hide Video" : "Show Video"}</p></TooltipContent>
+              </Tooltip>
 
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => setShowVisualizer((v) => !v)}
-              className={`rounded-full h-10 w-10 transition-all ${
-                showVisualizer
-                  ? "text-primary bg-primary/20 hover:bg-primary/30"
-                  : "text-white/45 hover:text-white hover:bg-white/10"
-              }`}
-              title={showVisualizer ? "Hide Visualizer" : "Show Visualizer"}
-            >
-              <AudioLinesIcon size={18} />
-            </Button>
+              {/* Visualizer toggle - updated hover style */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={() => setShowVisualizer((v) => !v)}
+                    aria-label={showVisualizer ? "Hide visualizer" : "Show visualizer"}
+                    className={`h-10 w-10 transition-colors ${
+                      showVisualizer
+                        ? "text-primary bg-primary/10 hover:bg-primary/20"
+                        : "text-white/60 hover:text-white hover:bg-primary"
+                    }`}
+                  >
+                    <AudioLinesIcon size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>{showVisualizer ? "Hide Visualizer" : "Show Visualizer"}</p></TooltipContent>
+              </Tooltip>
+            </div>
           </div>
-        </div>
+        </TooltipProvider>
 
         {/* Mobile drag handle */}
         <div className="flex justify-center mb-2 lg:hidden">
@@ -306,15 +353,139 @@ export function ExpandablePlayer({
             {/* Desktop divider */}
             <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
 
-            {/* Controls — ALWAYS in same position regardless of video mode */}
+            {/* Controls - now built into ExpandablePlayer */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.2 }}
               className="w-full"
             >
-              <div className="[&_.play-pause-button]:w-16 [&_.play-pause-button]:h-16 [&_.play-pause-button]:sm:w-20 [&_.play-pause-button]:sm:h-20">
-                {children}
+              <div className="flex flex-col items-center w-full gap-4">
+                {/* Progress bar */}
+                <div className="flex items-center gap-2 w-full max-w-2xl mx-auto">
+                  <span className="text-sm text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
+                  <div className="flex-1">
+                    <Slider 
+                      value={[currentTime]} 
+                      max={duration > 0 ? duration : 1} 
+                      step={0.1}
+                      onValueChange={onSeek} 
+                      disabled={!currentTrack || duration === 0} 
+                      className="[&_.slider-thumb]:bg-primary"
+                    />
+                  </div>
+                  <span className="text-sm text-white/60 w-10">{formatTime(duration)}</span>
+                </div>
+
+                {/* Control buttons */}
+                <TooltipProvider>
+                  <div className="flex items-center justify-center gap-4">
+                    {/* Shuffle */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={onToggleShuffle} 
+                          disabled={!currentTrack}
+                          className={`h-14 w-14 transition-colors ${
+                            shuffle 
+                              ? "text-primary bg-primary/10" 
+                              : "text-white/60 hover:text-white hover:bg-primary"
+                          }`}
+                        >
+                          <Shuffle size={24} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* Previous */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={onPrevious} 
+                          disabled={!currentTrack}
+                          className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary transition-colors"
+                        >
+                          <SkipBack size={28} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>Previous</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* Play/Pause */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          size="icon" 
+                          className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
+                          onClick={onPlayPause} 
+                          disabled={!currentTrack}
+                        >
+                          {isPlaying ? 
+                            <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
+                            <Play fill="currentColor" size={32} className="stroke-[1.5] ml-0.5" />
+                          }
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>{isPlaying ? "Pause" : "Play"}</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* Next */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={onNext} 
+                          disabled={!currentTrack}
+                          className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary transition-colors"
+                        >
+                          <SkipForward size={28} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>Next</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* Repeat */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={onToggleRepeat} 
+                          disabled={!currentTrack}
+                          className={`h-14 w-14 relative transition-colors ${
+                            repeat !== "off" 
+                              ? "text-primary bg-primary/10" 
+                              : "text-white/60 hover:text-white hover:bg-primary"
+                          }`}
+                        >
+                          <Repeat size={24} />
+                          {repeat === "one" && (
+                            <span className="absolute text-xs font-bold bg-primary text-white w-4 h-4 flex items-center justify-center -top-1 -right-1">
+                              1
+                            </span>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>{getRepeatLabel()}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
               </div>
             </motion.div>
 
