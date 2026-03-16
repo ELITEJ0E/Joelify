@@ -532,7 +532,7 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
-                    className="h-14 w-14 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+                    className="h-14 w-14 text-white/60 hover:text-white hover:bg-white/10 transition-colors">
                     <SkipBack size={28} />
                   </Button>
                 </TooltipTrigger>
@@ -562,7 +562,7 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
-                    className="h-14 w-14 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+                    className="h-14 w-14 text-white/60 hover:text-white hover:bg-white/10 transition-colors">
                     <SkipForward size={28} />
                   </Button>
                 </TooltipTrigger>
@@ -763,7 +763,7 @@ export function PlayerControls() {
                   </TooltipContent>
                 </Tooltip>
 
-                {/* Play/Pause - keep as special primary button */}
+                {/* Play/Pause */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon"
