@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import {
-  Play, Pause, SkipBack, SkipForward, Repeat, Shuffle,
+  Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
   Volume2, VolumeX, List, Youtube, Music2, Video, Music,
   Type, Minimize2, Maximize2,
 } from "lucide-react"
@@ -712,15 +712,14 @@ export function PlayerControls() {
                     <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
                       aria-label={`Repeat: ${repeat}`}
                       className={`h-10 w-10 relative transition-colors ${
-                        repeat !== "off" 
-                          ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-primary"
+                        repeat !== "off"
+                          ? "text-primary hover:text-primary hover:bg-primary/10"
+                          : "text-zinc-400 hover:text-white hover:bg-white/10"
                       }`}>
-                      <Repeat size={20} />
-                      {repeat === "one" && (
-                        <span className="absolute text-[10px] font-bold bg-primary text-white w-3.5 h-3.5 flex items-center justify-center bottom-1.5 right-1.5">
-                          1
-                        </span>
+                      {repeat === "one" ? <Repeat1 size={20} /> : <Repeat size={20} />}
+                      {/* Active dot — same pattern as shuffle */}
+                      {repeat !== "off" && (
+                        <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
                       )}
                     </Button>
                   </TooltipTrigger>
