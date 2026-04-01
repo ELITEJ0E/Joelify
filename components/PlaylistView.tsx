@@ -161,8 +161,8 @@ export function PlaylistView() {
   }
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-purple-900/20 to-background text-foreground p-8 overflow-y-auto">
-      <div className="max-w-7xl mx-auto">
+    <div className="flex-1 bg-gradient-to-b from-purple-900/20 to-background text-foreground p-4 sm:p-8 overflow-y-auto">
+      <div className="w-full px-0">
         <div className="flex items-end gap-6 mb-8">
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
             <DialogTrigger asChild>
@@ -300,7 +300,7 @@ export function PlaylistView() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        className="shrink-0"
                       >
                         <MoreVertical size={16} />
                       </Button>
