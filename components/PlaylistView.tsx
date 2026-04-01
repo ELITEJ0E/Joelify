@@ -275,32 +275,32 @@ export function PlaylistView() {
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-4 p-3 rounded-md list-hover-green group cursor-move ${
+                  className={`flex items-center gap-2 p-3 rounded-md list-hover-green group cursor-move ${
                     draggedIndex === index ? "opacity-50" : ""
                   }`}
                 >
-                  <GripVertical size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100" />
-                  <span className="text-sm text-muted-foreground w-8 text-center">{index + 1}</span>
-                  <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => handlePlayTrack(index)}>
+                  <GripVertical size={16} className="text-muted-foreground hidden sm:block opacity-0 group-hover:opacity-100 shrink-0" />
+                  <span className="text-sm text-muted-foreground w-6 text-center shrink-0 hidden sm:block">{index + 1}</span>
+                  <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => handlePlayTrack(index)}>
                     <Image
                       src={track.thumbnail || "/placeholder.svg"}
                       alt={track.title}
                       width={48}
                       height={48}
-                      className="rounded"
+                      className="rounded shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm line-clamp-1">{track.title}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">{track.artist}</p>
+                      <p className="font-medium text-sm truncate">{track.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
                     </div>
                   </div>
-                  <span className="text-sm text-muted-foreground">{track.duration}</span>
+                  <span className="text-sm text-muted-foreground shrink-0 hidden sm:block">{track.duration}</span>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                       >
                         <MoreVertical size={16} />
                       </Button>
