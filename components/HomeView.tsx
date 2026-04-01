@@ -51,9 +51,9 @@ export function HomeView({ onNavigate }: HomeViewProps) {
   }
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-blue-900/20 to-background text-foreground p-4 md:p-8 overflow-y-auto">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.08)] to-background text-foreground p-4 md:p-8 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl md:text-5xl font-bold mb-8">{getGreeting()}</h1>
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-8">{getGreeting()}</h1>
 
         {/* Quick Access - Recently Played */}
         {recentPlaylists.length > 0 && (
