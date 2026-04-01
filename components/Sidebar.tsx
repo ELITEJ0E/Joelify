@@ -43,6 +43,7 @@ import { SpotifyQuota } from "./SpotifyQuota"
 import { isAuthenticated } from "@/lib/spotifyAuth"
 import { AudioSettings } from "./AudioSettings"
 import { KeyboardShortcuts } from "./KeyboardShortcuts"
+import { toast } from "sonner"
 
 
 interface SidebarProps {
@@ -141,7 +142,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   const playlistsToText = () => {
     return playlists.map(playlist => {
       const header = `PLAYLIST: ${playlist.name}`
-      const tracks = playlist.tracks.map(track => 
+      const tracks = playlist.tracks.map(track =>
         `- ${track.title} | ${track.artist} | ${track.id}`
       ).join("\n")
       return tracks ? `${header}\n${tracks}` : header
@@ -194,7 +195,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
 
   const handleCopyToClipboard = async () => {
     await navigator.clipboard.writeText(exportText)
-    alert("Copied to clipboard!")
+    toast.success("Playlists copied to clipboard", {
+      description: `${playlists.length} playlist${playlists.length !== 1 ? "s" : ""} ready to share`,
+      duration: 3000,
+    })
   }
 
   const handleDownloadText = () => {
@@ -219,9 +223,15 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       setPlaylists([...playlists, ...imported])
       setIsImportDialogOpen(false)
       setImportText("")
-      alert(`Imported ${imported.length} playlist(s)!`)
+      toast.success(`Imported ${imported.length} playlist${imported.length !== 1 ? "s" : ""}`, {
+        description: "Your playlists have been added to your library",
+        duration: 3000,
+      })
     } else {
-      alert("No valid playlists found in text")
+      toast.error("No valid playlists found", {
+        description: "Make sure the text follows the correct format",
+        duration: 4000,
+      })
     }
   }
 
@@ -241,7 +251,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           if (Array.isArray(json)) {
             setPlaylists([...playlists, ...json])
             setIsImportDialogOpen(false)
-            alert(`Imported ${json.length} playlist(s)!`)
+            toast.success(`Imported ${json.length} playlist${json.length !== 1 ? "s" : ""}`, {
+              description: "Your playlists have been added to your library",
+              duration: 3000,
+            })
             return
           }
         } catch {
@@ -270,9 +283,8 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} aria-hidden="true" />}
 
       <div
-        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
       >
         <div className="flex flex-col h-full">
           {/* HEADER */}
@@ -314,11 +326,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("home")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "home"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "home"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Home size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Home</span>
@@ -327,11 +338,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("search")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "search"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "search"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Search size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Search</span>
@@ -344,11 +354,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                           setIsLibraryExpanded(!isLibraryExpanded)
                           onNavigate("library")
                         }}
-                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "library"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "library"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <div className="flex items-center space-x-3">
                           <Library size={20} className="transition-transform duration-300 group-hover:scale-105" />
@@ -425,11 +434,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                   <div className="flex items-center justify-between py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
                                     <button
                                       onClick={() => handlePlaylistClick(playlist.id)}
-                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${
-                                        currentPlaylistId === playlist.id
-                                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
-                                          : "hover:bg-primary/10 hover:text-primary"
-                                      }`}
+                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${currentPlaylistId === playlist.id
+                                        ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
+                                        : "hover:bg-primary/10 hover:text-primary"
+                                        }`}
                                     >
                                       {playlist.name}
                                     </button>
@@ -499,11 +507,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("liked")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${
-                          activeView === "liked"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${activeView === "liked"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Heart size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Liked Songs</span>
@@ -517,11 +524,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("stats")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "stats"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "stats"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <BarChart3 size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Statistics</span>
@@ -605,7 +611,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           <DialogHeader>
             <DialogTitle className="text-primary">Export Playlists</DialogTitle>
             <DialogDescription className="text-gray-300">
-              Copy this text and paste it anywhere - WhatsApp, Notes, Email, etc.
+              Copy this text or download as a file. Share it easily via message!
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -639,7 +645,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           <DialogHeader>
             <DialogTitle className="text-primary">Import Playlists</DialogTitle>
             <DialogDescription className="text-gray-300">
-              Paste text from WhatsApp, Notes, or anywhere else. Supports both - and bullet points.
+              Paste playlist text below or import from a file.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 mb-2">
