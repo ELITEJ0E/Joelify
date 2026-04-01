@@ -134,20 +134,21 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme(theme === "dark" ? "light" : "dark")
   }
 
-  // Convert playlists to simple text format:
+  // Convert playlists to simple text format for easy sharing via WhatsApp, etc.
+  // Format:
   // PLAYLIST: name
   // - song title | artist | videoId
   const playlistsToText = () => {
     return playlists.map(playlist => {
       const header = `PLAYLIST: ${playlist.name}`
-      const songs = playlist.songs.map(song => 
-        `- ${song.title} | ${song.artist} | ${song.videoId}`
+      const tracks = playlist.tracks.map(track => 
+        `- ${track.title} | ${track.artist} | ${track.id}`
       ).join("\n")
-      return songs ? `${header}\n${songs}` : header
+      return tracks ? `${header}\n${tracks}` : header
     }).join("\n\n")
   }
 
-  // Parse text format back to playlists
+  // Parse text format back to playlists (supports pasting from WhatsApp, etc.)
   const textToPlaylists = (text: string) => {
     const lines = text.trim().split("\n")
     const result: typeof playlists = []
@@ -157,23 +158,26 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       const trimmed = line.trim()
       if (!trimmed) continue
 
-      if (trimmed.startsWith("PLAYLIST:")) {
+      if (trimmed.toUpperCase().startsWith("PLAYLIST:")) {
         if (currentPlaylist) result.push(currentPlaylist)
         currentPlaylist = {
           id: `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: trimmed.replace("PLAYLIST:", "").trim(),
-          songs: []
+          name: trimmed.replace(/^PLAYLIST:/i, "").trim(),
+          tracks: [],
+          createdAt: Date.now()
         }
-      } else if (trimmed.startsWith("-") && currentPlaylist) {
-        const parts = trimmed.slice(1).split("|").map(p => p.trim())
-        if (parts.length >= 3) {
-          currentPlaylist.songs.push({
-            id: `song-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      } else if ((trimmed.startsWith("-") || trimmed.startsWith("•")) && currentPlaylist) {
+        // Support both - and • as bullet points (WhatsApp often uses •)
+        const content = trimmed.slice(1).trim()
+        const parts = content.split("|").map(p => p.trim())
+        if (parts.length >= 2) {
+          const videoId = parts[2] || `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          currentPlaylist.tracks.push({
+            id: videoId,
             title: parts[0],
             artist: parts[1],
-            videoId: parts[2],
-            thumbnail: `https://img.youtube.com/vi/${parts[2]}/mqdefault.jpg`,
-            duration: 0
+            thumbnail: videoId.startsWith("imported-") ? "/placeholder.svg" : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+            duration: parts[3] || "0:00"
           })
         }
       }
@@ -601,7 +605,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           <DialogHeader>
             <DialogTitle className="text-primary">Export Playlists</DialogTitle>
             <DialogDescription className="text-gray-300">
-              Copy this text or download as a file. Share it easily via message!
+              Copy this text and paste it anywhere - WhatsApp, Notes, Email, etc.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -635,7 +639,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           <DialogHeader>
             <DialogTitle className="text-primary">Import Playlists</DialogTitle>
             <DialogDescription className="text-gray-300">
-              Paste playlist text below or import from a file.
+              Paste text from WhatsApp, Notes, or anywhere else. Supports both - and bullet points.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 mb-2">
@@ -661,7 +665,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           <Textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            placeholder={`PLAYLIST: My Playlist\n- Song Title | Artist | videoId\n- Another Song | Artist | videoId`}
+            placeholder={`PLAYLIST: My Playlist\n- Song Title | Artist | videoId | 3:45\n- Another Song | Artist | videoId\n\nPLAYLIST: Another Playlist\n• Track Name | Artist Name`}
             className="h-64 font-mono text-xs bg-gray-800/50 text-gray-100 border-gray-700 placeholder:text-gray-500"
           />
           <DialogFooter>
