@@ -18,7 +18,11 @@ import {
   Download,
   Upload,
   BarChart3,
+  Copy,
+  ClipboardPaste,
+  FileText,
 } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
@@ -39,6 +43,7 @@ import { SpotifyQuota } from "./SpotifyQuota"
 import { isAuthenticated } from "@/lib/spotifyAuth"
 import { AudioSettings } from "./AudioSettings"
 import { KeyboardShortcuts } from "./KeyboardShortcuts"
+import { toast } from "sonner"
 
 
 interface SidebarProps {
@@ -67,6 +72,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [exportText, setExportText] = useState("")
+  const [importText, setImportText] = useState("")
   const [newPlaylistName, setNewPlaylistName] = useState("")
   const [renamePlaylistId, setRenamePlaylistId] = useState<string | null>(null)
   const [renamePlaylistName, setRenamePlaylistName] = useState("")
@@ -126,42 +135,141 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme(theme === "dark" ? "light" : "dark")
   }
 
+  // Convert playlists to simple text format for easy sharing via WhatsApp, etc.
+  // Format:
+  // PLAYLIST: name
+  // - song title | artist | videoId
+  const playlistsToText = () => {
+    return playlists.map(playlist => {
+      const header = `PLAYLIST: ${playlist.name}`
+      const tracks = playlist.tracks.map(track =>
+        `- ${track.title} | ${track.artist} | ${track.id}`
+      ).join("\n")
+      return tracks ? `${header}\n${tracks}` : header
+    }).join("\n\n")
+  }
+
+  // Parse text format back to playlists (supports pasting from WhatsApp, etc.)
+  const textToPlaylists = (text: string) => {
+    const lines = text.trim().split("\n")
+    const result: typeof playlists = []
+    let currentPlaylist: typeof playlists[0] | null = null
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+
+      if (trimmed.toUpperCase().startsWith("PLAYLIST:")) {
+        if (currentPlaylist) result.push(currentPlaylist)
+        currentPlaylist = {
+          id: `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: trimmed.replace(/^PLAYLIST:/i, "").trim(),
+          tracks: [],
+          createdAt: Date.now()
+        }
+      } else if ((trimmed.startsWith("-") || trimmed.startsWith("•")) && currentPlaylist) {
+        // Support both - and • as bullet points (WhatsApp often uses •)
+        const content = trimmed.slice(1).trim()
+        const parts = content.split("|").map(p => p.trim())
+        if (parts.length >= 2) {
+          const videoId = parts[2] || `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          currentPlaylist.tracks.push({
+            id: videoId,
+            title: parts[0],
+            artist: parts[1],
+            thumbnail: videoId.startsWith("imported-") ? "/placeholder.svg" : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+            duration: parts[3] || "0:00"
+          })
+        }
+      }
+    }
+    if (currentPlaylist) result.push(currentPlaylist)
+    return result
+  }
+
   const handleExportPlaylists = () => {
-    const dataStr = JSON.stringify(playlists, null, 2)
-    const dataBlob = new Blob([dataStr], { type: "application/json" })
+    const text = playlistsToText()
+    setExportText(text)
+    setIsExportDialogOpen(true)
+  }
+
+  const handleCopyToClipboard = async () => {
+    await navigator.clipboard.writeText(exportText)
+    toast.success("Playlists copied to clipboard", {
+      description: `${playlists.length} playlist${playlists.length !== 1 ? "s" : ""} ready to share`,
+      duration: 3000,
+    })
+  }
+
+  const handleDownloadText = () => {
+    const dataBlob = new Blob([exportText], { type: "text/plain" })
     const url = URL.createObjectURL(dataBlob)
     const link = document.createElement("a")
     link.href = url
-    link.download = `joelify-playlists-${new Date().toISOString().split("T")[0]}.json`
+    link.download = `joelify-playlists-${new Date().toISOString().split("T")[0]}.txt`
     link.click()
     URL.revokeObjectURL(url)
   }
 
   const handleImportPlaylists = () => {
+    setImportText("")
+    setIsImportDialogOpen(true)
+  }
+
+  const handleImportFromText = () => {
+    if (!importText.trim()) return
+    const imported = textToPlaylists(importText)
+    if (imported.length > 0) {
+      setPlaylists([...playlists, ...imported])
+      setIsImportDialogOpen(false)
+      setImportText("")
+      toast.success(`Imported ${imported.length} playlist${imported.length !== 1 ? "s" : ""}`, {
+        description: "Your playlists have been added to your library",
+        duration: 3000,
+      })
+    } else {
+      toast.error("No valid playlists found", {
+        description: "Make sure the text follows the correct format",
+        duration: 4000,
+      })
+    }
+  }
+
+  const handleImportFromFile = () => {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = "application/json"
+    input.accept = ".txt,.json"
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
       const reader = new FileReader()
       reader.onload = (event) => {
+        const content = event.target?.result as string
+        // Try JSON first, then text format
         try {
-          const imported = JSON.parse(event.target?.result as string)
-          if (Array.isArray(imported)) {
-            setPlaylists(imported)
-            alert("Playlists imported successfully!")
-          } else {
-            alert("Invalid playlist file format")
+          const json = JSON.parse(content)
+          if (Array.isArray(json)) {
+            setPlaylists([...playlists, ...json])
+            setIsImportDialogOpen(false)
+            toast.success(`Imported ${json.length} playlist${json.length !== 1 ? "s" : ""}`, {
+              description: "Your playlists have been added to your library",
+              duration: 3000,
+            })
+            return
           }
-        } catch (error) {
-          alert("Error importing playlists")
-          console.error(error)
+        } catch {
+          // Not JSON, try text format
         }
+        setImportText(content)
       }
       reader.readAsText(file)
     }
     input.click()
+  }
+
+  const handlePasteFromClipboard = async () => {
+    const text = await navigator.clipboard.readText()
+    setImportText(text)
   }
 
   const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => {
@@ -175,9 +283,8 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} aria-hidden="true" />}
 
       <div
-        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
       >
         <div className="flex flex-col h-full">
           {/* HEADER */}
@@ -219,11 +326,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("home")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "home"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "home"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Home size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Home</span>
@@ -232,11 +338,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("search")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "search"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "search"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Search size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Search</span>
@@ -249,11 +354,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                           setIsLibraryExpanded(!isLibraryExpanded)
                           onNavigate("library")
                         }}
-                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "library"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "library"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <div className="flex items-center space-x-3">
                           <Library size={20} className="transition-transform duration-300 group-hover:scale-105" />
@@ -330,11 +434,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                   <div className="flex items-center justify-between py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
                                     <button
                                       onClick={() => handlePlaylistClick(playlist.id)}
-                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${
-                                        currentPlaylistId === playlist.id
-                                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
-                                          : "hover:bg-primary/10 hover:text-primary"
-                                      }`}
+                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${currentPlaylistId === playlist.id
+                                        ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
+                                        : "hover:bg-primary/10 hover:text-primary"
+                                        }`}
                                     >
                                       {playlist.name}
                                     </button>
@@ -404,11 +507,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("liked")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${
-                          activeView === "liked"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${activeView === "liked"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Heart size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Liked Songs</span>
@@ -422,11 +524,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     <li>
                       <button
                         onClick={() => handleNavigate("stats")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "stats"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "stats"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <BarChart3 size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Statistics</span>
@@ -499,6 +600,94 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
               className="bg-primary hover:bg-primary/90 text-white"
             >
               Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Dialog */}
+      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-primary">Export Playlists</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Copy this text or download as a file. Share it easily via message!
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={exportText}
+            readOnly
+            className="h-64 font-mono text-xs bg-gray-800/50 text-gray-100 border-gray-700"
+          />
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={handleCopyToClipboard}
+              className="border-primary text-gray-300 hover:bg-gray-800/50"
+            >
+              <Copy size={16} className="mr-2" />
+              Copy to Clipboard
+            </Button>
+            <Button
+              onClick={handleDownloadText}
+              className="bg-primary hover:bg-primary/90 text-white"
+            >
+              <FileText size={16} className="mr-2" />
+              Download .txt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-primary">Import Playlists</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Paste playlist text below or import from a file.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePasteFromClipboard}
+              className="border-primary text-gray-300 hover:bg-gray-800/50"
+            >
+              <ClipboardPaste size={14} className="mr-1" />
+              Paste
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleImportFromFile}
+              className="border-primary text-gray-300 hover:bg-gray-800/50"
+            >
+              <Upload size={14} className="mr-1" />
+              From File
+            </Button>
+          </div>
+          <Textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder={`PLAYLIST: My Playlist\n- Song Title | Artist | videoId | 3:45\n- Another Song | Artist | videoId\n\nPLAYLIST: Another Playlist\n• Track Name | Artist Name`}
+            className="h-64 font-mono text-xs bg-gray-800/50 text-gray-100 border-gray-700 placeholder:text-gray-500"
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsImportDialogOpen(false)}
+              className="border-primary text-gray-300 hover:bg-gray-800/50"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImportFromText}
+              disabled={!importText.trim()}
+              className="bg-primary hover:bg-primary/90 text-white"
+            >
+              Import
             </Button>
           </DialogFooter>
         </DialogContent>

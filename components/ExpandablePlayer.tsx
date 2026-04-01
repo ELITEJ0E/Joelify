@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
 import { 
   ChevronDown, Music, AudioLinesIcon, Video, VideoOff,
-  Play, Pause, SkipBack, SkipForward, Repeat, Shuffle 
+  Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle 
 } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -468,15 +468,14 @@ export function ExpandablePlayer({
                           disabled={!currentTrack}
                           className={`h-14 w-14 relative transition-colors ${
                             repeat !== "off" 
-                              ? "text-primary bg-primary/10" 
-                              : "text-white/60 hover:text-white hover:bg-primary"
+                              ? "text-primary bg-primary/10 hover:bg-primary/20" 
+                              : "text-white/60 hover:text-white hover:bg-white/10"
                           }`}
                         >
-                          <Repeat size={24} />
-                          {repeat === "one" && (
-                            <span className="absolute text-xs font-bold bg-primary text-white w-4 h-4 flex items-center justify-center -top-1 -right-1">
-                              1
-                            </span>
+                          {repeat === "one" ? <Repeat1 size={24} /> : <Repeat size={24} />}
+                          {/* Active dot — same pattern as shuffle */}
+                          {repeat !== "off" && (
+                            <span className="absolute bottom-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary" />
                           )}
                         </Button>
                       </TooltipTrigger>
