@@ -509,7 +509,7 @@ export function PlayerControls() {
       />
 
       {/* ── Collapsed bar ─────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-zinc-950 border-t border-white/[0.07] text-white p-3 md:p-4 w-full backdrop-blur-xl">
+      <div className="bg-zinc-950 border-t border-zinc-800/60 text-white p-3 md:p-4 w-full">
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
 
           {/* Desktop: track info */}
@@ -521,7 +521,7 @@ export function PlayerControls() {
               <>
                 {currentTrack.thumbnail ? (
                   <Image src={currentTrack.thumbnail || "/placeholder.svg"} width={56} height={56}
-                    alt={currentTrack.title || "Track"} className={`w-14 h-14 rounded object-cover flex-shrink-0 transition-all duration-300 ${isPlaying ? "ring-1 ring-primary/40 album-art-playing" : ""}`} />
+                    alt={currentTrack.title || "Track"} className="w-14 h-14 rounded object-cover flex-shrink-0" />
                 ) : (
                   <div className="w-14 h-14 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0">
                     <span className="text-2xl text-zinc-500">♪</span>
@@ -678,7 +678,7 @@ export function PlayerControls() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="icon"
-                      className="bg-white text-black rounded-full h-14 w-14 hover:scale-105 hover:bg-primary hover:text-white transition-all duration-150 shadow-lg shadow-primary/20 ring-2 ring-primary/20 disabled:opacity-50"
+                      className="bg-white text-black rounded-full h-14 w-14 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
                       onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                       aria-label={isPlaying ? "Pause" : "Play"}>
                       {isPlaying ? 

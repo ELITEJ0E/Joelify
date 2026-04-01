@@ -182,14 +182,12 @@ export function ExpandablePlayer({
             backgroundImage: `url(${currentTrack.thumbnail})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
-            filter: "blur(60px) brightness(0.15) saturate(2)",
-            transform: "scale(1.2)",
+            filter: "blur(40px) brightness(0.22) saturate(1.5)",
+            transform: "scale(1.15)",
           }}
         />
       )}
-      <div className="absolute inset-0 z-0 bg-zinc-950/80" />
-      {/* Radial primary glow */}
-      <div className="absolute inset-0 z-0 bg-radial-primary opacity-60" />
+      <div className="absolute inset-0 z-0 bg-zinc-950" />
 
       {/* ── Visualizer ──────────────────────────────────────────────────── */}
       {showVisualizer && (
@@ -278,7 +276,7 @@ export function ExpandablePlayer({
 
         {/* Mobile drag handle */}
         <div className="flex justify-center mb-2 lg:hidden">
-          <div className="drag-handle" />
+          <div className="w-12 h-1 bg-white/20 rounded-full" />
         </div>
 
         {/* ── Main content with responsive layout ───────────────────── */}
@@ -296,7 +294,7 @@ export function ExpandablePlayer({
               >
                 <div
                   className={[
-                    "relative overflow-hidden rounded-2xl shadow-2xl shadow-black/60 ring-1 ring-white/10 transition-all duration-300",
+                    "relative overflow-hidden rounded-2xl shadow-2xl transition-all duration-300",
                     // Fixed dimensions that don't change between modes
                     "w-full max-w-[min(85vw,380px)] aspect-square",
                     // Desktop fixed size
@@ -427,7 +425,7 @@ export function ExpandablePlayer({
                       <TooltipTrigger asChild>
                         <Button 
                           size="icon" 
-                          className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all duration-150 shadow-lg shadow-primary/20 ring-2 ring-primary/20"
+                          className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
                           onClick={onPlayPause} 
                           disabled={!currentTrack}
                         >

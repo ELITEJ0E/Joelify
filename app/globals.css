@@ -114,12 +114,12 @@
 
   /* Card hover lift — used in playlist / search result cards */
   .card-hover {
-    @apply transition-all duration-300;
+    @apply transition-all duration-200;
   }
   .card-hover:hover {
-    background-color: hsl(var(--primary) / 0.08);
-    transform: translateY(-4px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px hsl(var(--primary) / 0.1);
+    background-color: rgba(255, 255, 255, 0.07);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   }
 
   /* Icon button */
@@ -140,29 +140,17 @@
 
   /* ── Glass morphism panel ─────────────────────────────────────────────── */
   .glass {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(20px) saturate(1.5);
-    -webkit-backdrop-filter: blur(20px) saturate(1.5);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .glass-dark {
     background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(24px) saturate(1.6);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
     border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  /* ── Premium card surface ────────────────────────────────────────────── */
-  .premium-card {
-    background: linear-gradient(
-      180deg,
-      hsl(var(--primary) / 0.06) 0%,
-      transparent 100%
-    ), rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.07);
   }
 
   /* ── Glow on primary elements ─────────────────────────────────────────── */
@@ -172,34 +160,6 @@
 
   .glow-primary-sm {
     box-shadow: 0 0 10px hsl(var(--primary) / 0.3);
-  }
-
-  /* ── Progress bar glow ─────────────────────────────────────────────────── */
-  .progress-glow {
-    box-shadow: 0 0 12px hsl(var(--primary) / 0.5);
-  }
-
-  /* ── Play button ring glow ─────────────────────────────────────────────── */
-  .play-button-glow {
-    box-shadow: 0 8px 24px hsl(var(--primary) / 0.3);
-  }
-
-  /* ── Album art playing pulse ───────────────────────────────────────────── */
-  @keyframes albumPulse {
-    0%, 100% { box-shadow: 0 0 0 2px hsl(var(--primary) / 0.4), 0 0 20px hsl(var(--primary) / 0.2); }
-    50% { box-shadow: 0 0 0 4px hsl(var(--primary) / 0.3), 0 0 30px hsl(var(--primary) / 0.3); }
-  }
-  .album-art-playing {
-    animation: albumPulse 2s ease-in-out infinite;
-  }
-
-  /* ── Radial glow background ────────────────────────────────────────────── */
-  .bg-radial-primary {
-    background: radial-gradient(
-      circle at center,
-      hsl(var(--primary) / 0.08) 0%,
-      transparent 70%
-    );
   }
 
   /* ── Shimmer loading placeholder ─────────────────────────────────────── */
