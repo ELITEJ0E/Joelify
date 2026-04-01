@@ -3,9 +3,9 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion"
-import { 
+import {
   ChevronDown, Music, AudioLinesIcon, Video, VideoOff,
-  Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle 
+  Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle
 } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -207,7 +207,7 @@ export function ExpandablePlayer({
         onDragEnd={handleDragEnd}
         style={{ y, opacity, scale }}
         className="relative h-full w-full flex flex-col z-20"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e: { stopPropagation: () => any }) => e.stopPropagation()}
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
         <TooltipProvider>
@@ -240,11 +240,10 @@ export function ExpandablePlayer({
                     onClick={() => setShowVideo((v) => !v)}
                     disabled={!currentTrack}
                     aria-label={showVideo ? "Hide video" : "Show video"}
-                    className={`h-10 w-10 transition-colors ${
-                      showVideo
-                        ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-white/60 hover:text-white hover:bg-primary"
-                    }`}
+                    className={`h-10 w-10 transition-colors ${showVideo
+                      ? "text-primary bg-primary/10 hover:bg-primary/20"
+                      : "text-white/60 hover:text-white hover:bg-primary"
+                      }`}
                   >
                     {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
                   </Button>
@@ -259,11 +258,10 @@ export function ExpandablePlayer({
                     variant="ghost" size="icon"
                     onClick={() => setShowVisualizer((v) => !v)}
                     aria-label={showVisualizer ? "Hide visualizer" : "Show visualizer"}
-                    className={`h-10 w-10 transition-colors ${
-                      showVisualizer
-                        ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-white/60 hover:text-white hover:bg-primary"
-                    }`}
+                    className={`h-10 w-10 transition-colors ${showVisualizer
+                      ? "text-primary bg-primary/10 hover:bg-primary/20"
+                      : "text-white/60 hover:text-white hover:bg-primary"
+                      }`}
                   >
                     <AudioLinesIcon size={18} />
                   </Button>
@@ -365,12 +363,12 @@ export function ExpandablePlayer({
                 <div className="flex items-center gap-2 w-full max-w-2xl mx-auto">
                   <span className="text-sm text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
                   <div className="flex-1">
-                    <Slider 
-                      value={[currentTime]} 
-                      max={duration > 0 ? duration : 1} 
+                    <Slider
+                      value={[currentTime]}
+                      max={duration > 0 ? duration : 1}
                       step={0.1}
-                      onValueChange={onSeek} 
-                      disabled={!currentTrack || duration === 0} 
+                      onValueChange={onSeek}
+                      disabled={!currentTrack || duration === 0}
                       className="[&_.slider-thumb]:bg-primary"
                     />
                   </div>
@@ -383,16 +381,15 @@ export function ExpandablePlayer({
                     {/* Shuffle */}
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={onToggleShuffle} 
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={onToggleShuffle}
                           disabled={!currentTrack}
-                          className={`h-14 w-14 transition-colors ${
-                            shuffle 
-                              ? "text-primary bg-primary/10" 
-                              : "text-white/60 hover:text-white hover:bg-primary"
-                          }`}
+                          className={`h-14 w-14 transition-colors ${shuffle
+                            ? "text-primary bg-primary/10"
+                            : "text-white/60 hover:text-white hover:bg-primary"
+                            }`}
                         >
                           <Shuffle size={24} />
                         </Button>
@@ -405,10 +402,10 @@ export function ExpandablePlayer({
                     {/* Previous */}
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={onPrevious} 
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={onPrevious}
                           disabled={!currentTrack}
                           className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary transition-colors"
                         >
@@ -423,14 +420,14 @@ export function ExpandablePlayer({
                     {/* Play/Pause */}
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
+                        <Button
+                          size="icon"
                           className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg"
-                          onClick={onPlayPause} 
+                          onClick={onPlayPause}
                           disabled={!currentTrack}
                         >
-                          {isPlaying ? 
-                            <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
+                          {isPlaying ?
+                            <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> :
                             <Play fill="currentColor" size={32} className="stroke-[1.5] ml-0.5" />
                           }
                         </Button>
@@ -443,10 +440,10 @@ export function ExpandablePlayer({
                     {/* Next */}
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={onNext} 
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={onNext}
                           disabled={!currentTrack}
                           className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary transition-colors"
                         >
@@ -461,16 +458,15 @@ export function ExpandablePlayer({
                     {/* Repeat */}
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={onToggleRepeat} 
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={onToggleRepeat}
                           disabled={!currentTrack}
-                          className={`h-14 w-14 relative transition-colors ${
-                            repeat !== "off" 
-                              ? "text-primary bg-primary/10 hover:bg-primary/20" 
-                              : "text-white/60 hover:text-white hover:bg-white/10"
-                          }`}
+                          className={`h-14 w-14 relative transition-colors ${repeat !== "off"
+                            ? "text-primary bg-primary/10 hover:bg-primary/20"
+                            : "text-white/60 hover:text-white hover:bg-white/10"
+                            }`}
                         >
                           {repeat === "one" ? <Repeat1 size={24} /> : <Repeat size={24} />}
                           {/* Active dot — same pattern as shuffle */}
