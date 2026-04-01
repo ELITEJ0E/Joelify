@@ -6,6 +6,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { DiscoverMore } from "./DiscoverMore"
+import { Playlist } from "@/lib/storage"
 
 interface HomeViewProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
@@ -36,11 +37,11 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     onNavigate("playlist")
   }
 
-  // Get recently played playlists
+  // Get recently played playlists - fixed TypeScript error
   const recentPlaylists = recentlyPlayed
     .filter((item) => item.type === "playlist")
     .map((item) => playlists.find((p) => p.id === item.id))
-    .filter(Boolean)
+    .filter((playlist): playlist is Playlist => playlist !== undefined) // Type guard
     .slice(0, 6)
 
   const getGreeting = () => {
@@ -69,7 +70,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                     <div className="relative w-20 h-20 flex-shrink-0 rounded overflow-hidden bg-secondary">
                       {playlist.coverImage || playlist.tracks.length > 0 ? (
                         <Image
-                          src={playlist.coverImage || playlist.tracks[0].thumbnail || "/placeholder.svg"}
+                          src={playlist.coverImage || playlist.tracks[0]?.thumbnail || "/placeholder.svg"}
                           alt={playlist.name}
                           fill
                           className="object-cover"
@@ -151,7 +152,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                 <div className="relative mb-4 aspect-square rounded-md overflow-hidden bg-secondary flex items-center justify-center">
                   {playlist.coverImage || playlist.tracks.length > 0 ? (
                     <Image
-                      src={playlist.coverImage || playlist.tracks[0].thumbnail || "/placeholder.svg"}
+                      src={playlist.coverImage || playlist.tracks[0]?.thumbnail || "/placeholder.svg"}
                       alt={playlist.name}
                       fill
                       className="object-cover"
