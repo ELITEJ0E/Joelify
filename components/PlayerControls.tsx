@@ -630,11 +630,13 @@ export function PlayerControls() {
             <div className="flex items-center gap-2 w-full mb-3 md:mb-2">
               <span className="text-xs text-zinc-500 w-10 text-right">{formatTime(currentTime)}</span>
               <div className="flex-1">
-                <Slider value={[currentTime]} max={duration > 0 ? duration : 1} step={0.1}
+                <Slider
+                  value={[currentTime]}
+                  max={duration > 0 ? duration : 1}
+                  step={0.1}
                   onValueChange={handleSeek}
                   disabled={!currentTrack || duration === 0 || !isReady}
                   aria-label="Seek"
-                  key={`slider-${currentTrack?.id}-${Math.floor(currentTime)}`}
                 />
               </div>
               <span className="text-xs text-zinc-500 w-10">{formatTime(duration)}</span>
