@@ -102,7 +102,7 @@ export function StatisticsView() {
   const maxPlays = Math.max(...stats.playsByDay.map((d) => d.plays), 1)
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-purple-900/20 to-background text-foreground p-4 md:p-6 lg:p-8 overflow-y-auto">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-6 lg:p-8 overflow-y-auto">
       <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -117,10 +117,10 @@ export function StatisticsView() {
 
         {/* Overview Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-          <Card className="p-4 md:p-6">
+          <Card className="p-4 md:p-6 bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
             <div className="flex items-center gap-3">
-              <div className="p-2 md:p-3 rounded-lg bg-green-500/10">
-                <Music className="h-5 w-5 md:h-6 md:w-6 text-green-500" />
+              <div className="p-2 md:p-3 rounded-lg bg-primary/10">
+                <Music className="h-5 w-5 md:h-6 md:w-6 text-primary" />
               </div>
               <div>
                 <p className="text-xs md:text-sm text-muted-foreground">Total Plays</p>
@@ -129,10 +129,10 @@ export function StatisticsView() {
             </div>
           </Card>
 
-          <Card className="p-4 md:p-6">
+          <Card className="p-4 md:p-6 bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
             <div className="flex items-center gap-3">
-              <div className="p-2 md:p-3 rounded-lg bg-blue-500/10">
-                <Clock className="h-5 w-5 md:h-6 md:w-6 text-blue-500" />
+              <div className="p-2 md:p-3 rounded-lg bg-primary/10">
+                <Clock className="h-5 w-5 md:h-6 md:w-6 text-primary" />
               </div>
               <div>
                 <p className="text-xs md:text-sm text-muted-foreground">Listening Time</p>
@@ -141,10 +141,10 @@ export function StatisticsView() {
             </div>
           </Card>
 
-          <Card className="p-4 md:p-6 sm:col-span-2 lg:col-span-1">
+          <Card className="p-4 md:p-6 sm:col-span-2 lg:col-span-1 bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
             <div className="flex items-center gap-3">
-              <div className="p-2 md:p-3 rounded-lg bg-purple-500/10">
-                <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-purple-500" />
+              <div className="p-2 md:p-3 rounded-lg bg-primary/10">
+                <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-primary" />
               </div>
               <div>
                 <p className="text-xs md:text-sm text-muted-foreground">Unique Tracks</p>
@@ -155,20 +155,21 @@ export function StatisticsView() {
         </div>
 
         {/* Weekly Activity Chart */}
-        <Card className="p-4 md:p-6">
-          <div className="flex items-center gap-2 mb-4 md:mb-6">
-            <BarChart3 className="h-4 w-4 md:h-5 md:w-5" />
-            <h2 className="text-lg md:text-xl font-bold">Weekly Activity</h2>
+        <Card className="p-4 md:p-6 bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
+          <div className="flex items-center gap-3 mb-4 md:mb-6">
+            <div className="w-1.5 h-6 bg-primary rounded-full" />
+            <h2 className="text-xl md:text-2xl font-bold tracking-tight">Weekly Activity</h2>
           </div>
           <div className="flex items-end justify-between gap-1 md:gap-2 h-32 md:h-48">
-            {stats.playsByDay.map((day) => (
+            {stats.playsByDay.map((day, index) => (
               <div key={day.day} className="flex-1 flex flex-col items-center gap-2">
                 <div className="relative w-full flex items-end justify-center flex-1">
                   <div
-                    className="w-full bg-green-500 rounded-t transition-all hover:bg-green-400"
+                    className="w-full bg-gradient-to-t from-primary/40 to-primary rounded-t transition-all duration-700 hover:brightness-110"
                     style={{
                       height: `${(day.plays / maxPlays) * 100}%`,
                       minHeight: day.plays > 0 ? "8px" : "0",
+                      animation: `growUp 0.7s ease-out ${index * 0.05}s both`
                     }}
                   />
                 </div>
@@ -179,20 +180,25 @@ export function StatisticsView() {
               </div>
             ))}
           </div>
+          <style jsx>{`
+            @keyframes growUp {
+              from { height: 0; min-height: 0; }
+            }
+          `}</style>
         </Card>
 
         {/* Top Lists */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
           {/* Top Tracks */}
-          <Card className="p-4 md:p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Music className="h-4 w-4 md:h-5 md:w-5" />
-              <h2 className="text-lg md:text-xl font-bold">Top Tracks</h2>
+          <Card className="p-4 md:p-6 bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-1.5 h-6 bg-primary rounded-full" />
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight">Top Tracks</h2>
             </div>
             <div className="space-y-2 md:space-y-3">
               {stats.topTracks.map((track, index) => (
-                <div key={track.id} className="flex items-center gap-2 md:gap-3">
-                  <div className="text-lg md:text-2xl font-bold text-muted-foreground w-6 md:w-8 flex-shrink-0">
+                <div key={track.id} className="flex items-center gap-3 md:gap-4 p-2 rounded-lg hover:bg-white/[0.04] transition-colors">
+                  <div className="text-lg md:text-xl font-bold text-primary w-8 md:w-10 h-8 md:h-10 flex items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-transparent flex-shrink-0">
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -208,15 +214,15 @@ export function StatisticsView() {
           </Card>
 
           {/* Top Artists */}
-          <Card className="p-4 md:p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="h-4 w-4 md:h-5 md:w-5" />
-              <h2 className="text-lg md:text-xl font-bold">Top Artists</h2>
+          <Card className="p-4 md:p-6 bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-1.5 h-6 bg-primary rounded-full" />
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight">Top Artists</h2>
             </div>
             <div className="space-y-2 md:space-y-3">
               {stats.topArtists.map((artist, index) => (
-                <div key={artist.name} className="flex items-center gap-2 md:gap-3">
-                  <div className="text-lg md:text-2xl font-bold text-muted-foreground w-6 md:w-8 flex-shrink-0">
+                <div key={artist.name} className="flex items-center gap-3 md:gap-4 p-2 rounded-lg hover:bg-white/[0.04] transition-colors">
+                  <div className="text-lg md:text-xl font-bold text-primary w-8 md:w-10 h-8 md:h-10 flex items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-transparent flex-shrink-0">
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -232,16 +238,16 @@ export function StatisticsView() {
         </div>
 
         {/* Recently Played */}
-        <Card className="p-4 md:p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-4 w-4 md:h-5 md:w-5" />
-            <h2 className="text-lg md:text-xl font-bold">Recently Played</h2>
+        <Card className="p-4 md:p-6 bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-1.5 h-6 bg-primary rounded-full" />
+            <h2 className="text-xl md:text-2xl font-bold tracking-tight">Recently Played</h2>
           </div>
           <div className="space-y-1 md:space-y-2">
             {stats.recentlyPlayed.slice(0, 10).map((track, index) => (
               <div
                 key={`${track.id}-${index}`}
-                className="flex items-center justify-between p-2 md:p-3 rounded-lg hover:bg-accent transition-colors"
+                className="flex items-center justify-between p-2 md:p-3 rounded-lg hover:bg-white/[0.04] transition-colors"
               >
                 <div className="flex-1 min-w-0 mr-4">
                   <p className="font-medium text-sm md:text-base truncate">{track.title}</p>

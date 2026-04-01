@@ -154,35 +154,35 @@ export function DiscoverMore() {
         {videos.map((video) => (
           <Card
             key={video.id}
-            className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all cursor-pointer group hover:scale-[1.02] border-none"
+            className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl hover:bg-primary/10 rounded-xl p-4 transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10"
           >
-            <div className="relative mb-4 aspect-square rounded-md overflow-hidden bg-secondary">
-              <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover" />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+            <div className="relative mb-4 aspect-square rounded-lg overflow-hidden bg-secondary shadow-lg">
+              <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
                 <Button
                   size="icon"
-                  className="bg-green-600 hover:bg-green-700 rounded-full h-10 w-10"
+                  className="bg-primary hover:bg-primary/80 text-primary-foreground rounded-full h-12 w-12 shadow-lg shadow-primary/20 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300"
                   onClick={() => handlePlay(video)}
                   aria-label={`Play ${video.title}`}
                 >
-                  <Play fill="currentColor" size={18} />
+                  <Play fill="currentColor" size={20} className="ml-1" />
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       size="icon"
                       variant="secondary"
-                      className="rounded-full h-10 w-10"
+                      className="rounded-full h-10 w-10 bg-black/50 hover:bg-black/70 text-white border-none transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-75"
                       aria-label="Add to playlist or queue"
                     >
                       <Plus size={18} />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleAddToQueue(video)}>Add to Queue</DropdownMenuItem>
-                    {playlists.length > 0 && <DropdownMenuItem disabled>Add to Playlist:</DropdownMenuItem>}
+                  <DropdownMenuContent align="end" className="bg-black/90 backdrop-blur-xl border-white/10">
+                    <DropdownMenuItem onClick={() => handleAddToQueue(video)} className="hover:bg-primary/20 focus:bg-primary/20 cursor-pointer">Add to Queue</DropdownMenuItem>
+                    {playlists.length > 0 && <DropdownMenuItem disabled className="text-muted-foreground">Add to Playlist:</DropdownMenuItem>}
                     {playlists.map((playlist) => (
-                      <DropdownMenuItem key={playlist.id} onClick={() => handleAddToPlaylist(video, playlist.id)}>
+                      <DropdownMenuItem key={playlist.id} onClick={() => handleAddToPlaylist(video, playlist.id)} className="hover:bg-primary/20 focus:bg-primary/20 cursor-pointer">
                         {playlist.name}
                       </DropdownMenuItem>
                     ))}
@@ -190,7 +190,7 @@ export function DiscoverMore() {
                 </DropdownMenu>
               </div>
             </div>
-            <h3 className="font-semibold text-sm mb-1 line-clamp-2">{video.title}</h3>
+            <h3 className="font-semibold text-sm mb-1 line-clamp-2 group-hover:text-primary transition-colors">{video.title}</h3>
             <p className="text-xs text-muted-foreground line-clamp-1">{video.artist}</p>
           </Card>
         ))}

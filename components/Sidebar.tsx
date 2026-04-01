@@ -15,6 +15,7 @@ import {
   Sun,
   Moon,
   X,
+  Check,
   Download,
   Upload,
   BarChart3,
@@ -22,6 +23,7 @@ import {
   ClipboardPaste,
   FileText,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useApp } from "@/contexts/AppContext"
@@ -43,7 +45,6 @@ import { SpotifyQuota } from "./SpotifyQuota"
 import { isAuthenticated } from "@/lib/spotifyAuth"
 import { AudioSettings } from "./AudioSettings"
 import { KeyboardShortcuts } from "./KeyboardShortcuts"
-import { toast } from "sonner"
 
 
 interface SidebarProps {
@@ -65,8 +66,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     likedSongs,
     setPlaylists,
     audioSettings,
-    setAudioSettings,
-    primaryColor = "green-500", // Default to green-500 if not provided
+    setAudioSettings, // Default to green-500 if not provided
   } = useApp()
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -135,8 +135,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme(theme === "dark" ? "light" : "dark")
   }
 
-  // Convert playlists to simple text format for easy sharing via WhatsApp, etc.
-  // Format:
+  // Convert playlists to simple text format:
   // PLAYLIST: name
   // - song title | artist | videoId
   const playlistsToText = () => {
@@ -149,7 +148,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     }).join("\n\n")
   }
 
-  // Parse text format back to playlists (supports pasting from WhatsApp, etc.)
+  // Parse text format back to playlists
   const textToPlaylists = (text: string) => {
     const lines = text.trim().split("\n")
     const result: typeof playlists = []
@@ -160,30 +159,32 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       if (!trimmed) continue
 
       if (trimmed.toUpperCase().startsWith("PLAYLIST:")) {
-        if (currentPlaylist) result.push(currentPlaylist)
+        if (currentPlaylist && currentPlaylist.tracks.length > 0) {
+          result.push(currentPlaylist)
+        }
         currentPlaylist = {
-          id: `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: trimmed.replace(/^PLAYLIST:/i, "").trim(),
+          id: `playlist-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+          name: trimmed.substring(trimmed.indexOf(":") + 1).trim() || "Imported Playlist",
           tracks: [],
           createdAt: Date.now()
         }
-      } else if ((trimmed.startsWith("-") || trimmed.startsWith("•")) && currentPlaylist) {
-        // Support both - and • as bullet points (WhatsApp often uses •)
-        const content = trimmed.slice(1).trim()
-        const parts = content.split("|").map(p => p.trim())
-        if (parts.length >= 2) {
-          const videoId = parts[2] || `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      } else if (trimmed.startsWith("-") && currentPlaylist) {
+        const parts = trimmed.slice(1).split("|").map(p => p.trim())
+        if (parts.length >= 3) {
+          const videoId = parts[2]
           currentPlaylist.tracks.push({
             id: videoId,
-            title: parts[0],
-            artist: parts[1],
-            thumbnail: videoId.startsWith("imported-") ? "/placeholder.svg" : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-            duration: parts[3] || "0:00"
+            title: parts[0] || "Unknown Title",
+            artist: parts[1] || "Unknown Artist",
+            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+            duration: "0:00"
           })
         }
       }
     }
-    if (currentPlaylist) result.push(currentPlaylist)
+    if (currentPlaylist && currentPlaylist.tracks.length > 0) {
+      result.push(currentPlaylist)
+    }
     return result
   }
 
@@ -194,21 +195,64 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   }
 
   const handleCopyToClipboard = async () => {
-    await navigator.clipboard.writeText(exportText)
-    toast.success("Playlists copied to clipboard", {
-      description: `${playlists.length} playlist${playlists.length !== 1 ? "s" : ""} ready to share`,
-      duration: 3000,
-    })
+    try {
+      await navigator.clipboard.writeText(exportText)
+      toast.custom((t) => (
+        <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-primary/20 p-2 rounded-lg">
+            <Check size={20} className="text-primary" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-white">Copied to clipboard!</h4>
+            <p className="text-xs text-gray-400 mt-1">You can now paste this into WhatsApp or any other app.</p>
+          </div>
+          <button
+            onClick={() => toast.dismiss(t)}
+            className="text-gray-500 hover:text-white transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ))
+    } catch (err) {
+      toast.error("Failed to copy to clipboard", {
+        className: "bg-red-950 border-red-500/50 text-red-200"
+      })
+    }
   }
 
   const handleDownloadText = () => {
-    const dataBlob = new Blob([exportText], { type: "text/plain" })
-    const url = URL.createObjectURL(dataBlob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `joelify-playlists-${new Date().toISOString().split("T")[0]}.txt`
-    link.click()
-    URL.revokeObjectURL(url)
+    try {
+      const dataBlob = new Blob([exportText], { type: "text/plain" })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `joelify-playlists-${new Date().toISOString().split("T")[0]}.txt`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      toast.custom((t) => (
+        <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-primary/20 p-2 rounded-lg">
+            <Download size={20} className="text-primary" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-white">Download started</h4>
+            <p className="text-xs text-gray-400 mt-1">Your playlists have been saved as a .txt file.</p>
+          </div>
+          <button
+            onClick={() => toast.dismiss(t)}
+            className="text-gray-500 hover:text-white transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ))
+    } catch (err) {
+      toast.error("Failed to download file", {
+        className: "bg-red-950 border-red-500/50 text-red-200"
+      })
+    }
   }
 
   const handleImportPlaylists = () => {
@@ -217,20 +261,47 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   }
 
   const handleImportFromText = () => {
-    if (!importText.trim()) return
-    const imported = textToPlaylists(importText)
-    if (imported.length > 0) {
-      setPlaylists([...playlists, ...imported])
-      setIsImportDialogOpen(false)
-      setImportText("")
-      toast.success(`Imported ${imported.length} playlist${imported.length !== 1 ? "s" : ""}`, {
-        description: "Your playlists have been added to your library",
-        duration: 3000,
+    if (!importText.trim()) {
+      toast.error("Please paste some text first", {
+        className: "bg-red-950 border-red-500/50 text-red-200"
       })
-    } else {
-      toast.error("No valid playlists found", {
-        description: "Make sure the text follows the correct format",
-        duration: 4000,
+      return
+    }
+
+    try {
+      const imported = textToPlaylists(importText)
+      if (imported.length > 0) {
+        setPlaylists([...playlists, ...imported])
+        setIsImportDialogOpen(false)
+        setImportText("")
+
+        toast.custom((t) => (
+          <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="bg-primary/20 p-2 rounded-lg">
+              <Upload size={20} className="text-primary" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-white">Import Successful!</h4>
+              <p className="text-xs text-gray-400 mt-1">Imported {imported.length} playlist(s) to your library.</p>
+            </div>
+            <button
+              onClick={() => toast.dismiss(t)}
+              className="text-gray-500 hover:text-white transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ))
+      } else {
+        toast.error("No valid playlists found", {
+          description: "Check the format: PLAYLIST: Name followed by - Title | Artist | videoId",
+          className: "bg-red-950 border-red-500/50 text-red-200"
+        })
+      }
+    } catch (err) {
+      toast.error("Import failed", {
+        description: "An unexpected error occurred during import.",
+        className: "bg-red-950 border-red-500/50 text-red-200"
       })
     }
   }
@@ -242,25 +313,86 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
+
       const reader = new FileReader()
       reader.onload = (event) => {
         const content = event.target?.result as string
-        // Try JSON first, then text format
+
+        // Try JSON first
         try {
           const json = JSON.parse(content)
-          if (Array.isArray(json)) {
-            setPlaylists([...playlists, ...json])
+          if (Array.isArray(json) && json.length > 0 && (json[0].tracks || json[0].songs)) {
+            // Basic validation that it looks like our playlist structure
+            const validatedJson = json.map(p => ({
+              ...p,
+              id: p.id || `playlist-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+              tracks: (p.tracks || p.songs || []).map((s: any) => ({
+                ...s,
+                id: s.id || s.videoId || `song-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+                thumbnail: s.thumbnail || (s.videoId ? `https://img.youtube.com/vi/${s.videoId}/mqdefault.jpg` : ""),
+                duration: s.duration || "0:00"
+              })),
+              createdAt: p.createdAt || Date.now()
+            }))
+            setPlaylists([...playlists, ...validatedJson])
             setIsImportDialogOpen(false)
-            toast.success(`Imported ${json.length} playlist${json.length !== 1 ? "s" : ""}`, {
-              description: "Your playlists have been added to your library",
-              duration: 3000,
-            })
+
+            toast.custom((t) => (
+              <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="bg-primary/20 p-2 rounded-lg">
+                  <Upload size={20} className="text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-white">Import Successful!</h4>
+                  <p className="text-xs text-gray-400 mt-1">Imported {validatedJson.length} playlist(s) from JSON.</p>
+                </div>
+                <button
+                  onClick={() => toast.dismiss(t)}
+                  className="text-gray-500 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ))
             return
           }
         } catch {
-          // Not JSON, try text format
+          // Not JSON or invalid JSON structure, fall through to text parsing
         }
-        setImportText(content)
+
+        // Try text format
+        const imported = textToPlaylists(content)
+        if (imported.length > 0) {
+          setPlaylists([...playlists, ...imported])
+          setIsImportDialogOpen(false)
+
+          toast.custom((t) => (
+            <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="bg-primary/20 p-2 rounded-lg">
+                <Upload size={20} className="text-primary" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-white">Import Successful!</h4>
+                <p className="text-xs text-gray-400 mt-1">Imported {imported.length} playlist(s) from file.</p>
+              </div>
+              <button
+                onClick={() => toast.dismiss(t)}
+                className="text-gray-500 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ))
+        } else {
+          toast.error("Could not find any valid playlists in the file.", {
+            className: "bg-red-950 border-red-500/50 text-red-200"
+          })
+        }
+      }
+      reader.onerror = () => {
+        toast.error("Failed to read the file.", {
+          className: "bg-red-950 border-red-500/50 text-red-200"
+        })
       }
       reader.readAsText(file)
     }
@@ -268,8 +400,38 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   }
 
   const handlePasteFromClipboard = async () => {
-    const text = await navigator.clipboard.readText()
-    setImportText(text)
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text) {
+        setImportText(text)
+        toast.custom((t) => (
+          <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="bg-primary/20 p-2 rounded-lg">
+              <ClipboardPaste size={20} className="text-primary" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-white">Pasted from clipboard</h4>
+              <p className="text-xs text-gray-400 mt-1">Text has been loaded into the import area.</p>
+            </div>
+            <button
+              onClick={() => toast.dismiss(t)}
+              className="text-gray-500 hover:text-white transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ))
+      } else {
+        toast.error("Clipboard is empty", {
+          className: "bg-red-950 border-red-500/50 text-red-200"
+        })
+      }
+    } catch (err) {
+      toast.error("Failed to read clipboard", {
+        description: "Please paste manually into the text area.",
+        className: "bg-red-950 border-red-500/50 text-red-200"
+      })
+    }
   }
 
   const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => {
@@ -283,7 +445,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} aria-hidden="true" />}
 
       <div
-        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-black/40 backdrop-blur-2xl border-r border-white/[0.07] text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
           }`}
       >
         <div className="flex flex-col h-full">
@@ -348,13 +510,22 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                       </button>
                     </li>
                     <li>
-                      <button
+                      <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => {
                           setActiveView("library")
                           setIsLibraryExpanded(!isLibraryExpanded)
                           onNavigate("library")
                         }}
-                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "library"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            setActiveView("library")
+                            setIsLibraryExpanded(!isLibraryExpanded)
+                            onNavigate("library")
+                          }
+                        }}
+                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out cursor-pointer ${activeView === "library"
                           ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
                           : "hover:bg-primary/10 hover:text-primary"
                           }`}
@@ -378,7 +549,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                             <ChevronRight size={16} className="transition-transform duration-300" />
                           )}
                         </Button>
-                      </button>
+                      </div>
 
                       {isLibraryExpanded && (
                         <div className="ml-6 mt-2 space-y-1 animate-slideDown">
@@ -547,7 +718,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
             </ScrollArea>
 
             {/* FOOTER */}
-            <div className="mt-auto p-4 border-t border-gray-800/30 flex-shrink-0 bg-gradient-to-t from-gray-950/80 to-gray-900/80">
+            <div className="mt-auto p-4 border-t border-white/[0.07] flex-shrink-0 bg-black/20 backdrop-blur-md">
               <div className="flex items-center justify-center mb-2 space-x-4">
                 <button
                   onClick={handleExportPlaylists}
@@ -671,7 +842,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           <Textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            placeholder={`PLAYLIST: My Playlist\n- Song Title | Artist | videoId | 3:45\n- Another Song | Artist | videoId\n\nPLAYLIST: Another Playlist\n• Track Name | Artist Name`}
+            placeholder={`PLAYLIST: My Playlist\n- Song Title | Artist | videoId\n- Another Song | Artist | videoId`}
             className="h-64 font-mono text-xs bg-gray-800/50 text-gray-100 border-gray-700 placeholder:text-gray-500"
           />
           <DialogFooter>
