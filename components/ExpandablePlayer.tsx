@@ -187,17 +187,24 @@ export function ExpandablePlayer({
           }}
         />
       )}
-      <div className="absolute inset-0 z-0 bg-zinc-950" />
+
+      {/* Solid dark base background */}
+      <div className="absolute inset-0 z-10 bg-zinc-950" />
+
+      {/* Subtle animated gradient overlay */}
+      <div
+        className="absolute inset-0 z-20 bg-gradient-to-br from-black via-primary/30 to-black animate-gradient-move pointer-events-none"
+      />
 
       {/* ── Visualizer ──────────────────────────────────────────────────── */}
       {showVisualizer && (
-        <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 z-30 pointer-events-none">
           <SimpleVisualizer isPlaying={isPlaying} currentTime={currentTime} volume={volume} bpm={128} />
         </div>
       )}
 
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/20 via-black/25 to-black/55 pointer-events-none" />
+      {/* Gradient overlay (darker vignette for better contrast) */}
+      <div className="absolute inset-0 z-40 bg-gradient-to-b from-black/20 via-black/25 to-black/55 pointer-events-none" />
 
       {/* ── Draggable panel ─────────────────────────────────────────────── */}
       <motion.div
@@ -206,7 +213,7 @@ export function ExpandablePlayer({
         dragElastic={0.15}
         onDragEnd={handleDragEnd}
         style={{ y, opacity, scale }}
-        className="relative h-full w-full flex flex-col z-20"
+        className="relative h-full w-full flex flex-col z-50"
         onClick={(e: { stopPropagation: () => any }) => e.stopPropagation()}
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
@@ -232,7 +239,7 @@ export function ExpandablePlayer({
             </p>
 
             <div className="flex items-center gap-1">
-              {/* Video toggle - updated hover style */}
+              {/* Video toggle */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -251,7 +258,7 @@ export function ExpandablePlayer({
                 <TooltipContent side="bottom"><p>{showVideo ? "Hide Video" : "Show Video"}</p></TooltipContent>
               </Tooltip>
 
-              {/* Visualizer toggle - updated hover style */}
+              {/* Visualizer toggle */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -278,12 +285,10 @@ export function ExpandablePlayer({
         </div>
 
         {/* ── Main content with responsive layout ───────────────────── */}
-        {/* Fixed height container to prevent shifting */}
         <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-5 md:px-8 lg:px-12 pb-safe overflow-y-auto">
-          {/* LEFT SIDE - Fixed height container */}
+          {/* LEFT SIDE - Album Art / Video */}
           <div className="lg:flex-1 lg:flex lg:justify-end">
             <div className="flex flex-col items-center">
-              {/* Media container with fixed dimensions */}
               <motion.div
                 initial={{ scale: 0.85, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -293,15 +298,11 @@ export function ExpandablePlayer({
                 <div
                   className={[
                     "relative overflow-hidden rounded-2xl shadow-2xl transition-all duration-300",
-                    // Fixed dimensions that don't change between modes
                     "w-full max-w-[min(85vw,380px)] aspect-square",
-                    // Desktop fixed size
                     "lg:w-96 lg:h-96",
-                    // Video mode maintains same container size, just changes content aspect
-                    showVideo && "lg:w-96 lg:h-96", // Keep same dimensions
+                    showVideo && "lg:w-96 lg:h-96",
                   ].join(" ")}
                 >
-                  {/* Content that adapts but container stays same size */}
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                     {showVideo ? (
                       <div className="w-full h-full flex items-center justify-center">
@@ -326,14 +327,12 @@ export function ExpandablePlayer({
                 </div>
               </motion.div>
 
-              {/* Spacer that maintains consistent height */}
               <div className="h-4 lg:h-6" />
             </div>
           </div>
 
-          {/* ── RIGHT SIDE: Track info + controls - FIXED POSITION ───────────────── */}
+          {/* RIGHT SIDE: Track info + controls */}
           <div className="lg:flex-1 lg:max-w-md xl:max-w-lg">
-            {/* Track info - always in same position */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -348,10 +347,8 @@ export function ExpandablePlayer({
               </p>
             </motion.div>
 
-            {/* Desktop divider */}
             <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
 
-            {/* Controls - now built into ExpandablePlayer */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -378,7 +375,7 @@ export function ExpandablePlayer({
                 {/* Control buttons */}
                 <TooltipProvider>
                   <div className="flex items-center justify-center gap-4">
-                    {/* Shuffle */}
+                    {/* Shuffle, Previous, Play/Pause, Next, Repeat buttons... (unchanged) */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -399,7 +396,6 @@ export function ExpandablePlayer({
                       </TooltipContent>
                     </Tooltip>
 
-                    {/* Previous */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -417,7 +413,6 @@ export function ExpandablePlayer({
                       </TooltipContent>
                     </Tooltip>
 
-                    {/* Play/Pause */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -437,7 +432,6 @@ export function ExpandablePlayer({
                       </TooltipContent>
                     </Tooltip>
 
-                    {/* Next */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -455,7 +449,6 @@ export function ExpandablePlayer({
                       </TooltipContent>
                     </Tooltip>
 
-                    {/* Repeat */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -469,7 +462,6 @@ export function ExpandablePlayer({
                             }`}
                         >
                           {repeat === "one" ? <Repeat1 size={24} /> : <Repeat size={24} />}
-                          {/* Active dot — same pattern as shuffle */}
                           {repeat !== "off" && (
                             <span className="absolute bottom-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary" />
                           )}
@@ -484,7 +476,6 @@ export function ExpandablePlayer({
               </div>
             </motion.div>
 
-            {/* Extra bottom padding for mobile */}
             <div className="h-16 lg:h-0" />
           </div>
         </div>
