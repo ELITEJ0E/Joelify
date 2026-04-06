@@ -63,10 +63,12 @@ export function ExpandablePlayer({
   const [showVisualizer, setShowVisualizer] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const [isDestroying, setIsDestroying] = useState(false)
 
   const videoPlayerRef = useRef<any>(null)
   const videoReadyRef = useRef(false)
   const initialSyncDoneRef = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
@@ -92,7 +94,8 @@ export function ExpandablePlayer({
     }
   }, [isExpanded, y])
 
-  const destroyVideoPlayer = () => {
+  const destroyVideoPlayer = useCallback(() => {
+    setIsDestroying(true)
     try {
       if (videoPlayerRef.current?.destroy) {
         videoPlayerRef.current.destroy()
@@ -104,7 +107,12 @@ export function ExpandablePlayer({
     videoReadyRef.current = false
     initialSyncDoneRef.current = false
     onVideoActiveChange?.(false)
-  }
+
+    // Small delay to ensure cleanup is complete
+    setTimeout(() => {
+      setIsDestroying(false)
+    }, 100)
+  }, [onVideoActiveChange])
 
   // Load YouTube API safely
   useEffect(() => {
@@ -125,11 +133,17 @@ export function ExpandablePlayer({
 
   // Init video player
   useEffect(() => {
-    if (!isExpanded || !showVideo || !currentTrack?.id) return
+    if (!isExpanded || !showVideo || !currentTrack?.id || isDestroying) return
 
     const initPlayer = () => {
       try {
         if (!window.YT?.Player || videoPlayerRef.current) return
+
+        const element = document.getElementById("expanded-yt-video")
+        if (!element) {
+          console.error("Video container element not found")
+          return
+        }
 
         videoPlayerRef.current = new window.YT.Player("expanded-yt-video", {
           height: "100%",
@@ -161,20 +175,24 @@ export function ExpandablePlayer({
       }
     }
 
-    if (window.YT?.Player) {
-      initPlayer()
-    } else {
-      window.onYouTubeIframeAPIReady = initPlayer
-    }
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      if (window.YT?.Player) {
+        initPlayer()
+      } else {
+        window.onYouTubeIframeAPIReady = initPlayer
+      }
+    }, 50)
 
     return () => {
+      clearTimeout(timer)
       destroyVideoPlayer()
     }
-  }, [isExpanded, showVideo, currentTrack?.id, onVideoActiveChange])
+  }, [isExpanded, showVideo, currentTrack?.id, onVideoActiveChange, isDestroying, destroyVideoPlayer])
 
   // One-time sync
   useEffect(() => {
-    if (!videoReadyRef.current || initialSyncDoneRef.current || !videoPlayerRef.current) return
+    if (!videoReadyRef.current || initialSyncDoneRef.current || !videoPlayerRef.current || isDestroying) return
     initialSyncDoneRef.current = true
     try {
       videoPlayerRef.current.seekTo(currentTime, true)
@@ -183,22 +201,33 @@ export function ExpandablePlayer({
     } catch (err) {
       console.error("Error syncing video:", err)
     }
-  }, [currentTime, isPlaying])
+  }, [currentTime, isPlaying, isDestroying])
 
   // Keep video in sync
   useEffect(() => {
-    if (!videoPlayerRef.current || !videoReadyRef.current) return
+    if (!videoPlayerRef.current || !videoReadyRef.current || isDestroying) return
     try {
       if (isPlaying) videoPlayerRef.current.playVideo()
       else videoPlayerRef.current.pauseVideo()
     } catch (err) {
       console.error("Error toggling video playback:", err)
     }
-  }, [isPlaying])
+  }, [isPlaying, isDestroying])
 
-  useEffect(() => {
-    if (!showVideo) destroyVideoPlayer()
-  }, [showVideo])
+  // Handle video toggle with proper cleanup
+  const handleToggleVideo = useCallback(() => {
+    if (showVideo) {
+      // Turning video OFF - destroy player first
+      destroyVideoPlayer()
+      // Then update state
+      setTimeout(() => {
+        setShowVideo(false)
+      }, 50)
+    } else {
+      // Turning video ON
+      setShowVideo(true)
+    }
+  }, [showVideo, destroyVideoPlayer])
 
   const handleDragEnd = useCallback((_: any, info: PanInfo) => {
     if (info.offset.y > 120 || info.velocity.y > 600) onExpandChange(false)
@@ -224,12 +253,6 @@ export function ExpandablePlayer({
   }, [isExpanded, onExpandChange])
 
   if (!isExpanded) return null
-
-  // Show error state if something went wrong
-  if (error) {
-    console.error("Rendering error state:", error)
-    // Still render the player but without video functionality
-  }
 
   return (
     <TooltipProvider>
@@ -306,8 +329,8 @@ export function ExpandablePlayer({
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost" size="icon"
-                    onClick={() => setShowVideo((v) => !v)}
-                    disabled={!currentTrack}
+                    onClick={handleToggleVideo}
+                    disabled={!currentTrack || isDestroying}
                     aria-label={showVideo ? "Hide video" : "Show video"}
                     className={`h-10 w-10 transition-colors ${showVideo
                       ? "text-primary bg-primary/10 hover:bg-primary/20"
@@ -364,9 +387,9 @@ export function ExpandablePlayer({
                     ].filter(Boolean).join(" ")}
                   >
                     <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                      {showVideo ? (
+                      {showVideo && !isDestroying ? (
                         <div className="w-full h-full flex items-center justify-center bg-black rounded-2xl overflow-hidden">
-                          <div id="expanded-yt-video" className="w-full h-full" />
+                          <div id="expanded-yt-video" className="w-full h-full" ref={containerRef} />
                         </div>
                       ) : currentTrack?.thumbnail ? (
                         <div className="relative w-full h-full">
