@@ -15,6 +15,7 @@ import {
   Sun,
   Moon,
   X,
+  Check,
   Download,
   Upload,
   BarChart3,
@@ -22,6 +23,7 @@ import {
   ClipboardPaste,
   FileText,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useApp } from "@/contexts/AppContext"
@@ -70,7 +72,6 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setRecentlyPlayed,
     audioSettings,
     setAudioSettings,
-    primaryColor = "green-500", // Default to green-500 if not provided
   } = useApp()
 
   const { user, syncData, loadUserData } = useAuth()
@@ -188,8 +189,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       const trimmed = line.trim()
       if (!trimmed) continue
 
-      if (trimmed.startsWith("PLAYLIST:")) {
-        if (currentPlaylist) result.push(currentPlaylist)
+      if (trimmed.toUpperCase().startsWith("PLAYLIST:")) {
+        if (currentPlaylist && currentPlaylist.tracks.length > 0) {
+          result.push(currentPlaylist)
+        }
         currentPlaylist = {
           id: `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: trimmed.replace("PLAYLIST:", "").trim(),
@@ -210,7 +213,9 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
         }
       }
     }
-    if (currentPlaylist) result.push(currentPlaylist)
+    if (currentPlaylist && currentPlaylist.tracks.length > 0) {
+      result.push(currentPlaylist)
+    }
     return result
   }
 
@@ -231,13 +236,37 @@ const handleCopyToClipboard = async () => {
   }
 
   const handleDownloadText = () => {
-    const dataBlob = new Blob([exportText], { type: "text/plain" })
-    const url = URL.createObjectURL(dataBlob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `joelify-playlists-${new Date().toISOString().split("T")[0]}.txt`
-    link.click()
-    URL.revokeObjectURL(url)
+    try {
+      const dataBlob = new Blob([exportText], { type: "text/plain" })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `joelify-playlists-${new Date().toISOString().split("T")[0]}.txt`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      toast.custom((t) => (
+        <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-primary/20 p-2 rounded-lg">
+            <Download size={20} className="text-primary" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-white">Download started</h4>
+            <p className="text-xs text-gray-400 mt-1">Your playlists have been saved as a .txt file.</p>
+          </div>
+          <button
+            onClick={() => toast.dismiss(t)}
+            className="text-gray-500 hover:text-white transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ))
+    } catch (err) {
+      toast.error("Failed to download file", {
+        className: "bg-red-950 border-red-500/50 text-red-200"
+      })
+    }
   }
 
   const handleImportPlaylists = () => {
@@ -246,15 +275,48 @@ const handleCopyToClipboard = async () => {
   }
 
   const handleImportFromText = () => {
-    if (!importText.trim()) return
-    const imported = textToPlaylists(importText)
-    if (imported.length > 0) {
-      setPlaylists([...playlists, ...imported])
-      setIsImportDialogOpen(false)
-      setImportText("")
-      alert(`Imported ${imported.length} playlist(s)!`)
-    } else {
-      alert("No valid playlists found in text")
+    if (!importText.trim()) {
+      toast.error("Please paste some text first", {
+        className: "bg-red-950 border-red-500/50 text-red-200"
+      })
+      return
+    }
+
+    try {
+      const imported = textToPlaylists(importText)
+      if (imported.length > 0) {
+        setPlaylists([...playlists, ...imported])
+        setIsImportDialogOpen(false)
+        setImportText("")
+
+        toast.custom((t) => (
+          <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="bg-primary/20 p-2 rounded-lg">
+              <Upload size={20} className="text-primary" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-white">Import Successful!</h4>
+              <p className="text-xs text-gray-400 mt-1">Imported {imported.length} playlist(s) to your library.</p>
+            </div>
+            <button
+              onClick={() => toast.dismiss(t)}
+              className="text-gray-500 hover:text-white transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ))
+      } else {
+        toast.error("No valid playlists found", {
+          description: "Check the format: PLAYLIST: Name followed by - Title | Artist | videoId",
+          className: "bg-red-950 border-red-500/50 text-red-200"
+        })
+      }
+    } catch (err) {
+      toast.error("Import failed", {
+        description: "An unexpected error occurred during import.",
+        className: "bg-red-950 border-red-500/50 text-red-200"
+      })
     }
   }
 
@@ -265,22 +327,86 @@ const handleCopyToClipboard = async () => {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
+
       const reader = new FileReader()
       reader.onload = (event) => {
         const content = event.target?.result as string
-        // Try JSON first, then text format
+
+        // Try JSON first
         try {
           const json = JSON.parse(content)
-          if (Array.isArray(json)) {
-            setPlaylists([...playlists, ...json])
+          if (Array.isArray(json) && json.length > 0 && (json[0].tracks || json[0].songs)) {
+            // Basic validation that it looks like our playlist structure
+            const validatedJson = json.map(p => ({
+              ...p,
+              id: p.id || `playlist-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+              tracks: (p.tracks || p.songs || []).map((s: any) => ({
+                ...s,
+                id: s.id || s.videoId || `song-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+                thumbnail: s.thumbnail || (s.videoId ? `https://img.youtube.com/vi/${s.videoId}/mqdefault.jpg` : ""),
+                duration: s.duration || "0:00"
+              })),
+              createdAt: p.createdAt || Date.now()
+            }))
+            setPlaylists([...playlists, ...validatedJson])
             setIsImportDialogOpen(false)
-            alert(`Imported ${json.length} playlist(s)!`)
+
+            toast.custom((t) => (
+              <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="bg-primary/20 p-2 rounded-lg">
+                  <Upload size={20} className="text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-white">Import Successful!</h4>
+                  <p className="text-xs text-gray-400 mt-1">Imported {validatedJson.length} playlist(s) from JSON.</p>
+                </div>
+                <button
+                  onClick={() => toast.dismiss(t)}
+                  className="text-gray-500 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ))
             return
           }
         } catch {
-          // Not JSON, try text format
+          // Not JSON or invalid JSON structure, fall through to text parsing
         }
-        setImportText(content)
+
+        // Try text format
+        const imported = textToPlaylists(content)
+        if (imported.length > 0) {
+          setPlaylists([...playlists, ...imported])
+          setIsImportDialogOpen(false)
+
+          toast.custom((t) => (
+            <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="bg-primary/20 p-2 rounded-lg">
+                <Upload size={20} className="text-primary" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-white">Import Successful!</h4>
+                <p className="text-xs text-gray-400 mt-1">Imported {imported.length} playlist(s) from file.</p>
+              </div>
+              <button
+                onClick={() => toast.dismiss(t)}
+                className="text-gray-500 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ))
+        } else {
+          toast.error("Could not find any valid playlists in the file.", {
+            className: "bg-red-950 border-red-500/50 text-red-200"
+          })
+        }
+      }
+      reader.onerror = () => {
+        toast.error("Failed to read the file.", {
+          className: "bg-red-950 border-red-500/50 text-red-200"
+        })
       }
       reader.readAsText(file)
     }
@@ -308,9 +434,8 @@ const handlePasteFromClipboard = async () => {
       {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} aria-hidden="true" />}
 
       <div
-        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-black/40 backdrop-blur-2xl border-r border-white/[0.07] text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
       >
         <div className="flex flex-col h-full">
           {/* HEADER */}
@@ -356,11 +481,10 @@ const handlePasteFromClipboard = async () => {
                     <li>
                       <button
                         onClick={() => handleNavigate("home")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "home"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "home"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Home size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Home</span>
@@ -369,28 +493,35 @@ const handlePasteFromClipboard = async () => {
                     <li>
                       <button
                         onClick={() => handleNavigate("search")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "search"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "search"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Search size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Search</span>
                       </button>
                     </li>
                     <li>
-                      <button
+                      <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => {
                           setActiveView("library")
                           setIsLibraryExpanded(!isLibraryExpanded)
                           onNavigate("library")
                         }}
-                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "library"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            setActiveView("library")
+                            setIsLibraryExpanded(!isLibraryExpanded)
+                            onNavigate("library")
+                          }
+                        }}
+                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out cursor-pointer ${activeView === "library"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <div className="flex items-center space-x-3">
                           <Library size={20} className="transition-transform duration-300 group-hover:scale-105" />
@@ -411,7 +542,7 @@ const handlePasteFromClipboard = async () => {
                             <ChevronRight size={16} className="transition-transform duration-300" />
                           )}
                         </Button>
-                      </button>
+                      </div>
 
                       {isLibraryExpanded && (
                         <div className="ml-6 mt-2 space-y-1 animate-slideDown">
@@ -464,14 +595,13 @@ const handlePasteFromClipboard = async () => {
 
                               {playlists.map((playlist) => (
                                 <li key={playlist.id} className="group">
-                                  <div className="flex items-center justify-between py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
+                                  <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
                                     <button
                                       onClick={() => handlePlaylistClick(playlist.id)}
-                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${
-                                        currentPlaylistId === playlist.id
-                                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
-                                          : "hover:bg-primary/10 hover:text-primary"
-                                      }`}
+                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 truncate ${currentPlaylistId === playlist.id
+                                        ? "text-primary"
+                                        : "text-gray-300 hover:text-primary"
+                                        }`}
                                     >
                                       {playlist.name}
                                     </button>
@@ -480,54 +610,26 @@ const handlePasteFromClipboard = async () => {
                                         <Button
                                           size="icon"
                                           variant="ghost"
-                                          className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-full transition-all duration-200"
+                                          className="h-7 w-7 opacity-100 hover:bg-primary/10 hover:text-primary rounded-full transition-all duration-200 flex-shrink-0"
                                         >
                                           <MoreVertical size={14} />
                                         </Button>
                                       </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className=" border-gray-800/50">
+                                      <DropdownMenuContent align="end" className="border-gray-800/50">
                                         <DropdownMenuItem
                                           onClick={() => openRenameDialog(playlist.id, playlist.name)}
-                                          className="text-gray-200 hover:bg-primary/10 hover:text-primary"
+                                          className="text-gray-200 hover:bg-primary/10 hover:text-primary cursor-pointer"
                                         >
                                           <Edit2 size={14} className="mr-2" />
                                           Rename
                                         </DropdownMenuItem>
-                                        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                                          <DialogTrigger asChild>
-                                            <DropdownMenuItem
-                                              onSelect={(e) => e.preventDefault()}
-                                              onClick={() => openDeleteDialog(playlist.id, playlist.name)}
-                                              className="text-red-400 hover:bg-primary/10 hover:text-red-300"
-                                            >
-                                              <Trash2 size={14} className="mr-2" />
-                                              Delete
-                                            </DropdownMenuItem>
-                                          </DialogTrigger>
-                                          <DialogContent>
-                                            <DialogHeader>
-                                              <DialogTitle className="text-primary">Delete Playlist</DialogTitle>
-                                              <DialogDescription className="text-gray-300">
-                                                Are you sure you want to delete {playlistToDelete?.name}?
-                                              </DialogDescription>
-                                            </DialogHeader>
-                                            <DialogFooter>
-                                              <Button
-                                                variant="outline"
-                                                onClick={() => setIsDeleteDialogOpen(false)}
-                                                className="border-primary text-gray-300 hover:bg-gray-800/50"
-                                              >
-                                                Cancel
-                                              </Button>
-                                              <Button
-                                                onClick={handleDeletePlaylist}
-                                                className="bg-red-500 hover:bg-red-600 text-white"
-                                              >
-                                                Delete
-                                              </Button>
-                                            </DialogFooter>
-                                          </DialogContent>
-                                        </Dialog>
+                                        <DropdownMenuItem
+                                          onClick={() => openDeleteDialog(playlist.id, playlist.name)}
+                                          className="text-red-400 hover:bg-primary/10 hover:text-red-300 cursor-pointer"
+                                        >
+                                          <Trash2 size={14} className="mr-2" />
+                                          Delete
+                                        </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
                                   </div>
@@ -541,11 +643,10 @@ const handlePasteFromClipboard = async () => {
                     <li>
                       <button
                         onClick={() => handleNavigate("liked")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${
-                          activeView === "liked"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${activeView === "liked"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <Heart size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Liked Songs</span>
@@ -559,11 +660,10 @@ const handlePasteFromClipboard = async () => {
                     <li>
                       <button
                         onClick={() => handleNavigate("stats")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "stats"
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                            : "hover:bg-primary/10 hover:text-primary"
-                        }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "stats"
+                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                          : "hover:bg-primary/10 hover:text-primary"
+                          }`}
                       >
                         <BarChart3 size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Statistics</span>
@@ -583,7 +683,7 @@ const handlePasteFromClipboard = async () => {
             </ScrollArea>
 
             {/* FOOTER */}
-            <div className="mt-auto p-4 border-t border-gray-800/30 flex-shrink-0 bg-gradient-to-t from-gray-950/80 to-gray-900/80">
+            <div className="mt-auto p-4 border-t border-white/[0.07] flex-shrink-0 bg-black/20 backdrop-blur-md">
               <div className="flex items-center justify-center mb-2 space-x-4">
                 <button
                   onClick={handleExportPlaylists}

@@ -592,7 +592,7 @@ export function PlayerControls() {
                     aria-label="Open queue">
                     <List size={20} />
                     {queue.length > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-md h-4 w-4 flex items-center justify-center">
                         {queue.length}
                       </span>
                     )}
@@ -630,11 +630,13 @@ export function PlayerControls() {
             <div className="flex items-center gap-2 w-full mb-3 md:mb-2">
               <span className="text-xs text-zinc-500 w-10 text-right">{formatTime(currentTime)}</span>
               <div className="flex-1">
-                <Slider value={[currentTime]} max={duration > 0 ? duration : 1} step={0.1}
+                <Slider
+                  value={[currentTime]}
+                  max={duration > 0 ? duration : 1}
+                  step={0.1}
                   onValueChange={handleSeek}
                   disabled={!currentTrack || duration === 0 || !isReady}
                   aria-label="Seek"
-                  key={`slider-${currentTrack?.id}-${Math.floor(currentTime)}`}
                 />
               </div>
               <span className="text-xs text-zinc-500 w-10">{formatTime(duration)}</span>
@@ -647,11 +649,10 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
                       aria-label="Toggle shuffle"
-                      className={`h-10 w-10 transition-colors ${
-                        shuffle 
-                          ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-primary"
-                      }`}>
+                      className={`h-10 w-10 transition-colors ${shuffle
+                        ? "text-primary"
+                        : "text-zinc-400 hover:text-white hover:bg-primary"
+                        }`}>
                       <Shuffle size={20} />
                     </Button>
                   </TooltipTrigger>
@@ -681,8 +682,8 @@ export function PlayerControls() {
                       className="bg-white text-black rounded-full h-14 w-14 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-md disabled:opacity-50"
                       onClick={handlePlayPause} disabled={!currentTrack || !isReady}
                       aria-label={isPlaying ? "Pause" : "Play"}>
-                      {isPlaying ? 
-                        <Pause fill="currentColor" size={24} /> : 
+                      {isPlaying ?
+                        <Pause fill="currentColor" size={24} /> :
                         <Play fill="currentColor" size={24} className="ml-0.5" />
                       }
                     </Button>
@@ -711,11 +712,10 @@ export function PlayerControls() {
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
                       aria-label={`Repeat: ${repeat}`}
-                      className={`h-10 w-10 relative transition-colors ${
-                        repeat !== "off"
-                          ? "text-primary hover:text-primary hover:bg-primary/10"
-                          : "text-zinc-400 hover:text-white hover:bg-white/10"
-                      }`}>
+                      className={`h-10 w-10 relative transition-colors ${repeat !== "off"
+                        ? "text-primary hover:text-primary hover:bg-primary/10"
+                        : "text-zinc-400 hover:text-white hover:bg-white/10"
+                        }`}>
                       {repeat === "one" ? <Repeat1 size={20} /> : <Repeat size={20} />}
                       {/* Active dot — same pattern as shuffle */}
                       {repeat !== "off" && (
@@ -735,11 +735,10 @@ export function PlayerControls() {
                       onClick={() => setBarVideoMode((v) => !v)}
                       disabled={!currentTrack}
                       aria-label={barVideoMode ? "Hide video" : "Show video"}
-                      className={`h-10 w-10 transition-colors ${
-                        barVideoMode 
-                          ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-primary"
-                      }`}>
+                      className={`h-10 w-10 transition-colors ${barVideoMode
+                        ? "text-primary"
+                        : "text-zinc-400 hover:text-white hover:bg-primary"
+                        }`}>
                       {barVideoMode ? <Video size={20} /> : <Music size={20} />}
                     </Button>
                   </TooltipTrigger>
@@ -763,7 +762,7 @@ export function PlayerControls() {
                         aria-label="Queue">
                         <List size={20} />
                         {queue.length > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center">
+                          <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-md h-4 w-4 flex items-center justify-center">
                             {queue.length}
                           </span>
                         )}
@@ -785,13 +784,12 @@ export function PlayerControls() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button size="icon" variant="ghost" onClick={handleSwitch}
-                    className={`h-10 w-10 transition-colors ${
-                      !isSpotifyAuth && playbackSource === "youtube" 
-                        ? "text-zinc-600" 
-                        : playbackSource === "youtube" 
-                          ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-primary"
-                    }`}
+                    className={`h-10 w-10 transition-colors ${!isSpotifyAuth && playbackSource === "youtube"
+                      ? "text-zinc-600"
+                      : playbackSource === "youtube"
+                        ? "text-primary"
+                        : "text-zinc-400 hover:text-white hover:bg-primary"
+                      }`}
                     disabled={!currentTrack || (!isSpotifyAuth && playbackSource === "youtube")}>
                     {playbackSource === "youtube" ? <Music2 size={20} /> : <Youtube size={20} />}
                   </Button>

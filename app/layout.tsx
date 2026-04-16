@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { AuthProvider } from "@/contexts/AuthContext"
 import { AppProvider } from "@/contexts/AppContext"
+import { Toaster } from "sonner"
 import "./globals.css"
 import { Suspense } from "react"
 
@@ -47,6 +48,17 @@ export default function RootLayout({
           </AuthProvider>
         </Suspense>
         <Analytics />
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "hsl(var(--card))",
+              border: "1px solid hsl(var(--primary) / 0.3)",
+              color: "hsl(var(--foreground))",
+            },
+          }}
+        />
       </body>
     </html>
   )
