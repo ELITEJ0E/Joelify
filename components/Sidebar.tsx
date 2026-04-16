@@ -45,6 +45,8 @@ import { SpotifyQuota } from "./SpotifyQuota"
 import { isAuthenticated } from "@/lib/spotifyAuth"
 import { AudioSettings } from "./AudioSettings"
 import { KeyboardShortcuts } from "./KeyboardShortcuts"
+import { UserProfile } from "./UserProfile"
+import { useAuth } from "@/contexts/AuthContext"
 
 
 interface SidebarProps {
@@ -65,9 +67,38 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme,
     likedSongs,
     setPlaylists,
+    setLikedSongs,
+    recentlyPlayed,
+    setRecentlyPlayed,
     audioSettings,
     setAudioSettings,
   } = useApp()
+
+  const { user, syncData, loadUserData } = useAuth()
+
+  // Sync data to cloud
+  const handleSyncToCloud = async () => {
+    if (!user) return
+    await syncData({
+      playlists,
+      liked_songs: likedSongs,
+      recently_played: recentlyPlayed,
+      settings: { audioSettings, theme, primaryColor },
+    })
+  }
+
+  // Load data from cloud
+  const handleLoadFromCloud = async () => {
+    if (!user) return
+    const data = await loadUserData()
+    if (data) {
+      if (data.playlists?.length) setPlaylists(data.playlists)
+      if (data.liked_songs?.length) setLikedSongs(data.liked_songs)
+      if (data.recently_played?.length) setRecentlyPlayed(data.recently_played)
+      if (data.settings?.audioSettings) setAudioSettings(data.settings.audioSettings)
+      if (data.settings?.theme) setTheme(data.settings.theme)
+    }
+  }
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
@@ -137,14 +168,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
 
   // Convert playlists to simple text format:
   // PLAYLIST: name
-  // - song title | artist | videoId
+  // - track title | artist | videoId
   const playlistsToText = () => {
     return playlists.map(playlist => {
       const header = `PLAYLIST: ${playlist.name}`
-      const tracks = playlist.tracks.map(track =>
-        `- ${track.title} | ${track.artist} | ${track.id}`
+      const trackLines = (playlist.tracks || []).map(track => 
+        `- ${track.title} | ${track.artist} | ${track.videoId}`
       ).join("\n")
-      return tracks ? `${header}\n${tracks}` : header
+      return trackLines ? `${header}\n${trackLines}` : header
     }).join("\n\n")
   }
 
@@ -163,21 +194,21 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           result.push(currentPlaylist)
         }
         currentPlaylist = {
-          id: `playlist-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-          name: trimmed.substring(trimmed.indexOf(":") + 1).trim() || "Imported Playlist",
+          id: `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: trimmed.replace("PLAYLIST:", "").trim(),
           tracks: [],
           createdAt: Date.now()
         }
       } else if (trimmed.startsWith("-") && currentPlaylist) {
         const parts = trimmed.slice(1).split("|").map(p => p.trim())
         if (parts.length >= 3) {
-          const videoId = parts[2]
           currentPlaylist.tracks.push({
-            id: videoId,
-            title: parts[0] || "Unknown Title",
-            artist: parts[1] || "Unknown Artist",
-            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-            duration: "0:00"
+            id: `track-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            title: parts[0],
+            artist: parts[1],
+            videoId: parts[2],
+            thumbnail: `https://img.youtube.com/vi/${parts[2]}/mqdefault.jpg`,
+            duration: 0
           })
         }
       }
@@ -194,30 +225,13 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setIsExportDialogOpen(true)
   }
 
-  const handleCopyToClipboard = async () => {
+const handleCopyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(exportText)
-      toast.custom((t) => (
-        <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="bg-primary/20 p-2 rounded-lg">
-            <Check size={20} className="text-primary" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-bold text-white">Copied to clipboard!</h4>
-            <p className="text-xs text-gray-400 mt-1">You can now paste this into WhatsApp or any other app.</p>
-          </div>
-          <button
-            onClick={() => toast.dismiss(t)}
-            className="text-gray-500 hover:text-white transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      ))
-    } catch (err) {
-      toast.error("Failed to copy to clipboard", {
-        className: "bg-red-950 border-red-500/50 text-red-200"
-      })
+      alert("Copied to clipboard!")
+    } catch {
+      // Clipboard API blocked - select the text so user can copy manually
+      alert("Clipboard access is blocked. Please select the text and use Ctrl+C (or Cmd+C) to copy.")
     }
   }
 
@@ -399,38 +413,13 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     input.click()
   }
 
-  const handlePasteFromClipboard = async () => {
+const handlePasteFromClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText()
-      if (text) {
-        setImportText(text)
-        toast.custom((t) => (
-          <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="bg-primary/20 p-2 rounded-lg">
-              <ClipboardPaste size={20} className="text-primary" />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-bold text-white">Pasted from clipboard</h4>
-              <p className="text-xs text-gray-400 mt-1">Text has been loaded into the import area.</p>
-            </div>
-            <button
-              onClick={() => toast.dismiss(t)}
-              className="text-gray-500 hover:text-white transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ))
-      } else {
-        toast.error("Clipboard is empty", {
-          className: "bg-red-950 border-red-500/50 text-red-200"
-        })
-      }
-    } catch (err) {
-      toast.error("Failed to read clipboard", {
-        description: "Please paste manually into the text area.",
-        className: "bg-red-950 border-red-500/50 text-red-200"
-      })
+      setImportText(text)
+    } catch {
+      // Clipboard API blocked in iframe/sandboxed environments
+      alert("Clipboard access is blocked. Please use Ctrl+V (or Cmd+V) to paste directly into the text area.")
     }
   }
 
@@ -456,6 +445,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                 Joelify
               </h1>
               <div className="flex items-center gap-1">
+                <UserProfile 
+                  onSyncToCloud={handleSyncToCloud} 
+                  onLoadFromCloud={handleLoadFromCloud} 
+                />
                 <AudioSettings settings={audioSettings} onChange={setAudioSettings} />
                 <KeyboardShortcuts />
                 <ThemeSettings />
