@@ -219,9 +219,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setIsExportDialogOpen(true)
   }
 
-  const handleCopyToClipboard = async () => {
-    await navigator.clipboard.writeText(exportText)
-    alert("Copied to clipboard!")
+const handleCopyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(exportText)
+      alert("Copied to clipboard!")
+    } catch {
+      // Clipboard API blocked - select the text so user can copy manually
+      alert("Clipboard access is blocked. Please select the text and use Ctrl+C (or Cmd+C) to copy.")
+    }
   }
 
   const handleDownloadText = () => {
@@ -281,9 +286,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     input.click()
   }
 
-  const handlePasteFromClipboard = async () => {
-    const text = await navigator.clipboard.readText()
-    setImportText(text)
+const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      setImportText(text)
+    } catch {
+      // Clipboard API blocked in iframe/sandboxed environments
+      alert("Clipboard access is blocked. Please use Ctrl+V (or Cmd+V) to paste directly into the text area.")
+    }
   }
 
   const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => {
