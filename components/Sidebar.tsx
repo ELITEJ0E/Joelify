@@ -43,6 +43,8 @@ import { SpotifyQuota } from "./SpotifyQuota"
 import { isAuthenticated } from "@/lib/spotifyAuth"
 import { AudioSettings } from "./AudioSettings"
 import { KeyboardShortcuts } from "./KeyboardShortcuts"
+import { UserProfile } from "./UserProfile"
+import { useAuth } from "@/contexts/AuthContext"
 
 
 interface SidebarProps {
@@ -63,10 +65,39 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme,
     likedSongs,
     setPlaylists,
+    setLikedSongs,
+    recentlyPlayed,
+    setRecentlyPlayed,
     audioSettings,
     setAudioSettings,
     primaryColor = "green-500", // Default to green-500 if not provided
   } = useApp()
+
+  const { user, syncData, loadUserData } = useAuth()
+
+  // Sync data to cloud
+  const handleSyncToCloud = async () => {
+    if (!user) return
+    await syncData({
+      playlists,
+      liked_songs: likedSongs,
+      recently_played: recentlyPlayed,
+      settings: { audioSettings, theme, primaryColor },
+    })
+  }
+
+  // Load data from cloud
+  const handleLoadFromCloud = async () => {
+    if (!user) return
+    const data = await loadUserData()
+    if (data) {
+      if (data.playlists?.length) setPlaylists(data.playlists)
+      if (data.liked_songs?.length) setLikedSongs(data.liked_songs)
+      if (data.recently_played?.length) setRecentlyPlayed(data.recently_played)
+      if (data.settings?.audioSettings) setAudioSettings(data.settings.audioSettings)
+      if (data.settings?.theme) setTheme(data.settings.theme)
+    }
+  }
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
@@ -278,6 +309,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                 Joelify
               </h1>
               <div className="flex items-center gap-1">
+                <UserProfile 
+                  onSyncToCloud={handleSyncToCloud} 
+                  onLoadFromCloud={handleLoadFromCloud} 
+                />
                 <AudioSettings settings={audioSettings} onChange={setAudioSettings} />
                 <KeyboardShortcuts />
                 <ThemeSettings />

@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { AuthProvider } from "@/contexts/AuthContext"
 import { AppProvider } from "@/contexts/AppContext"
 import "./globals.css"
 import { Suspense } from "react"
@@ -41,7 +42,9 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <Suspense fallback={null}>
-          <AppProvider>{children}</AppProvider>
+          <AuthProvider>
+            <AppProvider>{children}</AppProvider>
+          </AuthProvider>
         </Suspense>
         <Analytics />
       </body>

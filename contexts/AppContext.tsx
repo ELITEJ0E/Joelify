@@ -36,6 +36,7 @@ interface AppContextType extends AppState {
   isTrackLiked: (trackId: string) => boolean
   setLikedSongs: (songs: Track[]) => void
   recentlyPlayed: RecentlyPlayed[]
+  setRecentlyPlayed: (items: RecentlyPlayed[]) => void
   addRecentlyPlayed: (item: { type: "track" | "playlist"; id: string }) => void
   setCustomTheme: (colors: { primary: string; accent: string }) => void
   customTheme?: { primary: string; accent: string }
@@ -318,6 +319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isTrackLiked,
         setLikedSongs,
         recentlyPlayed,
+        setRecentlyPlayed,
         addRecentlyPlayed,
         customTheme,
         setCustomTheme,
