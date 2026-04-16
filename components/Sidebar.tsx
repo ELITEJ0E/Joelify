@@ -167,14 +167,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
 
   // Convert playlists to simple text format:
   // PLAYLIST: name
-  // - song title | artist | videoId
+  // - track title | artist | videoId
   const playlistsToText = () => {
     return playlists.map(playlist => {
       const header = `PLAYLIST: ${playlist.name}`
-      const songs = playlist.songs.map(song => 
-        `- ${song.title} | ${song.artist} | ${song.videoId}`
+      const trackLines = (playlist.tracks || []).map(track => 
+        `- ${track.title} | ${track.artist} | ${track.videoId}`
       ).join("\n")
-      return songs ? `${header}\n${songs}` : header
+      return trackLines ? `${header}\n${trackLines}` : header
     }).join("\n\n")
   }
 
@@ -193,13 +193,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
         currentPlaylist = {
           id: `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: trimmed.replace("PLAYLIST:", "").trim(),
-          songs: []
+          tracks: [],
+          createdAt: Date.now()
         }
       } else if (trimmed.startsWith("-") && currentPlaylist) {
         const parts = trimmed.slice(1).split("|").map(p => p.trim())
         if (parts.length >= 3) {
-          currentPlaylist.songs.push({
-            id: `song-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          currentPlaylist.tracks.push({
+            id: `track-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             title: parts[0],
             artist: parts[1],
             videoId: parts[2],
