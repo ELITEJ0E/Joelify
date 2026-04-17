@@ -71,7 +71,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     recentlyPlayed,
     setRecentlyPlayed,
     audioSettings,
-    setAudioSettings,
+    setAudioSettings, // Default to green-500 if not provided
   } = useApp()
 
   const { user, syncData, loadUserData } = useAuth()
@@ -595,12 +595,12 @@ const handlePasteFromClipboard = async () => {
 
                               {playlists.map((playlist) => (
                                 <li key={playlist.id} className="group">
-                                  <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
+                                  <div className="flex items-center justify-between py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
                                     <button
                                       onClick={() => handlePlaylistClick(playlist.id)}
-                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 truncate ${currentPlaylistId === playlist.id
-                                        ? "text-primary"
-                                        : "text-gray-300 hover:text-primary"
+                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${currentPlaylistId === playlist.id
+                                        ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
+                                        : "hover:bg-primary/10 hover:text-primary"
                                         }`}
                                     >
                                       {playlist.name}
@@ -610,26 +610,54 @@ const handlePasteFromClipboard = async () => {
                                         <Button
                                           size="icon"
                                           variant="ghost"
-                                          className="h-7 w-7 opacity-100 hover:bg-primary/10 hover:text-primary rounded-full transition-all duration-200 flex-shrink-0"
+                                          className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-full transition-all duration-200"
                                         >
                                           <MoreVertical size={14} />
                                         </Button>
                                       </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="border-gray-800/50">
+                                      <DropdownMenuContent align="end" className=" border-gray-800/50">
                                         <DropdownMenuItem
                                           onClick={() => openRenameDialog(playlist.id, playlist.name)}
-                                          className="text-gray-200 hover:bg-primary/10 hover:text-primary cursor-pointer"
+                                          className="text-gray-200 hover:bg-primary/10 hover:text-primary"
                                         >
                                           <Edit2 size={14} className="mr-2" />
                                           Rename
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          onClick={() => openDeleteDialog(playlist.id, playlist.name)}
-                                          className="text-red-400 hover:bg-primary/10 hover:text-red-300 cursor-pointer"
-                                        >
-                                          <Trash2 size={14} className="mr-2" />
-                                          Delete
-                                        </DropdownMenuItem>
+                                        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                                          <DialogTrigger asChild>
+                                            <DropdownMenuItem
+                                              onSelect={(e) => e.preventDefault()}
+                                              onClick={() => openDeleteDialog(playlist.id, playlist.name)}
+                                              className="text-red-400 hover:bg-primary/10 hover:text-red-300"
+                                            >
+                                              <Trash2 size={14} className="mr-2" />
+                                              Delete
+                                            </DropdownMenuItem>
+                                          </DialogTrigger>
+                                          <DialogContent>
+                                            <DialogHeader>
+                                              <DialogTitle className="text-primary">Delete Playlist</DialogTitle>
+                                              <DialogDescription className="text-gray-300">
+                                                Are you sure you want to delete {playlistToDelete?.name}?
+                                              </DialogDescription>
+                                            </DialogHeader>
+                                            <DialogFooter>
+                                              <Button
+                                                variant="outline"
+                                                onClick={() => setIsDeleteDialogOpen(false)}
+                                                className="border-primary text-gray-300 hover:bg-gray-800/50"
+                                              >
+                                                Cancel
+                                              </Button>
+                                              <Button
+                                                onClick={handleDeletePlaylist}
+                                                className="bg-red-500 hover:bg-red-600 text-white"
+                                              >
+                                                Delete
+                                              </Button>
+                                            </DialogFooter>
+                                          </DialogContent>
+                                        </Dialog>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
                                   </div>
