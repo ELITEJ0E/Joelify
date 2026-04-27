@@ -5,10 +5,8 @@ import Image from "next/image"
 
 export function LoadingScreen() {
   const [isVisible, setIsVisible] = useState(true)
-  const [isMounted, setIsMounted] = useState(false)
 
   useEffect(() => {
-    setIsMounted(true)
     const timer = setTimeout(() => setIsVisible(false), 3000)
     return () => clearTimeout(timer)
   }, [])
@@ -119,7 +117,7 @@ export function LoadingScreen() {
 
           {/* Floating Particles */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {isMounted && [...Array(15)].map((_, i) => (
+            {[...Array(15)].map((_, i) => (
               <motion.span
                 key={i}
                 className="absolute w-1 h-1 bg-green-400/60 rounded-full"

@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { useApp } from "@/contexts/AppContext"
 
 interface SimpleVisualizerProps {
   isPlaying: boolean
@@ -16,23 +15,36 @@ export function SimpleVisualizer({
   volume = 1,
   bpm = 128 // Default BPM for electronic music
 }: SimpleVisualizerProps) {
-  const { analyserNode, audioSettings } = useApp()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const barsRef = useRef<number[]>([])
   const phaseRef = useRef(0)
   const lastBeatRef = useRef(0)
+  const beatPhaseRef = useRef(0)
   const energyRef = useRef(0)
-  
-  // Real-time beat detection refs
-  const beatThresholdRef = useRef(0.5)
-  const lastBeatTimeRef = useRef(0)
 
   // Initialize bars
   useEffect(() => {
     const numBars = 64
     barsRef.current = Array(numBars).fill(0).map(() => Math.random() * 0.3)
   }, [])
+
+  // Calculate beat timing for sync
+  const getBeatInfo = (time: number) => {
+    const beatInterval = 60 / bpm
+    const currentBeat = Math.floor(time / beatInterval)
+    const beatPhase = (time % beatInterval) / beatInterval
+    const isDownbeat = currentBeat % 4 === 0
+    const isBeat = currentBeat !== lastBeatRef.current
+    
+    if (isBeat) {
+      lastBeatRef.current = currentBeat
+      // Boost energy on beats
+      energyRef.current = Math.min(1, energyRef.current + (isDownbeat ? 0.5 : 0.3))
+    }
+    
+    return { isBeat, isDownbeat, beatPhase, beatInterval }
+  }
 
   // Animation loop with beat sync
   useEffect(() => {
@@ -54,117 +66,56 @@ export function SimpleVisualizer({
 
       // Update phase
       phaseRef.current += isPlaying ? 0.03 : 0.01
+
+      // Get beat info for sync
+      const { isBeat, isDownbeat, beatPhase } = getBeatInfo(currentTime)
       
       // Update energy (decay over time)
       energyRef.current *= 0.95
 
-      let bassEnergy = 0
-      let midEnergy = 0
-      let highEnergy = 0
-      let isBeat = false
-      let isDownbeat = false
-      let beatPhase = 0
+      // Simulate frequency bands based on beat
+      const bassEnergy = Math.sin(beatPhase * Math.PI) * 0.7 * (isDownbeat ? 1.2 : 1)
+      const midEnergy = Math.sin(beatPhase * Math.PI * 2) * 0.5
+      const highEnergy = Math.random() * 0.3 + Math.sin(currentTime * 10) * 0.2
 
+      // Update bars based on play state and beat sync
       const bars = barsRef.current
-
-      if (audioSettings.realAudioEngine && analyserNode && isPlaying) {
-        // Get real frequency data
-        const fullDataArray = new Uint8Array(analyserNode.frequencyBinCount)
-        analyserNode.getByteFrequencyData(fullDataArray)
+      for (let i = 0; i < bars.length; i++) {
+        let baseValue
         
-        // Logarithmic downsampling to 64 bars for a more accurate EQ look
-        const minLog = Math.log10(1)
-        const maxLog = Math.log10(analyserNode.frequencyBinCount)
-        const logRange = maxLog - minLog
-
-        for (let i = 0; i < 64; i++) {
-          const startLog = minLog + (i / 64) * logRange
-          const endLog = minLog + ((i + 1) / 64) * logRange
-          const startIndex = Math.floor(Math.pow(10, startLog))
-          const endIndex = Math.floor(Math.pow(10, endLog))
-          
-          let sum = 0
-          let count = 0
-          for (let j = startIndex; j <= endIndex && j < analyserNode.frequencyBinCount; j++) {
-            sum += fullDataArray[j]
-            count++
-          }
-          const avg = count > 0 ? sum / count : 0
-          const normalized = avg / 255.0
-          
-          // Smooth transition
-          bars[i] = bars[i] * 0.7 + normalized * 0.3
-
-          if (i < 21) bassEnergy += normalized
-          else if (i < 42) midEnergy += normalized
-          else highEnergy += normalized
-        }
-        bassEnergy /= 21
-        midEnergy /= 21
-        highEnergy /= 22
-
-        // Real-time beat detection using bass energy
-        let currentBassEnergy = 0
-        for (let i = 0; i < 5; i++) {
-          currentBassEnergy += fullDataArray[i]
-        }
-        currentBassEnergy /= (5 * 255.0)
-
-        if (currentBassEnergy > beatThresholdRef.current && currentBassEnergy > 0.4 && (Date.now() - lastBeatTimeRef.current > 250)) {
-          isBeat = true
-          isDownbeat = true
-          lastBeatTimeRef.current = Date.now()
-          energyRef.current = Math.min(1, energyRef.current + 0.5)
-          beatThresholdRef.current = currentBassEnergy * 1.2
+        // Different frequency bands respond differently
+        if (i < bars.length / 3) {
+          // Bass range - strong on beats
+          baseValue = bassEnergy * (0.8 + Math.random() * 0.4)
+        } else if (i < (bars.length * 2) / 3) {
+          // Mid range - flowing
+          baseValue = midEnergy * (0.7 + Math.random() * 0.6)
         } else {
-          beatThresholdRef.current = Math.max(0.3, beatThresholdRef.current * 0.98)
-        }
-        
-        // Calculate a fake beat phase for visual continuity
-        const timeSinceBeat = Date.now() - lastBeatTimeRef.current
-        beatPhase = Math.min(1, timeSinceBeat / 500)
-
-      } else {
-        // Fake beat sync
-        const beatInterval = 60 / bpm
-        const currentBeat = Math.floor(currentTime / beatInterval)
-        beatPhase = (currentTime % beatInterval) / beatInterval
-        isDownbeat = currentBeat % 4 === 0
-        isBeat = currentBeat !== lastBeatRef.current
-        
-        if (isBeat) {
-          lastBeatRef.current = currentBeat
-          energyRef.current = Math.min(1, energyRef.current + (isDownbeat ? 0.5 : 0.3))
+          // High range - sparkly
+          baseValue = highEnergy * (0.6 + Math.random() * 0.8)
         }
 
-        // Simulate frequency bands based on beat
-        bassEnergy = Math.sin(beatPhase * Math.PI) * 0.7 * (isDownbeat ? 1.2 : 1)
-        midEnergy = Math.sin(beatPhase * Math.PI * 2) * 0.5
-        highEnergy = Math.random() * 0.3 + Math.sin(currentTime * 10) * 0.2
-
-        // Update bars based on play state and beat sync
-        for (let i = 0; i < bars.length; i++) {
-          let baseValue
+        // Add energy when playing
+        if (isPlaying) {
+          const randomEnergy = Math.random() * 0.7 * (volume / 100)
+          baseValue = Math.min(1, baseValue + randomEnergy)
           
-          if (i < bars.length / 3) {
-            baseValue = bassEnergy * (0.8 + Math.random() * 0.4)
-          } else if (i < (bars.length * 2) / 3) {
-            baseValue = midEnergy * (0.7 + Math.random() * 0.6)
-          } else {
-            baseValue = highEnergy * (0.6 + Math.random() * 0.8)
+          // Boost on beats
+          if (isBeat) {
+            baseValue *= isDownbeat ? 1.5 : 1.2
           }
-
-          if (isPlaying) {
-            const randomEnergy = Math.random() * 0.7 * (volume / 100)
-            baseValue = Math.min(1, baseValue + randomEnergy)
-            if (isBeat) baseValue *= isDownbeat ? 1.5 : 1.2
-            if (Math.random() < 0.05) baseValue = 1
-          } else {
-            baseValue = Math.sin(phaseRef.current * 0.2) * 0.1 + 0.2
+          
+          // Occasional peaks
+          if (Math.random() < 0.05) {
+            baseValue = 1
           }
-
-          bars[i] = bars[i] * 0.85 + baseValue * 0.15
+        } else {
+          // Subtle pulsing when paused
+          baseValue = Math.sin(phaseRef.current * 0.2) * 0.1 + 0.2
         }
+
+        // Smooth transition
+        bars[i] = bars[i] * 0.85 + baseValue * 0.15
       }
 
       // Draw bars with gradient
@@ -172,21 +123,22 @@ export function SimpleVisualizer({
       const centerY = height / 2
 
       for (let i = 0; i < bars.length; i++) {
-        const barHeight = bars[i] * height * (window.innerWidth >= 1024 ? 0.9 : 0.7)
+        const barHeight = bars[i] * height * 0.7 // REVERTED to original height
         
         // Create colorful gradient based on frequency band
         let hue
         if (i < bars.length / 3) {
+          // Bass - red/orange
           hue = (i / (bars.length / 3)) * 60 + currentTime * 50
         } else if (i < (bars.length * 2) / 3) {
+          // Mid - green/cyan
           hue = 120 + ((i - bars.length / 3) / (bars.length / 3)) * 60 + currentTime * 30
         } else {
+          // High - blue/purple
           hue = 240 + ((i - (bars.length * 2) / 3) / (bars.length / 3)) * 60 + currentTime * 20
         }
 
-        const gradient = window.innerWidth >= 1024
-          ? ctx.createLinearGradient(0, height, 0, height - barHeight)
-          : ctx.createLinearGradient(0, centerY - barHeight, 0, centerY + barHeight)
+        const gradient = ctx.createLinearGradient(0, centerY - barHeight, 0, centerY + barHeight)
         gradient.addColorStop(0, `hsla(${hue}, 100%, 60%, 0.9)`)
         gradient.addColorStop(0.5, `hsla(${hue + 60}, 100%, 50%, 0.6)`)
         gradient.addColorStop(1, `hsla(${hue + 120}, 100%, 40%, 0.3)`)
@@ -195,11 +147,13 @@ export function SimpleVisualizer({
         
         // Draw bar with rounded corners effect
         const x = i * barWidth
-        const y = window.innerWidth >= 1024 ? height - barHeight : centerY - barHeight / 2
+        const y = centerY - barHeight / 2
         const barW = barWidth - 1
         
+        // Draw main bar
         ctx.fillRect(x, y, barW, barHeight)
         
+        // Draw glow effect (stronger on beats)
         const glowIntensity = isBeat ? 20 : 10
         ctx.shadowColor = `hsla(${hue}, 100%, 60%, ${isBeat ? 0.8 : 0.5})`
         ctx.shadowBlur = glowIntensity
@@ -239,12 +193,15 @@ export function SimpleVisualizer({
         )
         
         if (isDownbeat) {
+          // Strong pulse on downbeats
           gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)')
           gradient.addColorStop(0.5, 'rgba(255, 100, 100, 0.4)')
         } else if (isBeat) {
+          // Regular pulse on beats
           gradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)')
           gradient.addColorStop(0.5, 'rgba(100, 100, 255, 0.3)')
         } else {
+          // Subtle pulse
           gradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)')
           gradient.addColorStop(0.5, 'rgba(100, 255, 100, 0.1)')
         }
@@ -255,6 +212,7 @@ export function SimpleVisualizer({
         ctx.arc(centerX, centerY, pulseSize, 0, Math.PI * 2)
         ctx.fill()
 
+        // Draw beat circle outline
         if (isBeat) {
           ctx.strokeStyle = isDownbeat ? 'rgba(255, 100, 100, 0.8)' : 'rgba(100, 100, 255, 0.6)'
           ctx.lineWidth = 3
@@ -268,12 +226,15 @@ export function SimpleVisualizer({
       if (isPlaying) {
         const bandHeight = height / 6
         
+        // Bass indicator (bottom)
         ctx.fillStyle = `rgba(255, 100, 100, ${0.2 + bassEnergy * 0.3})`
         ctx.fillRect(0, height - bandHeight, width * bassEnergy, bandHeight)
         
+        // Mid indicator (middle)
         ctx.fillStyle = `rgba(100, 255, 100, ${0.2 + midEnergy * 0.3})`
         ctx.fillRect(0, height - bandHeight * 2, width * midEnergy, bandHeight)
         
+        // High indicator (top)
         ctx.fillStyle = `rgba(100, 100, 255, ${0.2 + highEnergy * 0.3})`
         ctx.fillRect(0, height - bandHeight * 3, width * highEnergy, bandHeight)
       }
@@ -288,7 +249,7 @@ export function SimpleVisualizer({
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [isPlaying, currentTime, volume, bpm, analyserNode, audioSettings.realAudioEngine])
+  }, [isPlaying, currentTime, volume, bpm])
 
   // Handle resize
   useEffect(() => {
@@ -326,6 +287,7 @@ export function SimpleVisualizer({
         right: 0,
         bottom: 0,
         display: 'block',
+        // REMOVED background gradient
       }}
     />
   )

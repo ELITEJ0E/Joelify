@@ -60,7 +60,7 @@ export function ThemeSettings() {
         <Button
           size="icon"
           variant="ghost"
-          className="text-white/60 hover:text-white hover:bg-primary/15 h-8 w-8 transition-colors"
+          className="text-gray-400 hover:text-white h-8 w-8"
           aria-label="Theme settings"
         >
           <Palette size={18} />
@@ -69,7 +69,7 @@ export function ThemeSettings() {
 
       <DropdownMenuContent
         align="end"
-        className="w-56 max-h-64 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] bg-black/80 backdrop-blur-2xl border-white/[0.07]"
+        className="w-56 max-h-64 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none]"
       >
         {/* hide scrollbar in WebKit */}
         <style jsx>{`
@@ -87,7 +87,7 @@ export function ThemeSettings() {
             className="flex items-center gap-2"
           >
             <div
-              className={`w-5 h-5 rounded-full border border-border ${currentTheme === preset.hsl ? 'ring-2 ring-primary/50 animate-pulse' : ''}`}
+              className="w-5 h-5 rounded-full border border-border"
               style={{
                 background: `linear-gradient(135deg, 
                   hsl(${preset.hsl}) 0%, 

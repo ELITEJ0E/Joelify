@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react"
 import { useApp } from "@/contexts/AppContext"
-import { AudioEngine } from "./AudioEngine"
 
 declare global {
   interface Window {
@@ -21,11 +20,7 @@ interface YouTubePlayerProps {
   videoMode?: boolean
 }
 
-export function YouTubePlayer(props: YouTubePlayerProps) {
-  return <YouTubeIframePlayer {...props} />
-}
-
-function YouTubeIframePlayer({
+export function YouTubePlayer({
   onPlayerReady,
   onStateChange,
   onError,
@@ -38,7 +33,7 @@ function YouTubeIframePlayer({
   const isPlayerReadyRef = useRef(false)
   const durationPollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const progressRAFRef = useRef<number | null>(null)
-  const { currentTrack, audioSettings, playbackSource } = useApp()
+  const { currentTrack, audioSettings } = useApp()
 
   // ── Stable callback refs ───────────────────────────────────────────────────
   const onStateChangeRef = useRef(onStateChange)
@@ -108,16 +103,16 @@ function YouTubeIframePlayer({
 
   useEffect(() => {
     const initPlayer = () => {
-      if (!window.YT?.Player || !containerRef.current || playerRef.current || !currentTrack?.id || playbackSource !== "youtube") return
+      if (!window.YT?.Player || !containerRef.current || playerRef.current) return
       const playerVars: any = {
-        autoplay: 1, controls: 0, disablekb: 1, fs: 0,
+        autoplay: 0, controls: 0, disablekb: 1, fs: 0,
         modestbranding: 1, playsinline: 1, rel: 0, iv_load_policy: 3,
       }
       if (audioSettings.youtubeQuality !== "audio") playerVars.quality = audioSettings.youtubeQuality
 
       playerRef.current = new window.YT.Player("youtube-player", {
         height: "100%", width: "100%",
-        videoId: currentTrack.id,
+        videoId: currentTrack?.id || "",
         playerVars,
         events: {
           onReady: (event: any) => {
@@ -156,10 +151,8 @@ function YouTubeIframePlayer({
         tag, document.getElementsByTagName("script")[0]
       )
     }
-    if (currentTrack?.id && playbackSource === "youtube") {
-      if (window.YT?.Player) initPlayer()
-      else window.onYouTubeIframeAPIReady = initPlayer
-    }
+    if (window.YT?.Player) initPlayer()
+    else window.onYouTubeIframeAPIReady = initPlayer
 
     return () => {
       clearInterval(durationPollIntervalRef.current!)
@@ -169,17 +162,17 @@ function YouTubeIframePlayer({
       isPlayerReadyRef.current = false
       window.onYouTubeIframeAPIReady = () => {}
     }
-  }, [audioSettings, currentTrack?.id, playbackSource]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [audioSettings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id && playbackSource === "youtube") {
+    if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id) {
       clearInterval(durationPollIntervalRef.current!)
       durationPollIntervalRef.current = null
       stopProgressTracking()
       playerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: 0 })
       setTimeout(() => startDurationPolling(playerRef.current), 500)
     }
-  }, [currentTrack?.id, playbackSource]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentTrack?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Single player instance — shown or hidden based on videoMode prop.
   // When ExpandablePlayer's video is active, PlayerControls mutes this player
@@ -188,8 +181,8 @@ function YouTubeIframePlayer({
     <div ref={containerRef}>
       <div
         className={videoMode
-          ? "flex justify-center items-center bg-black w-full overflow-hidden relative z-10"
-          : "absolute inset-0 opacity-[0.01] pointer-events-none z-[-1]"
+          ? "flex justify-center items-center bg-black w-full overflow-hidden"
+          : "hidden"
         }
         style={videoMode ? { maxWidth: 640, maxHeight: 360, margin: "0 auto", aspectRatio: "16/9" } : undefined}
       >

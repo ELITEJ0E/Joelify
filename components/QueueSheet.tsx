@@ -71,7 +71,7 @@ export function QueueSheet() {
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-3 p-2 rounded-lg hover:bg-primary/15 group cursor-move transition-colors ${
+                  className={`flex items-center gap-3 p-2 rounded-lg hover:bg-secondary group cursor-move transition-colors ${
                     draggedIndex === index ? "opacity-50" : ""
                   }`}
                 >

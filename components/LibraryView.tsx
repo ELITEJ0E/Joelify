@@ -37,9 +37,9 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
   const totalTracks = playlists.reduce((acc, p) => acc + p.tracks.length, 0)
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 overflow-y-auto">
+    <div className="flex-1 bg-gradient-to-b from-purple-900/20 to-background text-foreground p-4 md:p-8 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">Your Library</h1>
+        <h1 className="text-3xl md:text-4xl font-bold mb-2">Your Library</h1>
         <p className="text-muted-foreground mb-8">
           {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"} • {totalTracks}{" "}
           {totalTracks === 1 ? "song" : "songs"}
@@ -48,7 +48,7 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
         {/* Liked Songs Card */}
         {likedSongs.length > 0 && (
           <Card
-            className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] backdrop-blur-xl p-6 mb-8 transition-all duration-300 cursor-pointer group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40"
+            className="bg-gradient-to-br from-purple-500/20 to-blue-500/20 border-none p-6 mb-8 hover:scale-[1.02] transition-transform cursor-pointer group"
             onClick={() => onNavigate("liked")}
           >
             <div className="flex items-center gap-6">
@@ -63,14 +63,14 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
               </div>
               <Button
                 size="icon"
-                className="bg-primary hover:bg-primary/90 hover:scale-105 text-white rounded-full h-14 w-14 shadow-lg shadow-primary/20 opacity-0 group-hover:opacity-100 transition-all duration-300"
+                className="bg-primary hover:bg-primary/90 rounded-full h-14 w-14 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation()
                   handlePlayLikedSongs()
                 }}
                 aria-label="Play liked songs"
               >
-                <Play fill="currentColor" size={24} className="ml-1" />
+                <Play fill="currentColor" size={24} />
               </Button>
             </div>
           </Card>
@@ -78,18 +78,18 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
 
         {/* Playlists Grid */}
         <section>
-          <h2 className="text-4xl font-bold tracking-tight mb-6">Playlists</h2>
+          <h2 className="text-xl md:text-2xl font-bold mb-6">Playlists</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
             {playlists.map((playlist) => (
               <div
                 key={playlist.id}
-                className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] backdrop-blur-xl rounded-xl p-4 transition-all duration-300 cursor-pointer group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40"
+                className="bg-card hover:bg-card/80 rounded-lg p-4 transition-all cursor-pointer group hover:scale-[1.02]"
                 onClick={() => handleNavigateToPlaylist(playlist.id)}
                 role="button"
                 tabIndex={0}
                 aria-label={`Open ${playlist.name} playlist`}
               >
-                <div className="relative mb-4 aspect-square rounded-lg overflow-hidden bg-secondary flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-105">
+                <div className="relative mb-4 aspect-square rounded-md overflow-hidden bg-secondary flex items-center justify-center">
                   {playlist.coverImage || playlist.tracks.length > 0 ? (
                     <Image
                       src={playlist.coverImage || playlist.tracks[0].thumbnail || "/placeholder.svg"}
@@ -104,14 +104,14 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Button
                         size="icon"
-                        className="bg-primary hover:bg-primary/90 hover:scale-105 text-white rounded-full h-12 w-12 shadow-lg shadow-primary/20 transition-all duration-300"
+                        className="bg-primary hover:bg-primary/90 rounded-full h-12 w-12"
                         onClick={(e) => {
                           e.stopPropagation()
                           handlePlayPlaylist(playlist.id)
                         }}
                         aria-label={`Play ${playlist.name} playlist`}
                       >
-                        <Play fill="currentColor" size={20} className="ml-1" />
+                        <Play fill="currentColor" size={20} />
                       </Button>
                     </div>
                   )}

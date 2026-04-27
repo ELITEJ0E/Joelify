@@ -2,9 +2,6 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { type AppState, type Playlist, type Track, loadState, saveState, createDefaultPlaylist } from "@/lib/storage"
-import { auth, db } from "@/lib/firebase"
-import { onAuthStateChanged, User } from "firebase/auth"
-import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore"
 
 interface RecentlyPlayed {
   type: "track" | "playlist"
@@ -12,7 +9,7 @@ interface RecentlyPlayed {
   timestamp: number
 }
 
-type PlaybackSource = "youtube" | "spotify" | "suno"
+type PlaybackSource = "youtube" | "spotify"
 
 interface AppContextType extends AppState {
   setCurrentTrack: (track: Track | null) => void
@@ -39,6 +36,7 @@ interface AppContextType extends AppState {
   isTrackLiked: (trackId: string) => boolean
   setLikedSongs: (songs: Track[]) => void
   recentlyPlayed: RecentlyPlayed[]
+  setRecentlyPlayed: (items: RecentlyPlayed[]) => void
   addRecentlyPlayed: (item: { type: "track" | "playlist"; id: string }) => void
   setCustomTheme: (colors: { primary: string; accent: string }) => void
   customTheme?: { primary: string; accent: string }
@@ -53,7 +51,6 @@ interface AppContextType extends AppState {
     customEQ: number[]
     youtubeQuality: "audio" | "360p" | "720p" | "1080p"
     spotifyQuality: "normal" | "high" | "veryhigh"
-    realAudioEngine: boolean
   }
   setAudioSettings: (settings: AppContextType["audioSettings"]) => void
   audioElement: HTMLAudioElement | null
@@ -62,11 +59,6 @@ interface AppContextType extends AppState {
   setAudioContext: (context: AudioContext | null) => void
   analyserNode: AnalyserNode | null
   setAnalyserNode: (node: AnalyserNode | null) => void
-  currentBPM: number
-  setCurrentBPM: (bpm: number) => void
-  beatPulse: number
-  setBeatPulse: (pulse: number) => void
-  user: User | null
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -93,110 +85,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     gaplessPlayback: true,
     eqPreset: "Flat",
     customEQ: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    youtubeQuality: "audio" as const,
+    youtubeQuality: "720p" as const,
     spotifyQuality: "high" as const,
-    realAudioEngine: true,
   })
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null)
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
-  const [currentBPM, setCurrentBPM] = useState<number>(0)
-  const [beatPulse, setBeatPulse] = useState<number>(0)
-  const [user, setUser] = useState<User | null>(null)
 
-  // Listen for Firebase Auth state changes
+
+  // Load state from localStorage on mount
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-    })
-    return () => unsubscribe()
-  }, [])
-
-  // Load state from localStorage or Firebase on mount/login
-  useEffect(() => {
-    const loadData = async () => {
-      let stored: Partial<AppState> = {}
-      
-      if (user) {
-        try {
-          const docRef = doc(db, "users", user.uid)
-          const docSnap = await getDoc(docRef)
-          if (docSnap.exists()) {
-            const data = docSnap.data()
-            if (data.appState) {
-              stored = JSON.parse(data.appState)
-            }
-          } else {
-            stored = loadState() // Fallback to local storage if no cloud data
-          }
-        } catch (error) {
-          console.error("Failed to load from Firebase:", error)
-          stored = loadState()
-        }
-      } else {
-        stored = loadState()
-      }
-
-      if (stored.currentTrack) setCurrentTrack(stored.currentTrack)
-      if (stored.currentPlaylistId) setCurrentPlaylistId(stored.currentPlaylistId)
-      if (stored.playlists && stored.playlists.length > 0) {
-        setPlaylists(stored.playlists)
-      } else {
-        setPlaylists([createDefaultPlaylist()])
-      }
-      if (stored.likedSongs) setLikedSongs(stored.likedSongs)
-      if (stored.queue) setQueue(stored.queue)
-      if (stored.playbackPosition !== undefined) setPlaybackPosition(stored.playbackPosition)
-      if (stored.volume !== undefined) setVolume(stored.volume)
-      if (stored.shuffle !== undefined) setShuffle(stored.shuffle)
-      if (stored.repeat) setRepeat(stored.repeat)
-      if (stored.theme) setTheme(stored.theme)
-      if (stored.videoMode !== undefined) setVideoMode(stored.videoMode)
-      if (stored.customTheme) setCustomThemeState(stored.customTheme)
-      if (stored.playbackSource) setPlaybackSource(stored.playbackSource as PlaybackSource)
-      if (stored.audioSettings) setAudioSettingsState(stored.audioSettings)
-      setIsInitialized(true)
+    const stored = loadState()
+    if (stored.currentTrack) setCurrentTrack(stored.currentTrack)
+    if (stored.currentPlaylistId) setCurrentPlaylistId(stored.currentPlaylistId)
+    if (stored.playlists && stored.playlists.length > 0) {
+      setPlaylists(stored.playlists)
+    } else {
+      setPlaylists([createDefaultPlaylist()])
     }
-
-    loadData()
-  }, [user])
-
-  // Listen for real-time updates from Firebase
-  useEffect(() => {
-    if (!user || !isInitialized) return
-
-    const docRef = doc(db, "users", user.uid)
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        if (data.appState) {
-          try {
-            const stored = JSON.parse(data.appState)
-            // Only update if the data is different to avoid infinite loops
-            // For simplicity, we just update playlists and liked songs from cloud
-            if (stored.playlists) setPlaylists(stored.playlists)
-            if (stored.likedSongs) setLikedSongs(stored.likedSongs)
-          } catch (e) {
-            console.error("Error parsing cloud state", e)
-          }
-        }
-      }
-    }, (error) => {
-      console.error("Firestore Error: ", JSON.stringify({
-        error: error.message,
-        operationType: "get",
-        path: `users/${user.uid}`
-      }))
-    })
-
-    return () => unsubscribe()
-  }, [user, isInitialized])
+    if (stored.likedSongs) setLikedSongs(stored.likedSongs)
+    if (stored.queue) setQueue(stored.queue)
+    if (stored.playbackPosition !== undefined) setPlaybackPosition(stored.playbackPosition)
+    if (stored.volume !== undefined) setVolume(stored.volume)
+    if (stored.shuffle !== undefined) setShuffle(stored.shuffle)
+    if (stored.repeat) setRepeat(stored.repeat)
+    if (stored.theme) setTheme(stored.theme)
+    if (stored.videoMode !== undefined) setVideoMode(stored.videoMode)
+    if (stored.customTheme) setCustomThemeState(stored.customTheme)
+    if (stored.playbackSource) setPlaybackSource(stored.playbackSource as PlaybackSource)
+    if (stored.audioSettings) setAudioSettingsState(stored.audioSettings)
+    setIsInitialized(true)
+  }, [])
 
   // Save state to localStorage whenever it changes
   useEffect(() => {
     if (!isInitialized) return
 
-    const stateToSave = {
+    saveState({
       currentTrack,
       currentPlaylistId,
       playlists,
@@ -211,9 +136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       customTheme,
       playbackSource,
       audioSettings,
-    }
-
-    saveState(stateToSave)
+    })
   }, [
     currentTrack,
     currentPlaylistId,
@@ -229,92 +152,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     customTheme,
     playbackSource,
     audioSettings,
-    isInitialized
-  ])
-
-  // Save state to Firebase whenever it changes (debounced and excluding frequent updates)
-  useEffect(() => {
-    if (!isInitialized || !user) return
-
-    const stateToSave = {
-      currentTrack,
-      currentPlaylistId,
-      playlists,
-      likedSongs,
-      queue,
-      // We exclude playbackPosition from frequent Firebase sync to save quota.
-      // It will still be saved whenever other properties change.
-      playbackPosition, 
-      volume,
-      shuffle,
-      repeat,
-      theme,
-      videoMode,
-      customTheme,
-      playbackSource,
-      audioSettings,
-    }
-
-    const saveToFirebase = async () => {
-      try {
-        const docRef = doc(db, "users", user.uid)
-        const docSnap = await getDoc(docRef)
-        
-        const dataToSave = {
-          uid: user.uid,
-          email: user.email || "",
-          displayName: user.displayName || "",
-          photoURL: user.photoURL || "",
-          appState: JSON.stringify(stateToSave),
-          updatedAt: Date.now()
-        }
-        
-        if (docSnap.exists()) {
-          await setDoc(docRef, {
-            ...dataToSave,
-            createdAt: docSnap.data().createdAt
-          }, { merge: true })
-        } else {
-          await setDoc(docRef, {
-            ...dataToSave,
-            createdAt: Date.now()
-          })
-        }
-      } catch (error: any) {
-        // Check for quota exceeded specifically
-        if (error.message?.includes("quota") || error.code === "resource-exhausted") {
-          console.warn("Firestore Quota Exceeded. Cloud sync disabled for today.")
-        }
-        
-        console.error("Firestore Error: ", JSON.stringify({
-          error: error.message,
-          operationType: "write",
-          path: `users/${user.uid}`
-        }))
-      }
-    }
-    
-    // Use a much longer debounce for Firebase (10 seconds)
-    // and exclude playbackPosition from dependencies to avoid triggering on every second
-    const timeoutId = setTimeout(saveToFirebase, 10000)
-    return () => clearTimeout(timeoutId)
-  }, [
-    currentTrack,
-    currentPlaylistId,
-    playlists,
-    likedSongs,
-    queue,
-    // playbackPosition excluded from dependencies
-    volume,
-    shuffle,
-    repeat,
-    theme,
-    videoMode,
-    customTheme,
-    playbackSource,
-    audioSettings,
     isInitialized,
-    user
   ])
 
   // Apply theme
@@ -481,6 +319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isTrackLiked,
         setLikedSongs,
         recentlyPlayed,
+        setRecentlyPlayed,
         addRecentlyPlayed,
         customTheme,
         setCustomTheme,
@@ -496,11 +335,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAudioContext,
         analyserNode,
         setAnalyserNode,
-        currentBPM,
-        setCurrentBPM,
-        beatPulse,
-        setBeatPulse,
-        user
       }}
     >
       {children}

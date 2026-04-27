@@ -328,7 +328,7 @@ export function AudioAnalyzerVisualizer({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--primary)/0.05) 50%, hsl(var(--background)) 100%)',
+          background: 'linear-gradient(135deg, #000 0%, #0a001a 50%, #000 100%)',
         }}
       />
       

@@ -71,38 +71,25 @@ const config: Config = {
       },
       keyframes: {
         'accordion-down': {
-          from: { height: '0' },
-          to: { height: 'var(--radix-accordion-content-height)' },
+          from: {
+            height: '0',
+          },
+          to: {
+            height: 'var(--radix-accordion-content-height)',
+          },
         },
         'accordion-up': {
-          from: { height: 'var(--radix-accordion-content-height)' },
-          to: { height: '0' },
-        },
-        'gradient-xy': {
-          '0%, 100%': {
-            'background-size': '200% 200%',
-            'background-position': 'left center'
+          from: {
+            height: 'var(--radix-accordion-content-height)',
           },
-          '50%': {
-            'background-size': '200% 200%',
-            'background-position': 'right center'
+          to: {
+            height: '0',
           },
         },
-        'subtle-pan': {
-          '0%, 100%': { transform: 'scale(1.05) translate(0, 0)' },
-          '50%': { transform: 'scale(1.05) translate(2%, 2%)' },
-        },
-        'spin-slow': {
-          'from': { transform: 'rotate(0deg)' },
-          'to': { transform: 'rotate(360deg)' },
-        }
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
-        'gradient-xy': 'gradient-xy 15s ease infinite',
-        'subtle-pan': 'subtle-pan 20s ease-in-out infinite',
-        'spin-slow': 'spin-slow 6s linear infinite',
       },
     },
   },
