@@ -22,6 +22,7 @@ import {
   Copy,
   ClipboardPaste,
   FileText,
+  Music2,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Textarea } from "@/components/ui/textarea"
@@ -41,16 +42,15 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ThemeSettings } from "./ThemeSettings"
 import { SpotifyLogin } from "./SpotifyLogin"
+import { FirebaseLogin } from "./FirebaseLogin"
 import { SpotifyQuota } from "./SpotifyQuota"
 import { isAuthenticated } from "@/lib/spotifyAuth"
 import { AudioSettings } from "./AudioSettings"
 import { KeyboardShortcuts } from "./KeyboardShortcuts"
-import { UserProfile } from "./UserProfile"
-import { useAuth } from "@/contexts/AuthContext"
 
 
 interface SidebarProps {
-  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => void
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels") => void
   isOpen: boolean
   onClose: () => void
 }
@@ -67,38 +67,10 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setTheme,
     likedSongs,
     setPlaylists,
-    setLikedSongs,
-    recentlyPlayed,
-    setRecentlyPlayed,
     audioSettings,
-    setAudioSettings, // Default to green-500 if not provided
+    setAudioSettings,
+    primaryColor = "green-500", // Default to green-500 if not provided
   } = useApp()
-
-  const { user, syncData, loadUserData } = useAuth()
-
-  // Sync data to cloud
-  const handleSyncToCloud = async () => {
-    if (!user) return
-    await syncData({
-      playlists,
-      liked_songs: likedSongs,
-      recently_played: recentlyPlayed,
-      settings: { audioSettings, theme, primaryColor },
-    })
-  }
-
-  // Load data from cloud
-  const handleLoadFromCloud = async () => {
-    if (!user) return
-    const data = await loadUserData()
-    if (data) {
-      if (data.playlists?.length) setPlaylists(data.playlists)
-      if (data.liked_songs?.length) setLikedSongs(data.liked_songs)
-      if (data.recently_played?.length) setRecentlyPlayed(data.recently_played)
-      if (data.settings?.audioSettings) setAudioSettings(data.settings.audioSettings)
-      if (data.settings?.theme) setTheme(data.settings.theme)
-    }
-  }
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
@@ -168,14 +140,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
 
   // Convert playlists to simple text format:
   // PLAYLIST: name
-  // - track title | artist | videoId
+  // - song title | artist | videoId
   const playlistsToText = () => {
     return playlists.map(playlist => {
       const header = `PLAYLIST: ${playlist.name}`
-      const trackLines = (playlist.tracks || []).map(track => 
-        `- ${track.title} | ${track.artist} | ${track.videoId}`
+      const tracks = playlist.tracks.map(track => 
+        `- ${track.title} | ${track.artist} | ${track.id}`
       ).join("\n")
-      return trackLines ? `${header}\n${trackLines}` : header
+      return tracks ? `${header}\n${tracks}` : header
     }).join("\n\n")
   }
 
@@ -194,21 +166,21 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           result.push(currentPlaylist)
         }
         currentPlaylist = {
-          id: `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: trimmed.replace("PLAYLIST:", "").trim(),
+          id: `playlist-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+          name: trimmed.substring(trimmed.indexOf(":") + 1).trim() || "Imported Playlist",
           tracks: [],
           createdAt: Date.now()
         }
       } else if (trimmed.startsWith("-") && currentPlaylist) {
         const parts = trimmed.slice(1).split("|").map(p => p.trim())
         if (parts.length >= 3) {
+          const videoId = parts[2]
           currentPlaylist.tracks.push({
-            id: `track-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            title: parts[0],
-            artist: parts[1],
-            videoId: parts[2],
-            thumbnail: `https://img.youtube.com/vi/${parts[2]}/mqdefault.jpg`,
-            duration: 0
+            id: videoId,
+            title: parts[0] || "Unknown Title",
+            artist: parts[1] || "Unknown Artist",
+            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+            duration: "0:00"
           })
         }
       }
@@ -225,13 +197,29 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setIsExportDialogOpen(true)
   }
 
-const handleCopyToClipboard = async () => {
+  const handleCopyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(exportText)
-      alert("Copied to clipboard!")
-    } catch {
-      // Clipboard API blocked - select the text so user can copy manually
-      alert("Clipboard access is blocked. Please select the text and use Ctrl+C (or Cmd+C) to copy.")
+      toast.custom((t) => (
+        <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-primary/20 p-2 rounded-lg">
+            <Check size={20} className="text-primary" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-white">Copied to clipboard!</h4>
+            <p className="text-xs text-gray-400 mt-1">You can now paste this into WhatsApp or any other app.</p>
+          </div>
+          <button 
+            onClick={() => toast.dismiss(t)}
+            className="text-gray-500 hover:text-white transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ))
+    } catch (err) {
+      toast.error("Failed to copy to clipboard", {
+        className: "bg-black/90 border-red-500/50 text-red-200 backdrop-blur-xl"
+      })
     }
   }
 
@@ -244,9 +232,9 @@ const handleCopyToClipboard = async () => {
       link.download = `joelify-playlists-${new Date().toISOString().split("T")[0]}.txt`
       link.click()
       URL.revokeObjectURL(url)
-
+      
       toast.custom((t) => (
-        <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="bg-primary/20 p-2 rounded-lg">
             <Download size={20} className="text-primary" />
           </div>
@@ -254,7 +242,7 @@ const handleCopyToClipboard = async () => {
             <h4 className="text-sm font-bold text-white">Download started</h4>
             <p className="text-xs text-gray-400 mt-1">Your playlists have been saved as a .txt file.</p>
           </div>
-          <button
+          <button 
             onClick={() => toast.dismiss(t)}
             className="text-gray-500 hover:text-white transition-colors"
           >
@@ -264,7 +252,7 @@ const handleCopyToClipboard = async () => {
       ))
     } catch (err) {
       toast.error("Failed to download file", {
-        className: "bg-red-950 border-red-500/50 text-red-200"
+        className: "bg-black/90 border-red-500/50 text-red-200 backdrop-blur-xl"
       })
     }
   }
@@ -281,16 +269,16 @@ const handleCopyToClipboard = async () => {
       })
       return
     }
-
+    
     try {
       const imported = textToPlaylists(importText)
       if (imported.length > 0) {
         setPlaylists([...playlists, ...imported])
         setIsImportDialogOpen(false)
         setImportText("")
-
+        
         toast.custom((t) => (
-          <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="bg-primary/20 p-2 rounded-lg">
               <Upload size={20} className="text-primary" />
             </div>
@@ -298,7 +286,7 @@ const handleCopyToClipboard = async () => {
               <h4 className="text-sm font-bold text-white">Import Successful!</h4>
               <p className="text-xs text-gray-400 mt-1">Imported {imported.length} playlist(s) to your library.</p>
             </div>
-            <button
+            <button 
               onClick={() => toast.dismiss(t)}
               className="text-gray-500 hover:text-white transition-colors"
             >
@@ -309,13 +297,13 @@ const handleCopyToClipboard = async () => {
       } else {
         toast.error("No valid playlists found", {
           description: "Check the format: PLAYLIST: Name followed by - Title | Artist | videoId",
-          className: "bg-red-950 border-red-500/50 text-red-200"
+          className: "bg-black/90 border-red-500/50 text-red-200 backdrop-blur-xl"
         })
       }
     } catch (err) {
       toast.error("Import failed", {
         description: "An unexpected error occurred during import.",
-        className: "bg-red-950 border-red-500/50 text-red-200"
+        className: "bg-black/90 border-red-500/50 text-red-200 backdrop-blur-xl"
       })
     }
   }
@@ -327,11 +315,11 @@ const handleCopyToClipboard = async () => {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
-
+      
       const reader = new FileReader()
       reader.onload = (event) => {
         const content = event.target?.result as string
-
+        
         // Try JSON first
         try {
           const json = JSON.parse(content)
@@ -350,9 +338,9 @@ const handleCopyToClipboard = async () => {
             }))
             setPlaylists([...playlists, ...validatedJson])
             setIsImportDialogOpen(false)
-
+            
             toast.custom((t) => (
-              <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
                 <div className="bg-primary/20 p-2 rounded-lg">
                   <Upload size={20} className="text-primary" />
                 </div>
@@ -360,7 +348,7 @@ const handleCopyToClipboard = async () => {
                   <h4 className="text-sm font-bold text-white">Import Successful!</h4>
                   <p className="text-xs text-gray-400 mt-1">Imported {validatedJson.length} playlist(s) from JSON.</p>
                 </div>
-                <button
+                <button 
                   onClick={() => toast.dismiss(t)}
                   className="text-gray-500 hover:text-white transition-colors"
                 >
@@ -379,9 +367,9 @@ const handleCopyToClipboard = async () => {
         if (imported.length > 0) {
           setPlaylists([...playlists, ...imported])
           setIsImportDialogOpen(false)
-
+          
           toast.custom((t) => (
-            <div className="bg-gray-900 border border-primary/30 p-4 rounded-xl shadow-2xl flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
               <div className="bg-primary/20 p-2 rounded-lg">
                 <Upload size={20} className="text-primary" />
               </div>
@@ -389,7 +377,7 @@ const handleCopyToClipboard = async () => {
                 <h4 className="text-sm font-bold text-white">Import Successful!</h4>
                 <p className="text-xs text-gray-400 mt-1">Imported {imported.length} playlist(s) from file.</p>
               </div>
-              <button
+              <button 
                 onClick={() => toast.dismiss(t)}
                 className="text-gray-500 hover:text-white transition-colors"
               >
@@ -399,13 +387,13 @@ const handleCopyToClipboard = async () => {
           ))
         } else {
           toast.error("Could not find any valid playlists in the file.", {
-            className: "bg-red-950 border-red-500/50 text-red-200"
+            className: "bg-black/90 border-red-500/50 text-red-200 backdrop-blur-xl"
           })
         }
       }
       reader.onerror = () => {
         toast.error("Failed to read the file.", {
-          className: "bg-red-950 border-red-500/50 text-red-200"
+          className: "bg-black/90 border-red-500/50 text-red-200 backdrop-blur-xl"
         })
       }
       reader.readAsText(file)
@@ -413,17 +401,42 @@ const handleCopyToClipboard = async () => {
     input.click()
   }
 
-const handlePasteFromClipboard = async () => {
+  const handlePasteFromClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText()
-      setImportText(text)
-    } catch {
-      // Clipboard API blocked in iframe/sandboxed environments
-      alert("Clipboard access is blocked. Please use Ctrl+V (or Cmd+V) to paste directly into the text area.")
+      if (text) {
+        setImportText(text)
+        toast.custom((t) => (
+          <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="bg-primary/20 p-2 rounded-lg">
+              <ClipboardPaste size={20} className="text-primary" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-white">Pasted from clipboard</h4>
+              <p className="text-xs text-gray-400 mt-1">Text has been loaded into the import area.</p>
+            </div>
+            <button 
+              onClick={() => toast.dismiss(t)}
+              className="text-gray-500 hover:text-white transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ))
+      } else {
+        toast.error("Clipboard is empty", {
+          className: "bg-black/90 border-red-500/50 text-red-200 backdrop-blur-xl"
+        })
+      }
+    } catch (err) {
+      toast.error("Failed to read clipboard", {
+        description: "Please paste manually into the text area.",
+        className: "bg-black/90 border-red-500/50 text-red-200 backdrop-blur-xl"
+      })
     }
   }
 
-  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats") => {
+  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels") => {
     setActiveView(view)
     onNavigate(view)
     onClose()
@@ -434,8 +447,9 @@ const handlePasteFromClipboard = async () => {
       {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} aria-hidden="true" />}
 
       <div
-        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-black/40 backdrop-blur-2xl border-r border-white/[0.07] text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-          }`}
+        className={`fixed lg:relative inset-y-0 left-0 z-50 w-70 bg-black/40 backdrop-blur-2xl border-r border-white/[0.07] text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
       >
         <div className="flex flex-col h-full">
           {/* HEADER */}
@@ -445,10 +459,6 @@ const handlePasteFromClipboard = async () => {
                 Joelify
               </h1>
               <div className="flex items-center gap-1">
-                <UserProfile 
-                  onSyncToCloud={handleSyncToCloud} 
-                  onLoadFromCloud={handleLoadFromCloud} 
-                />
                 <AudioSettings settings={audioSettings} onChange={setAudioSettings} />
                 <KeyboardShortcuts />
                 <ThemeSettings />
@@ -481,10 +491,11 @@ const handlePasteFromClipboard = async () => {
                     <li>
                       <button
                         onClick={() => handleNavigate("home")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "home"
-                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                          : "hover:bg-primary/10 hover:text-primary"
-                          }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                          activeView === "home"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
                       >
                         <Home size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Home</span>
@@ -493,10 +504,11 @@ const handlePasteFromClipboard = async () => {
                     <li>
                       <button
                         onClick={() => handleNavigate("search")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "search"
-                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                          : "hover:bg-primary/10 hover:text-primary"
-                          }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                          activeView === "search"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
                       >
                         <Search size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Search</span>
@@ -518,10 +530,11 @@ const handlePasteFromClipboard = async () => {
                             onNavigate("library")
                           }
                         }}
-                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out cursor-pointer ${activeView === "library"
-                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                          : "hover:bg-primary/10 hover:text-primary"
-                          }`}
+                        className={`flex items-center justify-between w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out cursor-pointer ${
+                          activeView === "library"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
                       >
                         <div className="flex items-center space-x-3">
                           <Library size={20} className="transition-transform duration-300 group-hover:scale-105" />
@@ -598,10 +611,11 @@ const handlePasteFromClipboard = async () => {
                                   <div className="flex items-center justify-between py-1.5 px-2 rounded-lg transition-all duration-300 ease-in-out">
                                     <button
                                       onClick={() => handlePlaylistClick(playlist.id)}
-                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${currentPlaylistId === playlist.id
-                                        ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
-                                        : "hover:bg-primary/10 hover:text-primary"
-                                        }`}
+                                      className={`flex-1 text-left font-medium text-sm transition-all duration-300 ${
+                                        currentPlaylistId === playlist.id
+                                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-2 border-primary shadow-md shadow-primary/10"
+                                          : "hover:bg-primary/10 hover:text-primary"
+                                      }`}
                                     >
                                       {playlist.name}
                                     </button>
@@ -671,10 +685,11 @@ const handlePasteFromClipboard = async () => {
                     <li>
                       <button
                         onClick={() => handleNavigate("liked")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${activeView === "liked"
-                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                          : "hover:bg-primary/10 hover:text-primary"
-                          }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out relative ${
+                          activeView === "liked"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
                       >
                         <Heart size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Liked Songs</span>
@@ -688,17 +703,32 @@ const handlePasteFromClipboard = async () => {
                     <li>
                       <button
                         onClick={() => handleNavigate("stats")}
-                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${activeView === "stats"
-                          ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
-                          : "hover:bg-primary/10 hover:text-primary"
-                          }`}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                          activeView === "stats"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
                       >
                         <BarChart3 size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Statistics</span>
                       </button>
                     </li>
+                    <li>
+                      <button
+                        onClick={() => handleNavigate("joels")}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                          activeView === "joels"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
+                      >
+                        <Music2 size={20} className="transition-transform duration-300 group-hover:scale-105" />
+                        <span className="font-medium text-sm">Joel's Music</span>
+                      </button>
+                    </li>
                     <li className="mt-4 pt-4 border-t border-gray-800/30">
                       <SpotifyLogin />
+                      <FirebaseLogin />
                       {isSpotifyAuth && (
                         <div className="mt-3">
                           <SpotifyQuota />
