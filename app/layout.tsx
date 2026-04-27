@@ -2,11 +2,14 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
-import { AuthProvider } from "@/contexts/AuthContext"
 import { AppProvider } from "@/contexts/AppContext"
-import { Toaster } from "sonner"
 import "./globals.css"
 import { Suspense } from "react"
+
+import { TooltipProvider } from "@/components/ui/tooltip"
+
+import { Toaster } from "sonner"
+import { FirestoreQuotaWarning } from "@/components/FirestoreQuotaWarning"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
@@ -43,22 +46,13 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <Suspense fallback={null}>
-          <AuthProvider>
+          <TooltipProvider>
             <AppProvider>{children}</AppProvider>
-          </AuthProvider>
+          </TooltipProvider>
         </Suspense>
+        <Toaster position="top-center" richColors />
+        <FirestoreQuotaWarning />
         <Analytics />
-        <Toaster
-          theme="dark"
-          position="bottom-right"
-          toastOptions={{
-            style: {
-              background: "hsl(var(--card))",
-              border: "1px solid hsl(var(--primary) / 0.3)",
-              color: "hsl(var(--foreground))",
-            },
-          }}
-        />
       </body>
     </html>
   )

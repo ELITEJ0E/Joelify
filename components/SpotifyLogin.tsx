@@ -73,7 +73,7 @@ export function SpotifyLogin() {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
         <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -85,10 +85,10 @@ export function SpotifyLogin() {
 
   if (isLoggedIn && profile) {
     return (
-      <Card>
+      <Card className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
         <CardHeader className="p-3 pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">
-            <Music className="h-4 w-4 text-green-500 flex-shrink-0" />
+            <Music className="h-4 w-4 text-primary flex-shrink-0" />
             <span className="truncate">Spotify Connected</span>
           </CardTitle>
           <CardDescription className="text-xs">You're connected to Spotify</CardDescription>
@@ -114,7 +114,7 @@ export function SpotifyLogin() {
   }
 
   return (
-    <Card>
+    <Card className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
       <CardHeader className="p-3 pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Music className="h-4 w-4 flex-shrink-0 text-primary" />
