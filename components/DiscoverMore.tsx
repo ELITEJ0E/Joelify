@@ -31,7 +31,8 @@ export function DiscoverMore() {
 
   useEffect(() => {
     const updateCacheAge = () => {
-      const age = getCacheAge(DISCOVER_CACHE_KEY)
+      const cacheKey = currentTrack ? `discover_${currentTrack.id}` : "discover_default"
+      const age = getCacheAge(cacheKey)
       setCacheAge(formatCacheAge(age))
     }
 
@@ -39,10 +40,11 @@ export function DiscoverMore() {
     const interval = setInterval(updateCacheAge, 60000) // Update every minute
 
     return () => clearInterval(interval)
-  }, [videos])
+  }, [videos, currentTrack])
 
   const fetchRecommendations = async () => {
-    const cached = getCachedData<DiscoverVideo[]>(DISCOVER_CACHE_KEY)
+    const cacheKey = currentTrack ? `discover_${currentTrack.id}` : "discover_default"
+    const cached = getCachedData<DiscoverVideo[]>(cacheKey)
     if (cached) {
       console.log("[v0] Using cached discover data")
       setVideos(cached)
@@ -55,11 +57,10 @@ export function DiscoverMore() {
     try {
       let url = `/api/discover`
       if (currentTrack) {
-        const params = new URLSearchParams({
-          videoId: currentTrack.id,
-          title: currentTrack.title,
-          artist: currentTrack.artist,
-        })
+        const params = new URLSearchParams()
+        if (currentTrack.id) params.append("videoId", currentTrack.id)
+        if (currentTrack.title) params.append("title", currentTrack.title)
+        if (currentTrack.artist) params.append("artist", currentTrack.artist)
         url = `/api/discover?${params.toString()}`
       }
 
@@ -72,7 +73,7 @@ export function DiscoverMore() {
       }
 
       const data = await response.json()
-      setCachedData(DISCOVER_CACHE_KEY, data.videos)
+      setCachedData(cacheKey, data.videos)
       setVideos(data.videos)
     } catch (err: any) {
       console.error("[v0] Discover More error:", err)

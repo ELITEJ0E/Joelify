@@ -50,7 +50,7 @@ async function generateCodeChallenge(codeVerifier: string): Promise<string> {
 }
 
 // Start Spotify OAuth flow
-export async function loginWithSpotify(): Promise<void> {
+export async function loginWithSpotify(): Promise<string> {
   const codeVerifier = generateRandomString(64)
   const codeChallenge = await generateCodeChallenge(codeVerifier)
 
@@ -66,7 +66,7 @@ export async function loginWithSpotify(): Promise<void> {
     code_challenge: codeChallenge,
   })
 
-  window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`
+  return `https://accounts.spotify.com/authorize?${params.toString()}`
 }
 
 // Exchange authorization code for tokens

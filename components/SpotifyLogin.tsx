@@ -22,46 +22,71 @@ export function SpotifyLogin() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      setLoading(true)
+  const checkAuthStatus = async () => {
+    setLoading(true)
+    const authenticated = isAuthenticated()
+    setIsLoggedIn(authenticated)
 
-      // Handle Spotify auth code exchange
-      const code = searchParams.get("code")
-      if (code) {
-        try {
-          await exchangeCodeForTokens(code)
+    if (authenticated) {
+      try {
+        const profileData = await getSpotifyProfile()
+        setProfile(profileData)
+        console.log("[Spotify] Profile loaded:", profileData.display_name)
+      } catch (error) {
+        console.error("[Spotify] Failed to load profile:", error)
+        setIsLoggedIn(false)
+      }
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    // Handle Spotify auth code exchange inside the component if redirected (fallback)
+    const code = searchParams.get("code")
+    if (code) {
+      exchangeCodeForTokens(code)
+        .then(() => {
           console.log("[Spotify] Authentication successful!")
           router.replace("/")
-        } catch (err) {
+          checkAuthStatus()
+        })
+        .catch((err) => {
           console.error("[Spotify] Token exchange failed:", err)
           router.replace(`/?spotify_error=${encodeURIComponent(err.message)}`)
-        }
-      }
-
-      // Check authentication status and load profile
-      const authenticated = isAuthenticated()
-      setIsLoggedIn(authenticated)
-
-      if (authenticated) {
-        try {
-          const profileData = await getSpotifyProfile()
-          setProfile(profileData)
-          console.log("[Spotify] Profile loaded:", profileData.display_name)
-        } catch (error) {
-          console.error("[Spotify] Failed to load profile:", error)
-          setIsLoggedIn(false)
-        }
-      }
-      setLoading(false)
+        })
+    } else {
+      checkAuthStatus()
     }
 
-    checkAuthStatus()
+    const handleMessage = (event: MessageEvent) => {
+      // Validate origin is from AI Studio preview or localhost
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('joelify')) {
+        return;
+      }
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        checkAuthStatus();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, [searchParams, router])
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     console.log("[Spotify] Initiating login")
-    loginWithSpotify()
+    try {
+      const url = await loginWithSpotify()
+      const authWindow = window.open(
+        url,
+        'oauth_popup',
+        'width=600,height=700'
+      );
+      if (!authWindow) {
+        alert('Please allow popups for this site to connect your account.');
+      }
+    } catch (err) {
+      console.error("[Spotify] Failed to get auth URL:", err)
+    }
   }
 
   const handleLogout = () => {
@@ -73,7 +98,7 @@ export function SpotifyLogin() {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
         <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -85,10 +110,10 @@ export function SpotifyLogin() {
 
   if (isLoggedIn && profile) {
     return (
-      <Card>
+      <Card className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
         <CardHeader className="p-3 pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">
-            <Music className="h-4 w-4 text-green-500 flex-shrink-0" />
+            <Music className="h-4 w-4 text-primary flex-shrink-0" />
             <span className="truncate">Spotify Connected</span>
           </CardTitle>
           <CardDescription className="text-xs">You're connected to Spotify</CardDescription>
@@ -114,7 +139,7 @@ export function SpotifyLogin() {
   }
 
   return (
-    <Card>
+    <Card className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
       <CardHeader className="p-3 pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Music className="h-4 w-4 flex-shrink-0 text-primary" />

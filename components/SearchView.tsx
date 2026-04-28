@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { Search, Plus, ExternalLink, Loader2, Heart, Compass, Play } from 'lucide-react'
+import { Search, Play, Plus, ExternalLink, Loader2, Heart, Compass } from 'lucide-react'
 import Image from "next/image"
 import type { YouTubeVideo } from "@/lib/youtube"
 import { useApp } from "@/contexts/AppContext"
@@ -126,8 +126,7 @@ export function SearchView() {
   }
 
   return (
-    // Changed gradient to use theme primary color with opacity
-    <div className="flex-1 bg-gradient-to-b from-primary/10 to-background text-foreground p-4 md:p-8 overflow-y-auto">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6 md:mb-8">Search</h1>
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { useApp } from "@/contexts/AppContext"
+import { AudioEngine } from "./AudioEngine"
 
 declare global {
   interface Window {
@@ -18,22 +19,36 @@ interface YouTubePlayerProps {
   onTimeUpdate?: (currentTime: number, duration: number) => void
   /** When true, renders the iframe visibly in the bar. Same single player instance — no second iframe created. */
   videoMode?: boolean
+  isPlaying?: boolean
 }
 
-export function YouTubePlayer({
+export function YouTubePlayer(props: YouTubePlayerProps) {
+  return <YouTubeIframePlayer {...props} />
+}
+
+function YouTubeIframePlayer({
   onPlayerReady,
   onStateChange,
   onError,
   onDurationReady,
   onTimeUpdate,
   videoMode = false,
+  isPlaying = false,
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const isPlayerReadyRef = useRef(false)
   const durationPollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const progressRAFRef = useRef<number | null>(null)
-  const { currentTrack, audioSettings } = useApp()
+  const { currentTrack, audioSettings, playbackSource } = useApp()
+  // Note: we don't strictly need isPlaying in the dependency array of the load effect
+  // but we should check its current value when deciding whether to load or cue.
+  // Using a ref to track isPlaying state to avoid unnecessary re-renders of the effect.
+  const isPlayingRef = useRef(false)
+  
+  // We need to pass isPlaying to the component or consume it differently
+  // To avoid circular dependencies or too many re-renders, let's just use the current playing state
+  // actually, PlayerControls manages isPlaying.
 
   // ── Stable callback refs ───────────────────────────────────────────────────
   const onStateChangeRef = useRef(onStateChange)
@@ -103,16 +118,16 @@ export function YouTubePlayer({
 
   useEffect(() => {
     const initPlayer = () => {
-      if (!window.YT?.Player || !containerRef.current || playerRef.current) return
+      if (!window.YT?.Player || !containerRef.current || playerRef.current || !currentTrack?.id || playbackSource !== "youtube") return
       const playerVars: any = {
-        autoplay: 0, controls: 0, disablekb: 1, fs: 0,
+        autoplay: 1, controls: 0, disablekb: 1, fs: 0,
         modestbranding: 1, playsinline: 1, rel: 0, iv_load_policy: 3,
       }
       if (audioSettings.youtubeQuality !== "audio") playerVars.quality = audioSettings.youtubeQuality
 
       playerRef.current = new window.YT.Player("youtube-player", {
         height: "100%", width: "100%",
-        videoId: currentTrack?.id || "",
+        videoId: currentTrack.id,
         playerVars,
         events: {
           onReady: (event: any) => {
@@ -151,8 +166,10 @@ export function YouTubePlayer({
         tag, document.getElementsByTagName("script")[0]
       )
     }
-    if (window.YT?.Player) initPlayer()
-    else window.onYouTubeIframeAPIReady = initPlayer
+    if (currentTrack?.id && playbackSource === "youtube") {
+      if (window.YT?.Player) initPlayer()
+      else window.onYouTubeIframeAPIReady = initPlayer
+    }
 
     return () => {
       clearInterval(durationPollIntervalRef.current!)
@@ -162,17 +179,37 @@ export function YouTubePlayer({
       isPlayerReadyRef.current = false
       window.onYouTubeIframeAPIReady = () => {}
     }
-  }, [audioSettings]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [audioSettings, currentTrack?.id, playbackSource]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id) {
+    if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id && playbackSource === "youtube") {
+      const currentId = playerRef.current.getVideoData?.()?.video_id;
+      if (currentId === currentTrack.id) return;
+
       clearInterval(durationPollIntervalRef.current!)
       durationPollIntervalRef.current = null
       stopProgressTracking()
-      playerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: 0 })
+      
+      if (isPlaying) {
+        playerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: 0 })
+      } else {
+        playerRef.current.cueVideoById({ videoId: currentTrack.id, startSeconds: 0 })
+      }
+      
       setTimeout(() => startDurationPolling(playerRef.current), 500)
     }
-  }, [currentTrack?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentTrack?.id, playbackSource]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (playerRef.current && isPlayerReadyRef.current && playbackSource === "youtube") {
+      const state = playerRef.current.getPlayerState?.();
+      if (isPlaying) {
+        if (state !== 1) playerRef.current.playVideo();
+      } else {
+        if (state !== 2) playerRef.current.pauseVideo();
+      }
+    }
+  }, [isPlaying, playbackSource])
 
   // Single player instance — shown or hidden based on videoMode prop.
   // When ExpandablePlayer's video is active, PlayerControls mutes this player
@@ -181,8 +218,8 @@ export function YouTubePlayer({
     <div ref={containerRef}>
       <div
         className={videoMode
-          ? "flex justify-center items-center bg-black w-full overflow-hidden"
-          : "hidden"
+          ? "flex justify-center items-center bg-black w-full overflow-hidden relative z-10"
+          : "absolute inset-0 opacity-[0.01] pointer-events-none z-[-1]"
         }
         style={videoMode ? { maxWidth: 640, maxHeight: 360, margin: "0 auto", aspectRatio: "16/9" } : undefined}
       >

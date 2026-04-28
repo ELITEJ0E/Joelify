@@ -39,10 +39,10 @@ export function SpotifyQuota() {
   const lastCallAgo = Math.floor((Date.now() - quota.lastCallTime) / 1000)
 
   return (
-    <Card>
+    <Card className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Activity className="h-5 w-5 text-green-500" />
+          <Activity className="h-5 w-5 text-primary" />
           Spotify API Usage
         </CardTitle>
         <CardDescription>Real-time quota monitoring</CardDescription>
@@ -55,7 +55,7 @@ export function SpotifyQuota() {
               {quota.requestsUsed} / {quota.requestsUsed + quota.requestsRemaining}
             </span>
           </div>
-          <Progress value={usagePercentage} className="h-2" />
+          <Progress value={usagePercentage} className="h-2 bg-white/10 [&>div]:bg-primary" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -76,10 +76,10 @@ export function SpotifyQuota() {
           </div>
         </div>
 
-        <div className="pt-2 border-t">
+        <div className="pt-2 border-t border-white/10">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Remaining requests</span>
-            <span className="font-semibold text-green-500">{quota.requestsRemaining}</span>
+            <span className="font-semibold text-primary">{quota.requestsRemaining}</span>
           </div>
         </div>
       </CardContent>
