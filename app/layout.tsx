@@ -44,7 +44,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Joelify" />
         <meta name="theme-color" content="#000000" />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} select-none`}>
         <Suspense fallback={null}>
           <TooltipProvider>
             <AppProvider>{children}</AppProvider>

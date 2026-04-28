@@ -22,46 +22,71 @@ export function SpotifyLogin() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      setLoading(true)
+  const checkAuthStatus = async () => {
+    setLoading(true)
+    const authenticated = isAuthenticated()
+    setIsLoggedIn(authenticated)
 
-      // Handle Spotify auth code exchange
-      const code = searchParams.get("code")
-      if (code) {
-        try {
-          await exchangeCodeForTokens(code)
+    if (authenticated) {
+      try {
+        const profileData = await getSpotifyProfile()
+        setProfile(profileData)
+        console.log("[Spotify] Profile loaded:", profileData.display_name)
+      } catch (error) {
+        console.error("[Spotify] Failed to load profile:", error)
+        setIsLoggedIn(false)
+      }
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    // Handle Spotify auth code exchange inside the component if redirected (fallback)
+    const code = searchParams.get("code")
+    if (code) {
+      exchangeCodeForTokens(code)
+        .then(() => {
           console.log("[Spotify] Authentication successful!")
           router.replace("/")
-        } catch (err) {
+          checkAuthStatus()
+        })
+        .catch((err) => {
           console.error("[Spotify] Token exchange failed:", err)
           router.replace(`/?spotify_error=${encodeURIComponent(err.message)}`)
-        }
-      }
-
-      // Check authentication status and load profile
-      const authenticated = isAuthenticated()
-      setIsLoggedIn(authenticated)
-
-      if (authenticated) {
-        try {
-          const profileData = await getSpotifyProfile()
-          setProfile(profileData)
-          console.log("[Spotify] Profile loaded:", profileData.display_name)
-        } catch (error) {
-          console.error("[Spotify] Failed to load profile:", error)
-          setIsLoggedIn(false)
-        }
-      }
-      setLoading(false)
+        })
+    } else {
+      checkAuthStatus()
     }
 
-    checkAuthStatus()
+    const handleMessage = (event: MessageEvent) => {
+      // Validate origin is from AI Studio preview or localhost
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('joelify')) {
+        return;
+      }
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        checkAuthStatus();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, [searchParams, router])
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     console.log("[Spotify] Initiating login")
-    loginWithSpotify()
+    try {
+      const url = await loginWithSpotify()
+      const authWindow = window.open(
+        url,
+        'oauth_popup',
+        'width=600,height=700'
+      );
+      if (!authWindow) {
+        alert('Please allow popups for this site to connect your account.');
+      }
+    } catch (err) {
+      console.error("[Spotify] Failed to get auth URL:", err)
+    }
   }
 
   const handleLogout = () => {

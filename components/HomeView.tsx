@@ -26,8 +26,17 @@ const JOELS_FALLBACK_SONGS = [
 ]
 
 export function HomeView({ onNavigate }: HomeViewProps) {
-  const { playlists, likedSongs, recentlyPlayed, setCurrentPlaylistId, setCurrentTrack, setQueue, addRecentlyPlayed, setPlaybackSource } =
-    useApp()
+  const { 
+    playlists, 
+    likedSongs, 
+    recentlyPlayed, 
+    setCurrentPlaylistId, 
+    setCurrentTrack, 
+    setQueue, 
+    addRecentlyPlayed, 
+    setPlaybackSource,
+    joelsSongs 
+  } = useApp()
 
   const playSunoTrack = (id: string, title: string, artist: string, thumbnail?: string) => {
     setPlaybackSource("suno")
@@ -40,6 +49,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
       duration: "0:00",
     })
     setQueue([])
+    setCurrentPlaylistId("joels_music")
   }
 
   const handlePlayPlaylist = (playlistId: string) => {
@@ -134,69 +144,6 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           </section>
         )}
 
-        {/* Joel's Music Section */}
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl overflow-hidden border border-primary/20 shadow-lg shadow-primary/10 flex-shrink-0">
-                <Image 
-                  src={`https://cdn2.suno.ai/24c69462-2727-415e-8f27-cdc43e0184db.jpeg?width=360`} 
-                  alt="Joel" 
-                  width={48} 
-                  height={48} 
-                  className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" 
-                  referrerPolicy="no-referrer" 
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <Music2 size={24} className="text-primary hidden sm:block" />
-                <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Joel's Music</h2>
-              </div>
-            </div>
-            <Button 
-              variant="link" 
-              className="text-primary font-bold hover:no-underline"
-              onClick={() => onNavigate("joels")}
-            >
-              View All
-            </Button>
-          </div>
-          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-            {JOELS_FALLBACK_SONGS.slice(0, 6).map((track) => (
-              <div
-                key={track.id}
-                className="flex-shrink-0 w-40 md:w-48 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] backdrop-blur-xl rounded-xl p-4 transition-all duration-300 cursor-pointer group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40"
-                onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail)}
-              >
-                <div className="relative mb-4 aspect-square rounded-lg overflow-hidden bg-secondary shadow-lg transition-transform duration-300 group-hover:scale-105">
-                  <Image
-                    src={track.thumbnail || "/placeholder.svg"}
-                    alt={track.title}
-                    fill
-                    className="object-cover"
-                    referrerPolicy="no-referrer"
-                    unoptimized={true}
-                  />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Button
-                      size="icon"
-                      className="bg-primary hover:bg-primary/90 hover:scale-105 text-white rounded-full h-12 w-12 shadow-lg shadow-primary/20 transition-all duration-300"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        playSunoTrack(track.id, track.title, track.artist, track.thumbnail)
-                      }}
-                    >
-                      <Play fill="currentColor" size={20} className="ml-1" />
-                    </Button>
-                  </div>
-                </div>
-                <h3 className="font-semibold text-sm mb-1 line-clamp-1">{track.title}</h3>
-                <p className="text-xs text-muted-foreground line-clamp-1">{track.artist}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
         {/* Made For You */}
         <section className="mb-12">
           <div className="flex items-center gap-3 mb-6">
@@ -277,6 +224,69 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                 <p className="text-xs text-muted-foreground">
                   {playlist.tracks.length} {playlist.tracks.length === 1 ? "song" : "songs"}
                 </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Joel's Music Section */}
+        <section className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl overflow-hidden border border-primary/20 shadow-lg shadow-primary/10 flex-shrink-0">
+                <Image 
+                  src={`https://cdn2.suno.ai/24c69462-2727-415e-8f27-cdc43e0184db.jpeg?width=360`} 
+                  alt="Joel" 
+                  width={48} 
+                  height={48} 
+                  className="w-full h-full object-cover transition-all duration-500" 
+                  referrerPolicy="no-referrer" 
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Music2 size={24} className="text-primary hidden sm:block" />
+                <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Joel's Music</h2>
+              </div>
+            </div>
+            <Button 
+              variant="link" 
+              className="text-primary font-bold hover:no-underline"
+              onClick={() => onNavigate("joels")}
+            >
+              View All
+            </Button>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+            {joelsSongs.slice(0, 6).map((track) => (
+              <div
+                key={track.id}
+                className="flex-shrink-0 w-40 md:w-48 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] backdrop-blur-xl rounded-xl p-4 transition-all duration-300 cursor-pointer group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40"
+                onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail)}
+              >
+                <div className="relative mb-4 aspect-square rounded-lg overflow-hidden bg-secondary shadow-lg transition-transform duration-300 group-hover:scale-105">
+                  <Image
+                    src={track.thumbnail || "/placeholder.svg"}
+                    alt={track.title}
+                    fill
+                    className="object-cover"
+                    referrerPolicy="no-referrer"
+                    unoptimized={true}
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Button
+                      size="icon"
+                      className="bg-primary hover:bg-primary/90 hover:scale-105 text-white rounded-full h-12 w-12 shadow-lg shadow-primary/20 transition-all duration-300"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        playSunoTrack(track.id, track.title, track.artist, track.thumbnail)
+                      }}
+                    >
+                      <Play fill="currentColor" size={20} className="ml-1" />
+                    </Button>
+                  </div>
+                </div>
+                <h3 className="font-semibold text-sm mb-1 line-clamp-1">{track.title}</h3>
+                <p className="text-xs text-muted-foreground line-clamp-1">{track.artist}</p>
               </div>
             ))}
           </div>

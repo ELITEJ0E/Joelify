@@ -19,20 +19,15 @@ export async function GET(req: NextRequest) {
     let playlistName = "Suno Playlist";
 
     const headers = {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
       "Accept": "application/json, text/plain, */*",
       "Accept-Language": "en-US,en;q=0.9",
       "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
       "Referer": "https://suno.com/",
       "Origin": "https://suno.com",
-      "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-      "Sec-Ch-Ua-Mobile": "?0",
-      "Sec-Ch-Ua-Platform": '"macOS"',
       "Sec-Fetch-Dest": "empty",
       "Sec-Fetch-Mode": "cors",
       "Sec-Fetch-Site": "same-site",
-      "Priority": "u=1, i",
       "DNT": "1"
     };
 
@@ -44,18 +39,21 @@ export async function GET(req: NextRequest) {
             headers,
           });
           
-          // If we get 503, it's a block. If we get 404, the playlist might be private.
           if (response.status === 200) return response;
+          
+          // If we get 503 or 403, we are being throttled or blocked
+          console.warn(`Suno API [${response.status}] retry ${i+1}/${retries}: ${url}`);
+          
           if (response.status === 404) {
-            throw new Error("Playlist not found. Please ensure it is set to 'Public' on Suno.");
+            throw new Error("Playlist not found. Ensure it is set to 'Public' on Suno.");
           }
           
-          console.warn(`Suno API retry ${i+1}/${retries} for status ${response.status}: ${url}`);
-          const delay = (i + 1) * 1200 + Math.random() * 800; // Increased sleep
+          const delay = (i + 1) * 2000 + Math.random() * 1000; 
           await new Promise(r => setTimeout(r, delay));
         } catch (e: any) {
-          if (i === retries - 1 || e.message?.includes("Public")) throw e;
-          await new Promise(r => setTimeout(r, 1500));
+          if (e.message?.includes("Public")) throw e;
+          if (i === retries - 1) throw e;
+          await new Promise(r => setTimeout(r, 2000));
         }
       }
       return fetch(url, { cache: "no-store", headers });

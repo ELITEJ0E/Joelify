@@ -19,6 +19,7 @@ interface YouTubePlayerProps {
   onTimeUpdate?: (currentTime: number, duration: number) => void
   /** When true, renders the iframe visibly in the bar. Same single player instance — no second iframe created. */
   videoMode?: boolean
+  isPlaying?: boolean
 }
 
 export function YouTubePlayer(props: YouTubePlayerProps) {
@@ -32,6 +33,7 @@ function YouTubeIframePlayer({
   onDurationReady,
   onTimeUpdate,
   videoMode = false,
+  isPlaying = false,
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -39,6 +41,14 @@ function YouTubeIframePlayer({
   const durationPollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const progressRAFRef = useRef<number | null>(null)
   const { currentTrack, audioSettings, playbackSource } = useApp()
+  // Note: we don't strictly need isPlaying in the dependency array of the load effect
+  // but we should check its current value when deciding whether to load or cue.
+  // Using a ref to track isPlaying state to avoid unnecessary re-renders of the effect.
+  const isPlayingRef = useRef(false)
+  
+  // We need to pass isPlaying to the component or consume it differently
+  // To avoid circular dependencies or too many re-renders, let's just use the current playing state
+  // actually, PlayerControls manages isPlaying.
 
   // ── Stable callback refs ───────────────────────────────────────────────────
   const onStateChangeRef = useRef(onStateChange)
@@ -173,13 +183,33 @@ function YouTubeIframePlayer({
 
   useEffect(() => {
     if (playerRef.current && isPlayerReadyRef.current && currentTrack?.id && playbackSource === "youtube") {
+      const currentId = playerRef.current.getVideoData?.()?.video_id;
+      if (currentId === currentTrack.id) return;
+
       clearInterval(durationPollIntervalRef.current!)
       durationPollIntervalRef.current = null
       stopProgressTracking()
-      playerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: 0 })
+      
+      if (isPlaying) {
+        playerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: 0 })
+      } else {
+        playerRef.current.cueVideoById({ videoId: currentTrack.id, startSeconds: 0 })
+      }
+      
       setTimeout(() => startDurationPolling(playerRef.current), 500)
     }
   }, [currentTrack?.id, playbackSource]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (playerRef.current && isPlayerReadyRef.current && playbackSource === "youtube") {
+      const state = playerRef.current.getPlayerState?.();
+      if (isPlaying) {
+        if (state !== 1) playerRef.current.playVideo();
+      } else {
+        if (state !== 2) playerRef.current.pauseVideo();
+      }
+    }
+  }, [isPlaying, playbackSource])
 
   // Single player instance — shown or hidden based on videoMode prop.
   // When ExpandablePlayer's video is active, PlayerControls mutes this player

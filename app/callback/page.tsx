@@ -23,12 +23,20 @@ export default function CallbackPage() {
       exchangeCodeForTokens(code)
         .then(() => {
           console.log("[Spotify] Authentication successful")
-          router.push("/")
+          if (window.opener) {
+            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*')
+            window.close()
+          } else {
+            router.push("/")
+          }
         })
         .catch((err) => {
           console.error("[Spotify] Token exchange failed:", err)
           setError("Failed to complete authentication")
-          setTimeout(() => router.push("/"), 3000)
+          setTimeout(() => {
+             if (window.opener) window.close()
+             else router.push("/")
+          }, 3000)
         })
     } else {
       setError("No authorization code received")

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
+export const dynamic = "force-dynamic"
 
-const YOUTUBE_API_KEYS = process.env.YOUTUBE_API_KEYS?.split(",") || []
+
+const YOUTUBE_API_KEYS = process.env.YOUTUBE_API_KEYS?.split(",") || (process.env.YOUTUBE_API_KEY ? [process.env.YOUTUBE_API_KEY] : [])
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 
 function getRandomYouTubeKey() {

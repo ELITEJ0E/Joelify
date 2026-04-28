@@ -26,7 +26,7 @@ export function PlayerControls() {
   const {
     currentTrack, queue, volume, shuffle, repeat, playbackPosition,
     currentPlaylistId, playlists, playbackSource, spotifyPlayer,
-    likedSongs,
+    likedSongs, joelsSongs,
     setSpotifyPlayer, setCurrentTrack, setQueue, setVolume, toggleShuffle,
     toggleRepeat, setPlaybackPosition, setPlaybackSource,
     audioSettings,
@@ -57,11 +57,12 @@ export function PlayerControls() {
 
   const getContextTracks = useCallback(() => {
     if (currentPlaylistId === LIKED_SONGS_PLAYLIST_ID) return likedSongs
+    if (currentPlaylistId === "joels_music") return joelsSongs
     if (currentPlaylistId) {
       return playlists.find((p) => p.id === currentPlaylistId)?.tracks ?? []
     }
     return []
-  }, [currentPlaylistId, likedSongs, playlists])
+  }, [currentPlaylistId, likedSongs, playlists, joelsSongs])
 
   const getNextShuffleTrack = useCallback((tracks: any[]) => {
     if (!tracks.length) return null
@@ -173,34 +174,55 @@ export function PlayerControls() {
   // ─── previous ───────────────────────────────────────────────────────────────
 
   const handlePrevious = useCallback(() => {
+    // 1. Replay current song if progress > 3s
     if (currentTime > 3) {
       if (playbackSource === "youtube" && youtubePlayer) {
-        youtubePlayer.seekTo(0, true); setCurrentTime(0); setPlaybackPosition(0)
+        try { if (typeof youtubePlayer.seekTo === 'function') youtubePlayer.seekTo(0, true) } catch(e){}
       } else if (playbackSource === "spotify" && spotifyPlayer) {
-        SpotifyPlayerControls.seek(spotifyPlayer, 0); setCurrentTime(0); setPlaybackPosition(0)
+        SpotifyPlayerControls.seek(spotifyPlayer, 0);
+      } else if (playbackSource === "suno" && sunoAudioRef.current) {
+        sunoAudioRef.current.currentTime = 0
       }
+      setCurrentTime(0); setPlaybackPosition(0)
       return
     }
 
+    // 2. Go back in history
     if (playHistoryRef.current.length > 1) {
-      playHistoryRef.current.pop()
+      playHistoryRef.current.pop() // remove current
       const prevId = playHistoryRef.current[playHistoryRef.current.length - 1]
       const contextTracks = getContextTracks()
       const prevTrack = contextTracks.find((t: any) => t.id === prevId)
       if (prevTrack) {
-        setCurrentTrack(prevTrack); setCurrentTime(0); setPlaybackPosition(0);
-        if (playbackSource === "suno") setIsPlaying(true);
+        setCurrentTrack(prevTrack);
+        setCurrentTime(0); setPlaybackPosition(0);
+        setIsPlaying(true)
+        return
+      }
+    }
+    
+    // 3. Fallback: previous in context
+    const contextTracks = getContextTracks()
+    if (contextTracks.length > 0) {
+      const idx = contextTracks.findIndex((t: any) => t.id === currentTrack?.id)
+      if (idx > 0) {
+        setCurrentTrack(contextTracks[idx - 1]);
+        setCurrentTime(0); setPlaybackPosition(0);
+        setIsPlaying(true)
         return
       }
     }
 
-    if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.seekTo(0, true)
+    // 4. Default seek to start
+    if (playbackSource === "youtube" && youtubePlayer) {
+      try { if (typeof youtubePlayer.seekTo === 'function') youtubePlayer.seekTo(0, true) } catch(e){}
+    }
     else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.seek(spotifyPlayer, 0)
     else if (playbackSource === "suno" && sunoAudioRef.current) sunoAudioRef.current.currentTime = 0
     setCurrentTime(0); setPlaybackPosition(0)
   }, [
     youtubePlayer, spotifyPlayer, setCurrentTrack, setPlaybackPosition,
-    currentTime, playbackSource, getContextTracks,
+    currentTime, playbackSource, getContextTracks, currentTrack
   ])
 
   // ─── play / pause ───────────────────────────────────────────────────────────
@@ -427,11 +449,12 @@ export function PlayerControls() {
       } else if (playbackSource === "youtube" && currentTrack.thumbnail?.includes("suno.ai")) {
          setPlaybackSource("suno");
       }
+      // Set initial times
       setCurrentTime(0); setPlaybackPosition(0); setDuration(0)
       hasRestoredPositionRef.current = false
       trackEndHandledRef.current = false
       
-      // Auto-play if not the very first render of the application
+      // Auto-play ONLY if it's not the very first render (initial app load)
       if (!isFirstRender.current) {
         setIsPlaying(true)
       }
@@ -467,14 +490,52 @@ export function PlayerControls() {
 
   const saveToListeningHistory = useCallback((track: typeof currentTrack) => {
     if (!track) return
-    const history = JSON.parse(localStorage.getItem("listening_history") || "[]")
+
+    // 1. Maintain 15-day raw history for charts & recent
+    const now = new Date();
+    const fifteenDaysAgo = now.getTime() - 15 * 24 * 60 * 60 * 1000;
+    
+    let history = [];
+    try {
+      history = JSON.parse(localStorage.getItem("listening_history") || "[]");
+    } catch(e) {}
+    
+    // Filter old entries
+    history = history.filter((h: any) => new Date(h.playedAt).getTime() > fifteenDaysAgo);
+    
+    // Add current
     history.push({
       id: track.id, title: track.title, artist: track.artist,
       thumbnail: track.thumbnail, duration: duration || 0,
-      playedAt: new Date().toISOString(), source: playbackSource,
+      playedAt: now.toISOString(), source: playbackSource,
     })
-    if (history.length > 1000) history.shift()
+    
+    if (history.length > 2000) history = history.slice(-2000); // safety cap
     localStorage.setItem("listening_history", JSON.stringify(history))
+
+    // 2. Aggregate all-time stats memory
+    let allTimeStats = { totalPlays: 0, totalTime: 0, trackPlays: {} as any, artistPlays: {} as any };
+    try {
+      const storedStats = localStorage.getItem("listening_stats_all_time");
+      if (storedStats) allTimeStats = JSON.parse(storedStats);
+    } catch (e) {}
+
+    allTimeStats.totalPlays += 1;
+    allTimeStats.totalTime += (duration || 0);
+
+    const trackKey = `${track.id}-${track.title}`;
+    if (!allTimeStats.trackPlays[trackKey]) {
+      allTimeStats.trackPlays[trackKey] = { 
+        track: { id: track.id, title: track.title, artist: track.artist }, 
+        count: 0 
+      };
+    }
+    allTimeStats.trackPlays[trackKey].count += 1;
+
+    allTimeStats.artistPlays[track.artist] = (allTimeStats.artistPlays[track.artist] || 0) + 1;
+
+    localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats));
+
   }, [duration, playbackSource])
 
   useEffect(() => {
@@ -500,16 +561,20 @@ export function PlayerControls() {
             setIsPlaying(true);
         }
       };
+      const onPlay = () => setIsPlaying(true);
+      const onPause = () => setIsPlaying(false);
       const onEnded = () => {
         if (!trackEndHandledRef.current) {
           trackEndHandledRef.current = true;
           handleNext();
         }
       };
-
+      
       audio.addEventListener("timeupdate", onTimeUpdate);
       audio.addEventListener("loadedmetadata", onLoadedMetadata);
       audio.addEventListener("ended", onEnded);
+      audio.addEventListener("play", onPlay);
+      audio.addEventListener("pause", onPause);
 
       // Play audio if it was already supposed to be playing
       if (currentTrack && isPlaying && !isFirstRender.current) {
@@ -526,6 +591,8 @@ export function PlayerControls() {
         audio.removeEventListener("timeupdate", onTimeUpdate);
         audio.removeEventListener("loadedmetadata", onLoadedMetadata);
         audio.removeEventListener("ended", onEnded);
+        audio.removeEventListener("play", onPlay);
+        audio.removeEventListener("pause", onPause);
       };
     }
   }, [playbackSource, currentTrack, isPlaying, handleNext, setCurrentTime, setPlaybackPosition, setDuration, setIsReady]);
@@ -548,10 +615,13 @@ export function PlayerControls() {
         case "v": e.preventDefault(); setBarVideoMode((v) => !v); break
       }
     }
+    
     window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
+    return () => {
+        window.removeEventListener("keydown", handleKeyDown)
+    }
   }, [handlePlayPause, handleSeekForward, handleSeekBackward, handleNext, handlePrevious,
-    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat])
+    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat, playbackSource])
 
   const handleSleepTimerEnd = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.pauseVideo()
@@ -589,6 +659,7 @@ export function PlayerControls() {
           onDurationReady={handleYouTubeDurationReady}
           onTimeUpdate={handleYouTubeTimeUpdate}
           videoMode={barVideoMode}
+          isPlaying={isPlaying}
         />
         <SpotifyPlayer onPlayerReady={handleSpotifyPlayerReady} onStateChange={handleSpotifyStateChange} onError={handleSpotifyError} />
         <MiniPlayer
@@ -614,6 +685,7 @@ export function PlayerControls() {
         onDurationReady={handleYouTubeDurationReady}
         onTimeUpdate={handleYouTubeTimeUpdate}
         videoMode={barVideoMode}
+        isPlaying={isPlaying}
       />
       <SpotifyPlayer onPlayerReady={handleSpotifyPlayerReady} onStateChange={handleSpotifyStateChange} onError={handleSpotifyError} />
 
@@ -894,7 +966,7 @@ export function PlayerControls() {
                         aria-label="Queue">
                         <List size={20} />
                         {queue.length > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center">
+                          <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center rounded-[6px]">
                             {queue.length}
                           </span>
                         )}

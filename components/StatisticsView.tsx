@@ -20,48 +20,83 @@ export function StatisticsView() {
   const [stats, setStats] = useState<ListeningStats | null>(null)
 
   useEffect(() => {
-    const history = JSON.parse(localStorage.getItem("listening_history") || "[]")
+    // 1. Get raw history for recent & charts
+    let history: any[] = []
+    try {
+      history = JSON.parse(localStorage.getItem("listening_history") || "[]")
+    } catch(e) {}
 
-    const trackPlays = new Map<string, { track: any; count: number }>()
-    const artistPlays = new Map<string, number>()
+    // 2. Get all-time stats, or migrate old history if they don't exist
+    let allTimeStats = { totalPlays: 0, totalTime: 0, trackPlays: {} as any, artistPlays: {} as any }
+    let needsMigration = false;
+    
+    try {
+      const storedStats = localStorage.getItem("listening_stats_all_time");
+      if (storedStats) {
+        allTimeStats = JSON.parse(storedStats);
+      } else {
+        needsMigration = true;
+      }
+    } catch(e) {
+      needsMigration = true;
+    }
+
+    if (needsMigration && history.length > 0) {
+      // Migrate old raw history to all-time stats
+      history.forEach((item: any) => {
+        allTimeStats.totalPlays += 1;
+        if (item.duration && typeof item.duration === 'number') {
+          allTimeStats.totalTime += item.duration;
+        }
+
+        const trackKey = `${item.id}-${item.title}`;
+        if (!allTimeStats.trackPlays[trackKey]) {
+          allTimeStats.trackPlays[trackKey] = {
+            track: { id: item.id, title: item.title, artist: item.artist },
+            count: 0
+          };
+        }
+        allTimeStats.trackPlays[trackKey].count += 1;
+        allTimeStats.artistPlays[item.artist] = (allTimeStats.artistPlays[item.artist] || 0) + 1;
+      });
+      localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats));
+    }
+
+    // Weekly activity (Last 7 days strictly, or based on days recorded)
     const dayPlays = new Map<string, number>()
-    let totalTimeSeconds = 0
+    // Initialize current week days
+    const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    weekDays.forEach(d => dayPlays.set(d, 0))
 
     history.forEach((item: any) => {
-      const key = `${item.id}-${item.title}`
-      trackPlays.set(key, {
-        track: item,
-        count: (trackPlays.get(key)?.count || 0) + 1,
-      })
-
-      artistPlays.set(item.artist, (artistPlays.get(item.artist) || 0) + 1)
-
-      const day = new Date(item.playedAt).toLocaleDateString("en-US", { weekday: "short" })
-      dayPlays.set(day, (dayPlays.get(day) || 0) + 1)
-
-      if (item.duration && typeof item.duration === 'number') {
-        totalTimeSeconds += item.duration
+      // Only count for charts if it's within the last 7 days? Or just the days themselves
+      const date = new Date(item.playedAt)
+      const now = new Date()
+      // Optional: only show current week's data
+      if ((now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000) {
+        const day = date.toLocaleDateString("en-US", { weekday: "short" })
+        dayPlays.set(day, (dayPlays.get(day) || 0) + 1)
       }
     })
 
-    const topTracks = Array.from(trackPlays.entries())
-      .sort((a, b) => b[1].count - a[1].count)
+    const topTracks = Object.values(allTimeStats.trackPlays)
+      .sort((a: any, b: any) => b.count - a.count)
       .slice(0, 10)
-      .map(([_, data]) => ({
+      .map((data: any) => ({
         id: data.track.id,
         title: data.track.title,
         artist: data.track.artist,
         plays: data.count,
       }))
 
-    const topArtists = Array.from(artistPlays.entries())
-      .sort((a, b) => b[1] - a[1])
+    const topArtists = Object.entries(allTimeStats.artistPlays)
+      .sort((a: any, b: any) => b[1] - a[1])
       .slice(0, 10)
-      .map(([name, plays]) => ({ name, plays }))
+      .map(([name, plays]) => ({ name, plays: plays as number }))
 
-    const recentlyPlayed = history
-      .slice(-20)
-      .reverse()
+    const recentlyPlayed = [...history]
+      .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime())
+      .slice(0, 20)
       .map((item: any) => ({
         id: item.id,
         title: item.title,
@@ -69,15 +104,15 @@ export function StatisticsView() {
         playedAt: new Date(item.playedAt),
       }))
 
-    const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    // Start with today and go backwards for the chart? Standard weekDays is fine.
     const playsByDay = weekDays.map((day) => ({
       day,
       plays: dayPlays.get(day) || 0,
     }))
 
     setStats({
-      totalPlays: history.length,
-      totalTime: totalTimeSeconds,
+      totalPlays: allTimeStats.totalPlays,
+      totalTime: allTimeStats.totalTime,
       topTracks,
       topArtists,
       recentlyPlayed,
