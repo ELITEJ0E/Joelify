@@ -29,9 +29,11 @@ export function PlayerControls() {
     likedSongs, joelsSongs,
     setSpotifyPlayer, setCurrentTrack, setQueue, setVolume, toggleShuffle,
     toggleRepeat, setPlaybackPosition, setPlaybackSource,
-    audioSettings,
+    audioSettings, user,
   } = useApp()
 
+  // We check for isInitialized from context but it's not exported.
+  // Actually, let's use isFirstRender better.
   const [youtubePlayer, setYoutubePlayer] = useState<any>(null)
   const sunoAudioRef = useRef<HTMLAudioElement | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -49,7 +51,7 @@ export function PlayerControls() {
   const trackEndHandledRef = useRef(false)
   const isSeekingRef = useRef(false)
   const hasRestoredPositionRef = useRef(false)
-  const isFirstRender = useRef(true)
+  const initialLoadHandledRef = useRef(false)
   const playedTracksRef = useRef(new Set<string>())
   const playHistoryRef = useRef<string[]>([])
 
@@ -454,15 +456,14 @@ export function PlayerControls() {
       hasRestoredPositionRef.current = false
       trackEndHandledRef.current = false
       
-      // Auto-play ONLY if it's not the very first render (initial app load)
-      if (!isFirstRender.current) {
+      // Auto-play ONLY if it's not the very first load of a track
+      if (initialLoadHandledRef.current) {
         setIsPlaying(true)
       }
-      isFirstRender.current = false
+      initialLoadHandledRef.current = true
     } else {
       setDuration(0); setCurrentTime(0); setPlaybackPosition(0)
       setIsPlaying(false)
-      isFirstRender.current = false
     }
   }, [currentTrack, setPlaybackPosition, playbackSource, setPlaybackSource])
 
@@ -555,10 +556,9 @@ export function PlayerControls() {
       const onLoadedMetadata = () => {
         setDuration(audio.duration);
         setIsReady(true);
-        if (!isFirstRender.current) {
+        if (initialLoadHandledRef.current && isPlaying) {
             const playPromise = audio.play();
             if (playPromise !== undefined) playPromise.catch(e => console.warn("Initial Suno play rejected:", e));
-            setIsPlaying(true);
         }
       };
       const onPlay = () => setIsPlaying(true);
@@ -577,7 +577,7 @@ export function PlayerControls() {
       audio.addEventListener("pause", onPause);
 
       // Play audio if it was already supposed to be playing
-      if (currentTrack && isPlaying && !isFirstRender.current) {
+      if (currentTrack && isPlaying && initialLoadHandledRef.current) {
         const playPromise = audio.play();
         if (playPromise !== undefined) {
             playPromise.catch(e => {

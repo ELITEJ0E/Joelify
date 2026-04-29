@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Share2, Copy, Check, Twitter, Facebook, X } from "lucide-react"
+import { CustomToast } from "./CustomToast"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -66,21 +67,12 @@ export function ShareMenu({ type, data, className = "" }: ShareMenuProps) {
       setTimeout(() => setCopied(false), 2000)
       
       toast.custom((t) => (
-        <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="bg-primary/20 p-2 rounded-lg">
-            <Check size={20} className="text-primary" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-bold text-white">Link copied!</h4>
-            <p className="text-xs text-gray-400 mt-1">Share link has been copied to your clipboard.</p>
-          </div>
-          <button 
-            onClick={() => toast.dismiss(t)}
-            className="text-gray-500 hover:text-white transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <CustomToast 
+          t={t} 
+          title="Link copied!" 
+          description="Share link has been copied to your clipboard." 
+          Icon={Check} 
+        />
       ))
     } catch (error) {
       console.error("[Share] Failed to copy:", error)
