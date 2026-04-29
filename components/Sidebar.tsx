@@ -24,6 +24,7 @@ import {
   FileText,
   Music2,
 } from "lucide-react"
+import { CustomToast } from "./CustomToast"
 import { toast } from "sonner"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -200,21 +201,12 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   const handleCopyToClipboard = async () => {
     try {
       toast.custom((t) => (
-        <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="bg-primary/20 p-2 rounded-lg">
-            <Check size={20} className="text-primary" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-bold text-white">Copied to clipboard!</h4>
-            <p className="text-xs text-gray-400 mt-1">You can now paste this into WhatsApp or any other app.</p>
-          </div>
-          <button 
-            onClick={() => toast.dismiss(t)}
-            className="text-gray-500 hover:text-white transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <CustomToast 
+          t={t} 
+          title="Copied to clipboard!" 
+          description="You can now paste this into WhatsApp or any other app." 
+          Icon={Check} 
+        />
       ))
     } catch (err) {
       toast.error("Failed to copy to clipboard", {
@@ -234,21 +226,12 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       URL.revokeObjectURL(url)
       
       toast.custom((t) => (
-        <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="bg-primary/20 p-2 rounded-lg">
-            <Download size={20} className="text-primary" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-bold text-white">Download started</h4>
-            <p className="text-xs text-gray-400 mt-1">Your playlists have been saved as a .txt file.</p>
-          </div>
-          <button 
-            onClick={() => toast.dismiss(t)}
-            className="text-gray-500 hover:text-white transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <CustomToast 
+          t={t} 
+          title="Download started" 
+          description="Your playlists have been saved as a .txt file." 
+          Icon={Download} 
+        />
       ))
     } catch (err) {
       toast.error("Failed to download file", {
@@ -278,21 +261,12 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
         setImportText("")
         
         toast.custom((t) => (
-          <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="bg-primary/20 p-2 rounded-lg">
-              <Upload size={20} className="text-primary" />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-bold text-white">Import Successful!</h4>
-              <p className="text-xs text-gray-400 mt-1">Imported {imported.length} playlist(s) to your library.</p>
-            </div>
-            <button 
-              onClick={() => toast.dismiss(t)}
-              className="text-gray-500 hover:text-white transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </div>
+          <CustomToast 
+            t={t} 
+            title="Import Successful!" 
+            description={`Imported ${imported.length} playlist(s) to your library.`} 
+            Icon={Upload} 
+          />
         ))
       } else {
         toast.error("No valid playlists found", {
@@ -340,21 +314,12 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
             setIsImportDialogOpen(false)
             
             toast.custom((t) => (
-              <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-                <div className="bg-primary/20 p-2 rounded-lg">
-                  <Upload size={20} className="text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-bold text-white">Import Successful!</h4>
-                  <p className="text-xs text-gray-400 mt-1">Imported {validatedJson.length} playlist(s) from JSON.</p>
-                </div>
-                <button 
-                  onClick={() => toast.dismiss(t)}
-                  className="text-gray-500 hover:text-white transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              <CustomToast 
+                t={t} 
+                title="Import Successful!" 
+                description={`Imported ${validatedJson.length} playlist(s) from JSON.`} 
+                Icon={Upload} 
+              />
             ))
             return
           }
@@ -369,21 +334,12 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
           setIsImportDialogOpen(false)
           
           toast.custom((t) => (
-            <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-              <div className="bg-primary/20 p-2 rounded-lg">
-                <Upload size={20} className="text-primary" />
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-bold text-white">Import Successful!</h4>
-                <p className="text-xs text-gray-400 mt-1">Imported {imported.length} playlist(s) from file.</p>
-              </div>
-              <button 
-                onClick={() => toast.dismiss(t)}
-                className="text-gray-500 hover:text-white transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
+            <CustomToast 
+              t={t} 
+              title="Import Successful!" 
+              description={`Imported ${imported.length} playlist(s) from file.`} 
+              Icon={Upload} 
+            />
           ))
         } else {
           toast.error("Could not find any valid playlists in the file.", {
@@ -407,21 +363,12 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       if (text) {
         setImportText(text)
         toast.custom((t) => (
-          <div className="bg-black/90 backdrop-blur-2xl border border-primary/40 p-4 rounded-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] flex items-start gap-3 min-w-[320px] animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="bg-primary/20 p-2 rounded-lg">
-              <ClipboardPaste size={20} className="text-primary" />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-bold text-white">Pasted from clipboard</h4>
-              <p className="text-xs text-gray-400 mt-1">Text has been loaded into the import area.</p>
-            </div>
-            <button 
-              onClick={() => toast.dismiss(t)}
-              className="text-gray-500 hover:text-white transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </div>
+          <CustomToast 
+            t={t} 
+            title="Pasted from clipboard" 
+            description="Text has been loaded into the import area." 
+            Icon={ClipboardPaste} 
+          />
         ))
       } else {
         toast.error("Clipboard is empty", {
@@ -624,7 +571,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                         <Button
                                           size="icon"
                                           variant="ghost"
-                                          className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-full transition-all duration-200"
+                                          className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-full transition-all duration-200"
                                         >
                                           <MoreVertical size={14} />
                                         </Button>

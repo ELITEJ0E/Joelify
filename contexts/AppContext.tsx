@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { type AppState, type Playlist, type Track, loadState, saveState, createDefaultPlaylist } from "@/lib/storage"
+import { FALLBACK_JOELS_SONGS } from "@/lib/constants"
 import { auth, db } from "@/lib/firebase"
 import { onAuthStateChanged, User } from "firebase/auth"
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore"
@@ -70,26 +71,6 @@ interface AppContextType extends AppState {
   setJoelsSongs: (songs: Track[]) => void
   user: User | null
 }
-
-const FALLBACK_JOELS_SONGS: Track[] = [
-  { id: "c0b11db7-a280-4472-804d-665a3964fe75", title: "I Do (ori.ver)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_c0b11db7-a280-4472-804d-665a3964fe75.jpeg" },
-  { id: "592ac792-0d91-4912-b7a8-1d601f277ffe", title: "I Do (wedding.ver)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_592ac792-0d91-4912-b7a8-1d601f277ffe.jpeg" },
-  { id: "54aec49b-119c-46c8-a81f-9c718e4ab374", title: "I Do (bright)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_54aec49b-119c-46c8-a81f-9c718e4ab374.jpeg" },
-  { id: "aba59ff3-0dc0-456a-b3c5-b69c2b229722", title: "I Do (90s.ver)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_aba59ff3-0dc0-456a-b3c5-b69c2b229722.jpeg" },
-  { id: "bd216e5e-4604-48e2-ac6e-7f1698044908", title: "红唇转圈", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/3e4680bd-d807-40f8-8ab4-d0e86800d44e.jpeg?width=100" },
-  { id: "15095bb6-e6fc-491a-8e6c-0fe284c8b539", title: "红唇转圈 (male.ver)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_15095bb6-e6fc-491a-8e6c-0fe284c8b539.jpeg" },
-  { id: "93071252-c3b8-48cf-8fba-29af58e06fa7", title: "红唇转圈 (male + female.ver)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_93071252-c3b8-48cf-8fba-29af58e06fa7.jpeg" },
-  { id: "aff5c48b-1c9a-48e1-8f3a-75e6dc9b6165", title: "Sweetheart Pulse", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_aff5c48b-1c9a-48e1-8f3a-75e6dc9b6165.jpeg" },
-  { id: "fb92ee0d-ec81-4b13-adff-665d4ce72959", title: "霓虹坠落", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/454dc708-54ae-4e5c-923e-86f3c3a6017d.jpeg?width=100" },
-  { id: "fae0bffa-8b42-4efe-ad48-06beec264ed6", title: "霓虹坠落（guzheng ver)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/59dcf2f0-3c9d-44fc-98ca-5028c884dbc1.jpeg?width=100" },
-  { id: "dae2c3e3-5c80-4c86-ba69-f7aca9b393ad", title: "灯一亮就", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/260a7eb5-2093-4d4d-bfbc-7912459816e5.jpeg" },
-  { id: "71adb5b0-2a9a-4409-84fd-7b57666728cb", title: "霓虹贴身", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/5b3734e2-410b-41cc-b24d-c3f2220afda2.jpeg?width=100" },
-  { id: "269a9621-677f-4864-8193-4b2265cd73cc", title: "Light It Up Tonight", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/cdea3ba4-5f38-4462-968f-1fb74ba5ac92.jpeg" },
-  { id: "256a7d2a-f304-4498-afe5-50d888e92f82", title: "Light It Up (short)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_256a7d2a-f304-4498-afe5-50d888e92f82.jpeg" },
-  { id: "2239a5e6-3ade-443e-aa21-091376583af2", title: "Light It Up", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/a9493a70-6b86-4f80-ab59-d10d676d4443.jpeg" },
-  { id: "290650dc-28cb-4412-9347-f2ca5c9ed891", title: "Light It Up 2 (short)", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/image_290650dc-28cb-4412-9347-f2ca5c9ed891.jpeg" },
-  { id: "2ebad459-81ee-40bf-bdaf-dfc7d90cd1e0", title: "Light It Up 2", artist: "ELITEJOE", thumbnail: "https://cdn2.suno.ai/18f34ffd-7dc7-4d17-81b4-5d64f12dcce6.jpeg" },
-]
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
 
@@ -183,7 +164,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (savedJoels) {
         try {
           let parsed: Track[] = JSON.parse(savedJoels)
-          // Ensure all fallback songs are present
+          // Ensure all fallback songs are present and updated with latest hardcoded thumbnail data
+          parsed = parsed.map(pTrack => {
+            const fallback = FALLBACK_JOELS_SONGS.find(f => f.id === pTrack.id);
+            return fallback ? { ...pTrack, ...fallback } : pTrack;
+          });
+
           const missingFallbacks = FALLBACK_JOELS_SONGS.filter(
             f => !parsed.some(p => p.id === f.id)
           )

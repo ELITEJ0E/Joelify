@@ -120,7 +120,7 @@ function YouTubeIframePlayer({
     const initPlayer = () => {
       if (!window.YT?.Player || !containerRef.current || playerRef.current || !currentTrack?.id || playbackSource !== "youtube") return
       const playerVars: any = {
-        autoplay: 1, controls: 0, disablekb: 1, fs: 0,
+        autoplay: 0, controls: 0, disablekb: 1, fs: 0,
         modestbranding: 1, playsinline: 1, rel: 0, iv_load_policy: 3,
       }
       if (audioSettings.youtubeQuality !== "audio") playerVars.quality = audioSettings.youtubeQuality
@@ -133,6 +133,11 @@ function YouTubeIframePlayer({
           onReady: (event: any) => {
             isPlayerReadyRef.current = true
             event.target.setVolume(100)
+            if (isPlaying) {
+              event.target.playVideo()
+            } else {
+              event.target.cueVideoById({ videoId: currentTrack.id })
+            }
             startDurationPolling(event.target)
             onPlayerReadyRef.current(event.target)
           },

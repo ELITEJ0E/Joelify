@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogIn, LogOut, Cloud } from "lucide-react"
+import { LogIn, LogOut, Cloud, Check } from "lucide-react"
 import { auth } from "@/lib/firebase"
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth"
+import { CustomToast } from "./CustomToast"
 import { toast } from "sonner"
 
 export function FirebaseLogin() {
@@ -25,7 +26,14 @@ export function FirebaseLogin() {
     try {
       const provider = new GoogleAuthProvider()
       await signInWithPopup(auth, provider)
-      toast.success("Successfully logged in to Cloud Sync")
+      toast.custom((t) => (
+        <CustomToast 
+          t={t} 
+          title="Successfully logged in" 
+          description="Your library is now synced to the cloud." 
+          Icon={Check} 
+        />
+      ))
     } catch (error: any) {
       console.error("Firebase login error:", error)
       toast.error("Failed to log in", { description: error.message })
@@ -35,7 +43,14 @@ export function FirebaseLogin() {
   const handleLogout = async () => {
     try {
       await signOut(auth)
-      toast.success("Logged out from Cloud Sync")
+      toast.custom((t) => (
+        <CustomToast 
+          t={t} 
+          title="Logged out" 
+          description="Cloud sync has been disabled." 
+          Icon={LogOut} 
+        />
+      ))
     } catch (error: any) {
       console.error("Firebase logout error:", error)
       toast.error("Failed to log out")
