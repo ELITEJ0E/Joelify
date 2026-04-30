@@ -32,18 +32,17 @@ export interface AppState {
     primary: string
     accent: string
   }
-  playbackSource?: "youtube" | "spotify"
+  playbackSource?: "youtube" | "suno"
   audioSettings?: {
     crossfadeDuration: number
     gaplessPlayback: boolean
     eqPreset: string
     customEQ: number[]
     youtubeQuality: "audio" | "360p" | "720p" | "1080p"
-    spotifyQuality: "normal" | "high" | "veryhigh"
   }
 }
 
-const STORAGE_KEY = "spotify-youtube-app-state"
+const STORAGE_KEY = "joelify-app-state"
 
 export function loadState(): Partial<AppState> {
   if (typeof window === "undefined") return {}

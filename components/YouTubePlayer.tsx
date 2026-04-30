@@ -44,11 +44,11 @@ function YouTubeIframePlayer({
   // Note: we don't strictly need isPlaying in the dependency array of the load effect
   // but we should check its current value when deciding whether to load or cue.
   // Using a ref to track isPlaying state to avoid unnecessary re-renders of the effect.
-  const isPlayingRef = useRef(false)
+  const isPlayingRef = useRef(isPlaying)
   
-  // We need to pass isPlaying to the component or consume it differently
-  // To avoid circular dependencies or too many re-renders, let's just use the current playing state
-  // actually, PlayerControls manages isPlaying.
+  useEffect(() => {
+    isPlayingRef.current = isPlaying
+  }, [isPlaying])
 
   // ── Stable callback refs ───────────────────────────────────────────────────
   const onStateChangeRef = useRef(onStateChange)
@@ -120,8 +120,9 @@ function YouTubeIframePlayer({
     const initPlayer = () => {
       if (!window.YT?.Player || !containerRef.current || playerRef.current || !currentTrack?.id || playbackSource !== "youtube") return
       const playerVars: any = {
-        autoplay: 0, controls: 0, disablekb: 1, fs: 0,
+        autoplay: 1, controls: 0, disablekb: 1, fs: 0,
         modestbranding: 1, playsinline: 1, rel: 0, iv_load_policy: 3,
+        origin: window.location.origin
       }
       if (audioSettings.youtubeQuality !== "audio") playerVars.quality = audioSettings.youtubeQuality
 
@@ -133,10 +134,15 @@ function YouTubeIframePlayer({
           onReady: (event: any) => {
             isPlayerReadyRef.current = true
             event.target.setVolume(100)
-            if (isPlaying) {
-              event.target.playVideo()
+            if (isPlayingRef.current) {
+              event.target.loadVideoById(currentTrack.id)
+              setTimeout(() => {
+                if (event.target.getPlayerState?.() !== 1) {
+                  event.target.playVideo?.()
+                }
+              }, 150)
             } else {
-              event.target.cueVideoById({ videoId: currentTrack.id })
+              event.target.cueVideoById(currentTrack.id)
             }
             startDurationPolling(event.target)
             onPlayerReadyRef.current(event.target)
@@ -195,15 +201,20 @@ function YouTubeIframePlayer({
       durationPollIntervalRef.current = null
       stopProgressTracking()
       
-      if (isPlaying) {
-        playerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: 0 })
+      if (isPlayingRef.current) {
+        playerRef.current.loadVideoById(currentTrack.id)
+        setTimeout(() => {
+          if (playerRef.current?.getPlayerState?.() !== 1) {
+            playerRef.current?.playVideo?.()
+          }
+        }, 150)
       } else {
-        playerRef.current.cueVideoById({ videoId: currentTrack.id, startSeconds: 0 })
+        playerRef.current.cueVideoById(currentTrack.id)
       }
       
       setTimeout(() => startDurationPolling(playerRef.current), 500)
     }
-  }, [currentTrack?.id, playbackSource]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentTrack?.id, playbackSource])
 
   useEffect(() => {
     if (playerRef.current && isPlayerReadyRef.current && playbackSource === "youtube") {

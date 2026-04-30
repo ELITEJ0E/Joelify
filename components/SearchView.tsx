@@ -11,8 +11,6 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DiscoverMore } from "./DiscoverMore"
 import { getCachedData, setCachedData } from "@/lib/cache"
-import { searchTracks } from "@/lib/spotifyApi"
-import { isAuthenticated } from "@/lib/spotifyAuth"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const loadingMessages = [
@@ -29,13 +27,11 @@ const loadingMessages = [
 export function SearchView() {
   const [query, setQuery] = useState("")
   const [youtubeResults, setYoutubeResults] = useState<YouTubeVideo[]>([])
-  const [spotifyResults, setSpotifyResults] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
-  const [searchSource, setSearchSource] = useState<"youtube" | "spotify" | "both">("both")
   const [lastQuery, setLastQuery] = useState("")
-  const [activeTab, setActiveTab] = useState<"youtube" | "spotify">("youtube")
+  const [activeTab, setActiveTab] = useState<"youtube">("youtube")
 
   const {
     playlists,
@@ -48,8 +44,6 @@ export function SearchView() {
     setPlaybackSource,
   } = useApp()
 
-  const isSpotifyAuth = isAuthenticated()
-
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!query.trim()) return
@@ -60,51 +54,24 @@ export function SearchView() {
     setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
 
     try {
-      if (searchSource === "youtube" || searchSource === "both") {
-        const cacheKey = `searchCache_${query.trim().toLowerCase()}`
-        const cached = getCachedData<YouTubeVideo[]>(cacheKey, sessionStorage)
+      const cacheKey = `searchCache_${query.trim().toLowerCase()}`
+      const cached = getCachedData<YouTubeVideo[]>(cacheKey, sessionStorage)
 
-        if (cached) {
-          console.log(`[v0] Using cached YouTube search results for "${query}"`)
-          setYoutubeResults(cached)
-          if (cached.length > 0) setActiveTab("youtube")
+      if (cached) {
+        console.log(`[v0] Using cached YouTube search results for "${query}"`)
+        setYoutubeResults(cached)
+        if (cached.length > 0) setActiveTab("youtube")
+      } else {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        const data = await res.json()
+
+        if (data.error) {
+          console.error("[v0] YouTube API error:", data.error)
+          setError(data.error)
         } else {
-          const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
-          const data = await res.json()
-
-          if (data.error) {
-            console.error("[v0] YouTube API error:", data.error)
-            setError(data.error)
-          } else {
-            setCachedData(cacheKey, data.items, sessionStorage)
-            setYoutubeResults(data.items)
-            if (data.items.length > 0) setActiveTab("youtube")
-          }
-        }
-      }
-
-      if ((searchSource === "spotify" || searchSource === "both") && isSpotifyAuth) {
-        const cacheKey = `spotifySearchCache_${query.trim().toLowerCase()}`
-        const cached = getCachedData<any[]>(cacheKey, sessionStorage)
-
-        if (cached) {
-          console.log(`[Spotify] Using cached search results for "${query}"`)
-          setSpotifyResults(cached)
-          if (cached.length > 0 && youtubeResults.length === 0) setActiveTab("spotify")
-        } else {
-          const data = await searchTracks(query, 20)
-          const tracks = data.tracks.items.map((track: any) => ({
-            id: track.id,
-            title: track.name,
-            artist: track.artists.map((a: any) => a.name).join(", "),
-            thumbnail: track.album.images[0]?.url || "",
-            duration: `${Math.floor(track.duration_ms / 60000)}:${String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, "0")}`,
-            uri: track.uri,
-            spotifyUrl: track.external_urls.spotify,
-          }))
-          setCachedData(cacheKey, tracks, sessionStorage)
-          setSpotifyResults(tracks)
-          if (tracks.length > 0 && youtubeResults.length === 0) setActiveTab("spotify")
+          setCachedData(cacheKey, data.items, sessionStorage)
+          setYoutubeResults(data.items)
+          if (data.items.length > 0) setActiveTab("youtube")
         }
       }
 
@@ -116,7 +83,7 @@ export function SearchView() {
     }
   }
 
-  const handlePlayNow = (video: YouTubeVideo | any, source: "youtube" | "spotify") => {
+  const handlePlayNow = (video: YouTubeVideo | any, source: "youtube") => {
     setPlaybackSource(source)
     setCurrentTrack(video)
   }
@@ -147,22 +114,6 @@ export function SearchView() {
                 {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Search"}
               </Button>
             </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Search in:</span>
-              <Select value={searchSource} onValueChange={(value: any) => setSearchSource(value)}>
-                <SelectTrigger className="w-40 h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="both">Both</SelectItem>
-                  <SelectItem value="youtube">YouTube</SelectItem>
-                  <SelectItem value="spotify" disabled={!isSpotifyAuth}>
-                    Spotify {!isSpotifyAuth && "(Login required)"}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </form>
 
@@ -183,63 +134,28 @@ export function SearchView() {
           </div>
         )}
 
-        {!isLoading && (youtubeResults.length > 0 || spotifyResults.length > 0) && (
+        {!isLoading && youtubeResults.length > 0 && (
           <div className="mb-12">
             {lastQuery && <p className="text-sm text-muted-foreground mb-4">Showing results for "{lastQuery}"</p>}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "youtube" | "spotify")} className="w-full">
-              <TabsList className="mb-6">
-                {youtubeResults.length > 0 && (
-                  <TabsTrigger value="youtube">YouTube ({youtubeResults.length})</TabsTrigger>
-                )}
-                {spotifyResults.length > 0 && (
-                  <TabsTrigger value="spotify">Spotify ({spotifyResults.length})</TabsTrigger>
-                )}
-              </TabsList>
-
-              {youtubeResults.length > 0 && (
-                <TabsContent value="youtube">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                    {youtubeResults.map((video) => (
-                      <SearchResultCard
-                        key={video.id}
-                        video={video}
-                        source="youtube"
-                        playlists={playlists}
-                        onPlayNow={handlePlayNow}
-                        onAddToQueue={handleAddToQueue}
-                        onAddToPlaylist={addTrackToPlaylist}
-                        onToggleLike={toggleLikedSong}
-                        isLiked={isTrackLiked(video.id)}
-                      />
-                    ))}
-                  </div>
-                </TabsContent>
-              )}
-
-              {spotifyResults.length > 0 && (
-                <TabsContent value="spotify">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                    {spotifyResults.map((track) => (
-                      <SearchResultCard
-                        key={track.id}
-                        video={track}
-                        source="spotify"
-                        playlists={playlists}
-                        onPlayNow={handlePlayNow}
-                        onAddToQueue={handleAddToQueue}
-                        onAddToPlaylist={addTrackToPlaylist}
-                        onToggleLike={toggleLikedSong}
-                        isLiked={isTrackLiked(track.id)}
-                      />
-                    ))}
-                  </div>
-                </TabsContent>
-              )}
-            </Tabs>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+              {youtubeResults.map((video) => (
+                <SearchResultCard
+                  key={video.id}
+                  video={video}
+                  source="youtube"
+                  playlists={playlists}
+                  onPlayNow={handlePlayNow}
+                  onAddToQueue={handleAddToQueue}
+                  onAddToPlaylist={addTrackToPlaylist}
+                  onToggleLike={toggleLikedSong}
+                  isLiked={isTrackLiked(video.id)}
+                />
+              ))}
+            </div>
           </div>
         )}
 
-        {!isLoading && !error && youtubeResults.length === 0 && spotifyResults.length === 0 && query && (
+        {!isLoading && !error && youtubeResults.length === 0 && query && (
           <div className="text-center py-20">
             <p className="text-lg md:text-xl text-muted-foreground">Looking for "{query}"?</p>
             <p className="text-sm text-muted-foreground mt-2">Enter to search</p>
@@ -278,7 +194,7 @@ function SearchResultCard({
     setTimeout(() => setShowSuccess(false), 2000)
   }
 
-  const externalUrl = source === "spotify" ? video.spotifyUrl : `https://www.youtube.com/watch?v=${video.id}`
+  const externalUrl = `https://www.youtube.com/watch?v=${video.id}`
 
   return (
     <div className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] backdrop-blur-xl rounded-xl p-4 transition-all duration-300 group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40">
@@ -294,7 +210,7 @@ function SearchResultCard({
           </Button>
         </div>
         <div className="absolute top-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
-          {source === "spotify" ? "Spotify" : "YouTube"}
+          YouTube
         </div>
       </div>
 

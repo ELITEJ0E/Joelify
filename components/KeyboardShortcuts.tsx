@@ -54,6 +54,26 @@ export const KeyboardShortcuts = React.forwardRef<HTMLButtonElement, {}>(
     const [open, setOpen] = useState(false)
 
     useEffect(() => {
+      if (open) {
+        window.history.pushState({ modal: "shortcuts" }, "")
+        const handlePopState = () => setOpen(false)
+        window.addEventListener("popstate", handlePopState)
+        return () => window.removeEventListener("popstate", handlePopState)
+      }
+    }, [open])
+
+    const handleOpenChange = (isOpen: boolean) => {
+      if (isOpen) {
+        setOpen(true)
+      } else {
+        setOpen(false)
+        if (window.history.state?.modal === "shortcuts") {
+          window.history.back()
+        }
+      }
+    }
+
+    useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
         if ((e.key === "?" || e.key === "/") && (e.shiftKey || e.key === "?")) {
           e.preventDefault()
@@ -67,7 +87,7 @@ export const KeyboardShortcuts = React.forwardRef<HTMLButtonElement, {}>(
     }, [open])
 
     return (
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogTrigger asChild>
           <Button ref={ref} variant="ghost" size="sm" className="p-2 text-gray-400 hover:text-white hover:bg-primary/15">
             <Keyboard size={18} />

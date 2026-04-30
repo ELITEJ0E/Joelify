@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Home,
   Search,
@@ -42,11 +42,8 @@ import {
 } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ThemeSettings } from "./ThemeSettings"
-import { SpotifyLogin } from "./SpotifyLogin"
-import { FirebaseLogin } from "./FirebaseLogin"
-import { SpotifyQuota } from "./SpotifyQuota"
-import { isAuthenticated } from "@/lib/spotifyAuth"
 import { AudioSettings } from "./AudioSettings"
+import { FirebaseLogin } from "./FirebaseLogin"
 import { KeyboardShortcuts } from "./KeyboardShortcuts"
 
 
@@ -85,18 +82,43 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
   const [renamePlaylistName, setRenamePlaylistName] = useState("")
   const [playlistToDelete, setPlaylistToDelete] = useState<{ id: string; name: string } | null>(null)
   const [activeView, setActiveView] = useState<string>("")
-  const [isSpotifyAuth, setIsSpotifyAuth] = useState(false)
   const [isLibraryExpanded, setIsLibraryExpanded] = useState(true)
 
+  const handlePopState = useCallback(() => {
+    setIsCreateDialogOpen(false)
+    setIsRenameDialogOpen(false)
+    setIsDeleteDialogOpen(false)
+    setIsExportDialogOpen(false)
+    setIsImportDialogOpen(false)
+  }, [])
+
   useEffect(() => {
-    setIsSpotifyAuth(isAuthenticated())
+    const isAnyDialogOpen =
+      isCreateDialogOpen || isRenameDialogOpen || isDeleteDialogOpen || isExportDialogOpen || isImportDialogOpen
+    if (isAnyDialogOpen) {
+      window.history.pushState({ modal: "sidebar-dialog" }, "")
+      window.addEventListener("popstate", handlePopState)
+    } else {
+      window.removeEventListener("popstate", handlePopState)
+    }
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [isCreateDialogOpen, isRenameDialogOpen, isDeleteDialogOpen, isExportDialogOpen, isImportDialogOpen, handlePopState])
+
+  const closeDialog = (setter: (val: boolean) => void) => {
+    setter(false)
+    if (window.history.state?.modal === "sidebar-dialog") {
+      window.history.back()
+    }
+  }
+
+  useEffect(() => {
   }, [])
 
   const handleCreatePlaylist = () => {
     if (newPlaylistName.trim()) {
       addPlaylist(newPlaylistName.trim())
       setNewPlaylistName("")
-      setIsCreateDialogOpen(false)
+      closeDialog(setIsCreateDialogOpen)
     }
   }
 
@@ -105,14 +127,14 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       renamePlaylist(renamePlaylistId, renamePlaylistName.trim())
       setRenamePlaylistId(null)
       setRenamePlaylistName("")
-      setIsRenameDialogOpen(false)
+      closeDialog(setIsRenameDialogOpen)
     }
   }
 
   const handleDeletePlaylist = () => {
     if (playlistToDelete) {
       deletePlaylist(playlistToDelete.id)
-      setIsDeleteDialogOpen(false)
+      closeDialog(setIsDeleteDialogOpen)
       setPlaylistToDelete(null)
     }
   }
@@ -257,7 +279,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       const imported = textToPlaylists(importText)
       if (imported.length > 0) {
         setPlaylists([...playlists, ...imported])
-        setIsImportDialogOpen(false)
+        closeDialog(setIsImportDialogOpen)
         setImportText("")
         
         toast.custom((t) => (
@@ -311,7 +333,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
               createdAt: p.createdAt || Date.now()
             }))
             setPlaylists([...playlists, ...validatedJson])
-            setIsImportDialogOpen(false)
+            closeDialog(setIsImportDialogOpen)
             
             toast.custom((t) => (
               <CustomToast 
@@ -331,7 +353,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
         const imported = textToPlaylists(content)
         if (imported.length > 0) {
           setPlaylists([...playlists, ...imported])
-          setIsImportDialogOpen(false)
+          closeDialog(setIsImportDialogOpen)
           
           toast.custom((t) => (
             <CustomToast 
@@ -509,7 +531,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                           <ScrollArea className="w-full pr-4 max-h-96">
                             <ul className="space-y-1">
                               <li>
-                                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                                <Dialog open={isCreateDialogOpen} onOpenChange={(open) => open ? setIsCreateDialogOpen(true) : closeDialog(setIsCreateDialogOpen)}>
                                   <DialogTrigger asChild>
                                     <button className="flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out hover:bg-primary/10 hover:text-primary">
                                       <PlusSquare
@@ -584,7 +606,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                                           <Edit2 size={14} className="mr-2" />
                                           Rename
                                         </DropdownMenuItem>
-                                        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                                        <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => open ? setIsDeleteDialogOpen(true) : closeDialog(setIsDeleteDialogOpen)}>
                                           <DialogTrigger asChild>
                                             <DropdownMenuItem
                                               onSelect={(e) => e.preventDefault()}
@@ -674,13 +696,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                       </button>
                     </li>
                     <li className="mt-4 pt-4 border-t border-gray-800/30">
-                      <SpotifyLogin />
                       <FirebaseLogin />
-                      {isSpotifyAuth && (
-                        <div className="mt-3">
-                          <SpotifyQuota />
-                        </div>
-                      )}
                     </li>
                   </ul>
                 </nav>
@@ -714,7 +730,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       </div>
 
       {/* DIALOGS */}
-      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+      <Dialog open={isRenameDialogOpen} onOpenChange={(open) => open ? setIsRenameDialogOpen(true) : closeDialog(setIsRenameDialogOpen)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-primary">Rename Playlist</DialogTitle>
@@ -747,7 +763,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       </Dialog>
 
       {/* Export Dialog */}
-      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+      <Dialog open={isExportDialogOpen} onOpenChange={(open) => open ? setIsExportDialogOpen(true) : closeDialog(setIsExportDialogOpen)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-primary">Export Playlists</DialogTitle>
@@ -781,7 +797,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       </Dialog>
 
       {/* Import Dialog */}
-      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+      <Dialog open={isImportDialogOpen} onOpenChange={(open) => open ? setIsImportDialogOpen(true) : closeDialog(setIsImportDialogOpen)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-primary">Import Playlists</DialogTitle>

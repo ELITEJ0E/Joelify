@@ -15,6 +15,50 @@ export default function Home() {
   const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
+  // Handle initialization and browser back/forward for views
+  useEffect(() => {
+    // Set initial state
+    window.history.replaceState({ view: "home" }, "")
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.view) {
+        setCurrentView(event.state.view)
+      } else if (!event.state?.modal) {
+        // If we go back and there's no specific state, default to home
+        setCurrentView("home")
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
+
+  const handleNavigate = (view: any) => {
+    if (view !== currentView) {
+      setCurrentView(view)
+      window.history.pushState({ view }, "")
+    }
+  }
+
+  useEffect(() => {
+    if (isSidebarOpen) {
+      window.history.pushState({ modal: "sidebar" }, "")
+      
+      const handlePopState = () => {
+        setIsSidebarOpen(false)
+      }
+      window.addEventListener("popstate", handlePopState)
+      return () => window.removeEventListener("popstate", handlePopState)
+    }
+  }, [isSidebarOpen])
+
+  const closeSidebar = () => {
+    setIsSidebarOpen(false)
+    if (window.history.state?.modal === "sidebar") {
+      window.history.back()
+    }
+  }
+
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 3500)
     return () => clearTimeout(timer)
@@ -48,9 +92,9 @@ export default function Home() {
               </div>
             }
           >
-            <Sidebar onNavigate={setCurrentView} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            <Sidebar onNavigate={handleNavigate} isOpen={isSidebarOpen} onClose={closeSidebar} />
           </Suspense>
-          <MainContent view={currentView} onNavigate={setCurrentView} />
+          <MainContent view={currentView} onNavigate={handleNavigate} />
         </div>
 
         <PlayerControls />
