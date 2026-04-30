@@ -15,7 +15,6 @@ export interface AudioSettings {
   eqPreset: string
   customEQ: number[]
   youtubeQuality: "audio" | "360p" | "720p" | "1080p"
-  spotifyQuality: "normal" | "high" | "veryhigh"
   realAudioEngine: boolean
 }
 
@@ -43,6 +42,27 @@ const FREQUENCY_BANDS = ["32Hz", "64Hz", "125Hz", "250Hz", "500Hz", "1kHz", "2kH
 export const AudioSettings = React.forwardRef<HTMLButtonElement, AudioSettingsProps>(
   ({ settings, onChange }, ref) => {
     const [localSettings, setLocalSettings] = useState(settings)
+    const [open, setOpen] = useState(false)
+
+    useEffect(() => {
+      if (open) {
+        window.history.pushState({ modal: "audio-settings" }, "")
+        const handlePopState = () => setOpen(false)
+        window.addEventListener("popstate", handlePopState)
+        return () => window.removeEventListener("popstate", handlePopState)
+      }
+    }, [open])
+
+    const handleOpenChange = (isOpen: boolean) => {
+      if (isOpen) {
+        setOpen(true)
+      } else {
+        setOpen(false)
+        if (window.history.state?.modal === "audio-settings") {
+          window.history.back()
+        }
+      }
+    }
 
     useEffect(() => {
       setLocalSettings(settings)
@@ -75,14 +95,8 @@ export const AudioSettings = React.forwardRef<HTMLButtonElement, AudioSettingsPr
       onChange(newSettings)
     }
 
-    const handleSpotifyQualityChange = (quality: string) => {
-      const newSettings = { ...localSettings, spotifyQuality: quality as AudioSettings["spotifyQuality"] }
-      setLocalSettings(newSettings)
-      onChange(newSettings)
-    }
-
     return (
-      <Sheet>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>
           <Button ref={ref} variant="ghost" size="sm" className="p-2 text-gray-400 hover:text-white hover:bg-primary/15">
             <Settings size={18} />
@@ -192,23 +206,6 @@ export const AudioSettings = React.forwardRef<HTMLButtonElement, AudioSettingsPr
                 <Label className="text-sm font-medium mb-2 block">YouTube Quality</Label>
                 <p className="text-xs text-muted-foreground">
                   YouTube quality auto-optimizes based on your connection for the best experience.
-                </p>
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Spotify Quality</Label>
-                <Select value={localSettings.spotifyQuality} onValueChange={handleSpotifyQualityChange}>
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="veryhigh">Very High</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Note: Spotify quality is managed by your account settings.
                 </p>
               </div>
             </TabsContent>

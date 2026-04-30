@@ -9,7 +9,6 @@ import {
 import Image from "next/image"
 import { useApp } from "@/contexts/AppContext"
 import { YouTubePlayer } from "./YouTubePlayer"
-import { SpotifyPlayer, SpotifyPlayerControls } from "./SpotifyPlayer"
 import { QueueSheet } from "./QueueSheet"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { MiniPlayer } from "./MiniPlayer"
@@ -19,17 +18,16 @@ import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { isAuthenticated } from "@/lib/spotifyAuth"
 import { LIKED_SONGS_PLAYLIST_ID } from "./LikedSongsView"
 
 export function PlayerControls() {
   const {
     currentTrack, queue, volume, shuffle, repeat, playbackPosition,
-    currentPlaylistId, playlists, playbackSource, spotifyPlayer,
+    currentPlaylistId, playlists, playbackSource,
     likedSongs, joelsSongs,
-    setSpotifyPlayer, setCurrentTrack, setQueue, setVolume, toggleShuffle,
+    setCurrentTrack, setQueue, setVolume, toggleShuffle,
     toggleRepeat, setPlaybackPosition, setPlaybackSource,
-    audioSettings, user,
+    audioSettings, user, isInitialized,
   } = useApp()
 
   // We check for isInitialized from context but it's not exported.
@@ -41,12 +39,73 @@ export function PlayerControls() {
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
-  const [isSpotifyAuth, setIsSpotifyAuth] = useState(false)
-  const [shouldAutoPlaySpotify, setShouldAutoPlaySpotify] = useState(false)
   const [isMiniPlayer, setIsMiniPlayer] = useState(false)
   const [isExpandedPlayer, setIsExpandedPlayer] = useState(false)
+  const [isLyricsOpen, setIsLyricsOpen] = useState(false)
+  const [isQueueOpen, setIsQueueOpen] = useState(false)
   // Local video toggle for the bar — separate from expanded player's video
   const [barVideoMode, setBarVideoMode] = useState(false)
+
+  // ─── Popstate Handling ───────────────────────────────────────────────────
+
+  const handlePopState = useCallback((event: PopStateEvent) => {
+    const state = event.state;
+    if (!state || !state.modal) {
+      setIsExpandedPlayer(false);
+      setIsMiniPlayer(false);
+      setIsLyricsOpen(false);
+      setIsQueueOpen(false);
+    } else {
+      // If we have a specific modal state, we could handle it here,
+      // but the general "back" button should close whichever is top.
+      // However, popstate means we ALREADY navigated back, so we just
+      // need to ensure the UI reflects the closed state.
+      setIsExpandedPlayer(false);
+      setIsMiniPlayer(false);
+      setIsLyricsOpen(false);
+      setIsQueueOpen(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isExpandedPlayer || isMiniPlayer || isLyricsOpen || isQueueOpen) {
+      window.history.pushState({ modal: true }, "");
+      window.addEventListener("popstate", handlePopState);
+    } else {
+      window.removeEventListener("popstate", handlePopState);
+    }
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isExpandedPlayer, isMiniPlayer, isLyricsOpen, isQueueOpen, handlePopState]);
+
+  const closeExpandedPlayer = () => {
+    if (isExpandedPlayer) {
+      setIsExpandedPlayer(false);
+      if (window.history.state?.modal) window.history.back();
+    }
+  };
+
+  const closeMiniPlayer = () => {
+    if (isMiniPlayer) {
+      setIsMiniPlayer(false);
+      if (window.history.state?.modal) window.history.back();
+    }
+  };
+
+  const setLyricsOpen = (open: boolean) => {
+    if (open) setIsLyricsOpen(true);
+    else {
+      setIsLyricsOpen(false);
+      if (window.history.state?.modal) window.history.back();
+    }
+  };
+
+  const setQueueOpen = (open: boolean) => {
+    if (open) setIsQueueOpen(true);
+    else {
+      setIsQueueOpen(false);
+      if (window.history.state?.modal) window.history.back();
+    }
+  };
 
   const trackEndHandledRef = useRef(false)
   const isSeekingRef = useRef(false)
@@ -89,12 +148,6 @@ export function PlayerControls() {
         setIsPlaying(true)
       } catch (e) { console.warn("YT seek/play failed", e) }
       setTimeout(() => { trackEndHandledRef.current = false }, 1500)
-    } else if (playbackSource === "spotify" && spotifyPlayer) {
-      SpotifyPlayerControls.seek(spotifyPlayer, 0)
-      SpotifyPlayerControls.play(spotifyPlayer)
-      setIsPlaying(true)
-      setShouldAutoPlaySpotify(true)
-      setTimeout(() => { trackEndHandledRef.current = false }, 1500)
     } else if (playbackSource === "suno" && sunoAudioRef.current) {
       try {
         sunoAudioRef.current.currentTime = 0;
@@ -106,7 +159,7 @@ export function PlayerControls() {
     }
     setCurrentTime(0)
     setPlaybackPosition(0)
-  }, [currentTrack, youtubePlayer, spotifyPlayer, playbackSource, setPlaybackPosition])
+  }, [currentTrack, youtubePlayer, playbackSource, setPlaybackPosition])
 
   // ─── next track ─────────────────────────────────────────────────────────────
 
@@ -127,7 +180,6 @@ export function PlayerControls() {
       setCurrentTime(0)
       setPlaybackPosition(0)
       if (playbackSource === "youtube") setIsPlaying(true)
-      else if (playbackSource === "spotify") setShouldAutoPlaySpotify(true)
       else if (playbackSource === "suno") setIsPlaying(true)
       return
     }
@@ -159,7 +211,6 @@ export function PlayerControls() {
         setCurrentTime(0)
         setPlaybackPosition(0)
         if (playbackSource === "youtube") setIsPlaying(true)
-        else if (playbackSource === "spotify") setShouldAutoPlaySpotify(true)
         else if (playbackSource === "suno") setIsPlaying(true)
         return
       }
@@ -180,8 +231,6 @@ export function PlayerControls() {
     if (currentTime > 3) {
       if (playbackSource === "youtube" && youtubePlayer) {
         try { if (typeof youtubePlayer.seekTo === 'function') youtubePlayer.seekTo(0, true) } catch(e){}
-      } else if (playbackSource === "spotify" && spotifyPlayer) {
-        SpotifyPlayerControls.seek(spotifyPlayer, 0);
       } else if (playbackSource === "suno" && sunoAudioRef.current) {
         sunoAudioRef.current.currentTime = 0
       }
@@ -219,11 +268,10 @@ export function PlayerControls() {
     if (playbackSource === "youtube" && youtubePlayer) {
       try { if (typeof youtubePlayer.seekTo === 'function') youtubePlayer.seekTo(0, true) } catch(e){}
     }
-    else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.seek(spotifyPlayer, 0)
     else if (playbackSource === "suno" && sunoAudioRef.current) sunoAudioRef.current.currentTime = 0
     setCurrentTime(0); setPlaybackPosition(0)
   }, [
-    youtubePlayer, spotifyPlayer, setCurrentTrack, setPlaybackPosition,
+    youtubePlayer, setCurrentTrack, setPlaybackPosition,
     currentTime, playbackSource, getContextTracks, currentTrack
   ])
 
@@ -238,9 +286,6 @@ export function PlayerControls() {
         if (isPlaying && typeof youtubePlayer.pauseVideo === 'function') youtubePlayer.pauseVideo()
         else if (!isPlaying && typeof youtubePlayer.playVideo === 'function') youtubePlayer.playVideo()
       } catch (e) { console.warn("YT play/pause error", e) }
-    } else if (playbackSource === "spotify") {
-      if (!spotifyPlayer) return
-      SpotifyPlayerControls.togglePlay(spotifyPlayer)
     } else if (playbackSource === "suno" && sunoAudioRef.current) {
       try {
         if (isPlaying) {
@@ -254,7 +299,7 @@ export function PlayerControls() {
           console.warn("Suno play/pause error", e);
       }
     }
-  }, [youtubePlayer, spotifyPlayer, currentTrack, isReady, isPlaying, playbackSource])
+  }, [youtubePlayer, currentTrack, isReady, isPlaying, playbackSource])
 
   // ─── seek ────────────────────────────────────────────────────────────────────
 
@@ -262,30 +307,27 @@ export function PlayerControls() {
     if (!currentTrack || !isReady) return
     const newTime = Math.min(duration, currentTime + 5)
     if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.seekTo(newTime, true)
-    else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.seek(spotifyPlayer, newTime * 1000)
     else if (playbackSource === "suno" && sunoAudioRef.current) sunoAudioRef.current.currentTime = newTime
     setCurrentTime(newTime); setPlaybackPosition(newTime)
-  }, [youtubePlayer, spotifyPlayer, isReady, currentTrack, duration, currentTime, playbackSource, setPlaybackPosition])
+  }, [youtubePlayer, isReady, currentTrack, duration, currentTime, playbackSource, setPlaybackPosition])
 
   const handleSeekBackward = useCallback(() => {
     if (!currentTrack || !isReady) return
     const newTime = Math.max(0, currentTime - 5)
     if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.seekTo(newTime, true)
-    else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.seek(spotifyPlayer, newTime * 1000)
     else if (playbackSource === "suno" && sunoAudioRef.current) sunoAudioRef.current.currentTime = newTime
     setCurrentTime(newTime); setPlaybackPosition(newTime)
-  }, [youtubePlayer, spotifyPlayer, isReady, currentTrack, currentTime, playbackSource, setPlaybackPosition])
+  }, [youtubePlayer, isReady, currentTrack, currentTime, playbackSource, setPlaybackPosition])
 
   const handleSeek = useCallback((value: number[]) => {
     if (!isReady) return
     const newTime = value[0]
     isSeekingRef.current = true
     if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.seekTo(newTime, true)
-    else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.seek(spotifyPlayer, newTime * 1000)
     else if (playbackSource === "suno" && sunoAudioRef.current) sunoAudioRef.current.currentTime = newTime
     setCurrentTime(newTime); setPlaybackPosition(newTime)
     setTimeout(() => { isSeekingRef.current = false }, 300)
-  }, [youtubePlayer, spotifyPlayer, isReady, setPlaybackPosition, playbackSource])
+  }, [youtubePlayer, isReady, setPlaybackPosition, playbackSource])
 
   // ─── volume ──────────────────────────────────────────────────────────────────
 
@@ -293,10 +335,9 @@ export function PlayerControls() {
     const v = value[0]
     setVolume(v)
     if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.setVolume(v)
-    else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.setVolume(spotifyPlayer, v)
     else if (playbackSource === "suno" && sunoAudioRef.current) sunoAudioRef.current.volume = v / 100
     setIsMuted(v === 0)
-  }, [youtubePlayer, spotifyPlayer, setVolume, playbackSource])
+  }, [youtubePlayer, setVolume, playbackSource])
 
   const toggleMute = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) {
@@ -310,14 +351,11 @@ export function PlayerControls() {
           setIsMuted(true);
         }
       } catch (e) { console.warn("YT mute toggle failed", e) }
-    } else if (playbackSource === "spotify" && spotifyPlayer) {
-      if (isMuted) { SpotifyPlayerControls.setVolume(spotifyPlayer, volume); setIsMuted(false) }
-      else { SpotifyPlayerControls.setVolume(spotifyPlayer, 0); setIsMuted(true) }
     } else if (playbackSource === "suno" && sunoAudioRef.current) {
       if (isMuted) { sunoAudioRef.current.volume = volume / 100; setIsMuted(false); }
       else { sunoAudioRef.current.volume = 0; setIsMuted(true); }
     }
-  }, [youtubePlayer, spotifyPlayer, isMuted, volume, playbackSource])
+  }, [youtubePlayer, isMuted, volume, playbackSource])
 
   // ─── YouTube callbacks ───────────────────────────────────────────────────────
 
@@ -346,7 +384,8 @@ export function PlayerControls() {
         }
         break
       case -1:
-        setIsPlaying(false)
+        // Unstarted state occurs when a new track is loaded.
+        // Doing setIsPlaying(false) here will cancel auto-play for newly selected tracks!
         break
     }
   }, [youtubePlayer, setPlaybackPosition, playbackSource, handleNext, audioSettings, repeat, handleRepeatOne])
@@ -406,88 +445,49 @@ export function PlayerControls() {
     }
   }, [setPlaybackPosition, playbackSource])
 
-  // ─── Spotify callbacks ───────────────────────────────────────────────────────
-
-  const handleSpotifyPlayerReady = useCallback((player: any) => {
-    setSpotifyPlayer(player); setIsReady(true)
-  }, [setSpotifyPlayer])
-
-  const handleSpotifyStateChange = useCallback((state: any) => {
-    if (playbackSource !== "spotify" || !state) return
-    setCurrentTime(state.position / 1000)
-    setPlaybackPosition(state.position / 1000)
-    setIsPlaying(!state.paused)
-
-    if (state.track_window?.current_track) {
-      const t = state.track_window.current_track
-      if (currentTrack?.id !== t.id) {
-        setCurrentTrack({
-          id: t.id, title: t.name,
-          artist: t.artists.map((a: any) => a.name).join(", "),
-          thumbnail: t.album.images[0]?.url || "",
-          duration: `${Math.floor(state.duration / 60000)}:${String(Math.floor((state.duration % 60000) / 1000)).padStart(2, "0")}`,
-        })
-      }
-    }
-
-    const trackEnded = state.position >= state.duration - 1000 && state.duration > 0
-    if ((trackEnded || (state.paused && state.position === 0 && state.duration > 0)) && !trackEndHandledRef.current) {
-      trackEndHandledRef.current = true
-      repeat === "one" ? handleRepeatOne() : handleNext()
-    }
-    if (!state.paused && trackEndHandledRef.current) trackEndHandledRef.current = false
-  }, [playbackSource, currentTrack, setCurrentTrack, setPlaybackPosition, handleNext, repeat, handleRepeatOne])
-
-  const handleSpotifyError = useCallback((error: any) => {
-    console.error("[Spotify] Player error:", error)
-  }, [])
-
   // ─── effects ─────────────────────────────────────────────────────────────────
 
+  const playbackSourceRef = useRef(playbackSource);
   useEffect(() => {
+    playbackSourceRef.current = playbackSource;
+  }, [playbackSource]);
+
+  useEffect(() => {
+    // Do not process track changes until context is fully initialized
+    if (!isInitialized) return;
+
     if (currentTrack) {
-      if (playbackSource === "suno" && !currentTrack.thumbnail?.includes("suno.ai") && !currentTrack.thumbnail?.includes("suno.com")) {
+      const currentSource = playbackSourceRef.current;
+      if (currentSource === "suno" && !currentTrack.thumbnail?.includes("suno.ai") && !currentTrack.thumbnail?.includes("suno.com")) {
          setPlaybackSource("youtube");
-      } else if (playbackSource === "youtube" && currentTrack.thumbnail?.includes("suno.ai")) {
+      } else if (currentSource === "youtube" && currentTrack.thumbnail?.includes("suno.ai")) {
          setPlaybackSource("suno");
       }
-      // Set initial times
+      
       setCurrentTime(0); setPlaybackPosition(0); setDuration(0)
       hasRestoredPositionRef.current = false
       trackEndHandledRef.current = false
       
-      // Auto-play ONLY if it's not the very first load of a track
+      // Auto-play ONLY if it's not the very first load of a track 
+      // after initialization
       if (initialLoadHandledRef.current) {
         setIsPlaying(true)
+      } else {
+        // Mark the first load as handled so subsequent track changes auto-play
+        initialLoadHandledRef.current = true
+        setIsPlaying(false) // ensure initial track is paused
       }
-      initialLoadHandledRef.current = true
     } else {
       setDuration(0); setCurrentTime(0); setPlaybackPosition(0)
       setIsPlaying(false)
+      // We also mark handled if the initial state resolves to no-track
+      initialLoadHandledRef.current = true
     }
-  }, [currentTrack, setPlaybackPosition, playbackSource, setPlaybackSource])
+  }, [currentTrack?.id, isInitialized, setPlaybackSource, setPlaybackPosition]) 
 
   useEffect(() => {
-    setIsSpotifyAuth(isAuthenticated())
     if (!playbackSource) setPlaybackSource("youtube")
   }, [playbackSource, setPlaybackSource])
-
-  useEffect(() => {
-    if (!currentTrack || !spotifyPlayer || playbackSource !== "spotify" || !isReady || !shouldAutoPlaySpotify) return
-    const playSpotifyTrack = async () => {
-      try {
-        let trackUri = currentTrack.id
-        if (!trackUri.startsWith("spotify:track:")) trackUri = `spotify:track:${trackUri}`
-        await SpotifyPlayerControls.play(spotifyPlayer, [trackUri])
-        setIsPlaying(true); setShouldAutoPlaySpotify(false); trackEndHandledRef.current = false
-      } catch (error) {
-        console.error("[Spotify] Failed to auto-play:", error)
-        setTimeout(() => { if (shouldAutoPlaySpotify) playSpotifyTrack() }, 1000)
-      }
-    }
-    const timer = setTimeout(playSpotifyTrack, 500)
-    return () => clearTimeout(timer)
-  }, [currentTrack, spotifyPlayer, playbackSource, isReady, shouldAutoPlaySpotify])
 
   const saveToListeningHistory = useCallback((track: typeof currentTrack) => {
     if (!track) return
@@ -625,19 +625,10 @@ export function PlayerControls() {
 
   const handleSleepTimerEnd = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.pauseVideo()
-    else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.pause(spotifyPlayer)
     else if (playbackSource === "suno" && sunoAudioRef.current) sunoAudioRef.current.pause()
     else if (playbackSource === "suno" && sunoAudioRef.current) sunoAudioRef.current.pause()
     setIsPlaying(false)
-  }, [youtubePlayer, spotifyPlayer, playbackSource])
-
-  const handleSwitch = () => {
-    if (playbackSource === "youtube" && !isSpotifyAuth) { alert("Please login to Spotify first"); return }
-    if (playbackSource === "youtube" && youtubePlayer) youtubePlayer.pauseVideo()
-    else if (playbackSource === "spotify" && spotifyPlayer) SpotifyPlayerControls.pause(spotifyPlayer)
-    setIsPlaying(false); setShouldAutoPlaySpotify(false)
-    setPlaybackSource(playbackSource === "youtube" ? "spotify" : "youtube")
-  }
+  }, [youtubePlayer, playbackSource])
 
   const formatTime = (s: number) => {
     if (!s || isNaN(s)) return "0:00"
@@ -661,14 +652,13 @@ export function PlayerControls() {
           videoMode={barVideoMode}
           isPlaying={isPlaying}
         />
-        <SpotifyPlayer onPlayerReady={handleSpotifyPlayerReady} onStateChange={handleSpotifyStateChange} onError={handleSpotifyError} />
         <MiniPlayer
           isPlaying={isPlaying}
           onPlayPause={handlePlayPause}
           onNext={handleNext}
           onPrevious={handlePrevious}
-          onClose={() => setIsMiniPlayer(false)}
-          onExpand={() => setIsMiniPlayer(false)}
+          onClose={closeMiniPlayer}
+          onExpand={closeMiniPlayer}
         />
       </>
     )
@@ -687,11 +677,13 @@ export function PlayerControls() {
         videoMode={barVideoMode}
         isPlaying={isPlaying}
       />
-      <SpotifyPlayer onPlayerReady={handleSpotifyPlayerReady} onStateChange={handleSpotifyStateChange} onError={handleSpotifyError} />
 
       <ExpandablePlayer
         isExpanded={isExpandedPlayer}
-        onExpandChange={setIsExpandedPlayer}
+        onExpandChange={(expanded) => {
+          if (expanded) setIsExpandedPlayer(true);
+          else closeExpandedPlayer();
+        }}
         currentTime={currentTime}
         isPlaying={isPlaying}
         duration={duration}
@@ -776,7 +768,7 @@ export function PlayerControls() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              <Sheet>
+              <Sheet open={isLyricsOpen} onOpenChange={setLyricsOpen}>
                 <SheetTrigger asChild>
                   <Button size="icon" variant="ghost"
                     className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
@@ -792,7 +784,7 @@ export function PlayerControls() {
                 </SheetContent>
               </Sheet>
 
-              <Sheet>
+              <Sheet open={isQueueOpen} onOpenChange={setQueueOpen}>
                 <SheetTrigger asChild>
                   <Button size="icon" variant="ghost"
                     className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors"
@@ -813,13 +805,13 @@ export function PlayerControls() {
 
               <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" onClick={handleSwitch}
-                      className={`h-10 w-10 transition-colors ${!isSpotifyAuth && playbackSource === "youtube" ? "text-zinc-600" : playbackSource === "youtube" ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"}`}
-                      disabled={!currentTrack || (!isSpotifyAuth && playbackSource === "youtube")}>
-                      {playbackSource === "youtube" ? <Music2 size={20} /> : <Youtube size={20} />}
+                    <Button size="icon" variant="ghost"
+                      className={`h-10 w-10 transition-colors ${playbackSource === "youtube" ? "text-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]" : "text-zinc-400 hover:text-white hover:bg-primary/15"}`}
+                      disabled={!currentTrack}>
+                      <Music2 size={20} />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent><p>{playbackSource === "youtube" ? "Switch to Spotify" : "Switch to YouTube"}</p></TooltipContent>
+                  <TooltipContent><p>Playback Source: {playbackSource === "youtube" ? "YouTube" : "Suno"}</p></TooltipContent>
                 </Tooltip>
 
               <Button size="icon" variant="ghost" onClick={() => setIsExpandedPlayer(true)}
@@ -957,7 +949,7 @@ export function PlayerControls() {
 
           {/* Desktop: right side controls */}
           <div className="hidden md:flex items-center gap-2 flex-1 justify-end">
-              <Sheet>
+              <Sheet open={isQueueOpen} onOpenChange={setQueueOpen}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SheetTrigger asChild>
@@ -985,20 +977,18 @@ export function PlayerControls() {
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={handleSwitch}
+                  <Button size="icon" variant="ghost" 
                     className={`h-10 w-10 transition-colors ${
-                      !isSpotifyAuth && playbackSource === "youtube" 
-                        ? "text-zinc-600" 
-                        : playbackSource === "youtube" 
-                          ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-primary/15"
+                      playbackSource === "youtube" 
+                        ? "text-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]" 
+                        : "text-zinc-400 hover:text-white hover:bg-primary/15"
                     }`}
-                    disabled={!currentTrack || (!isSpotifyAuth && playbackSource === "youtube")}>
-                    {playbackSource === "youtube" ? <Music2 size={20} /> : <Youtube size={20} />}
+                    disabled={!currentTrack}>
+                    <Music2 size={20} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{playbackSource === "youtube" ? "Switch to Spotify" : "Switch to YouTube"}</p>
+                  <p>Playback Source: {playbackSource === "youtube" ? "YouTube" : "Suno"}</p>
                 </TooltipContent>
               </Tooltip>
 

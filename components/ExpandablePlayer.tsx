@@ -147,7 +147,7 @@ export function ExpandablePlayer({
     } catch (error) {
       console.warn("Error syncing expanded YouTube player (initial):", error)
     }
-  })
+  }, [isPlaying, currentTime]) // Added dependency array
 
   // ── Keep video in sync ───────────────────────────────
   useEffect(() => {

@@ -13,7 +13,7 @@ interface RecentlyPlayed {
   timestamp: number
 }
 
-type PlaybackSource = "youtube" | "spotify" | "suno"
+type PlaybackSource = "youtube" | "suno"
 
 interface AppContextType extends AppState {
   setCurrentTrack: (track: Track | null) => void
@@ -45,15 +45,12 @@ interface AppContextType extends AppState {
   customTheme?: { primary: string; accent: string }
   playbackSource: PlaybackSource
   setPlaybackSource: (source: PlaybackSource) => void
-  spotifyPlayer: any
-  setSpotifyPlayer: (player: any) => void
   audioSettings: {
     crossfadeDuration: number
     gaplessPlayback: boolean
     eqPreset: string
     customEQ: number[]
     youtubeQuality: "audio" | "360p" | "720p" | "1080p"
-    spotifyQuality: "normal" | "high" | "veryhigh"
     realAudioEngine: boolean
   }
   setAudioSettings: (settings: AppContextType["audioSettings"]) => void
@@ -70,6 +67,7 @@ interface AppContextType extends AppState {
   joelsSongs: Track[]
   setJoelsSongs: (songs: Track[]) => void
   user: User | null
+  isInitialized: boolean
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -90,14 +88,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [customTheme, setCustomThemeState] = useState<{ primary: string; accent: string } | undefined>(undefined)
   const [isInitialized, setIsInitialized] = useState(false)
   const [playbackSource, setPlaybackSource] = useState<PlaybackSource>("youtube")
-  const [spotifyPlayer, setSpotifyPlayer] = useState<any>(null)
   const [audioSettings, setAudioSettingsState] = useState({
     crossfadeDuration: 0,
     gaplessPlayback: true,
     eqPreset: "Flat",
     customEQ: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     youtubeQuality: "audio" as const,
-    spotifyQuality: "high" as const,
     realAudioEngine: true,
   })
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
@@ -530,8 +526,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCustomTheme,
         playbackSource,
         setPlaybackSource,
-        spotifyPlayer,
-        setSpotifyPlayer,
         audioSettings,
         setAudioSettings,
         audioElement,
@@ -546,7 +540,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setBeatPulse,
         joelsSongs,
         setJoelsSongs,
-        user
+        user,
+        isInitialized
       }}
     >
       {children}
