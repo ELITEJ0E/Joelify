@@ -43,12 +43,27 @@ export interface AppState {
 }
 
 const STORAGE_KEY = "joelify-app-state"
+const OLD_STORAGE_KEY = "spotify-youtube-app-state"
 
 export function loadState(): Partial<AppState> {
   if (typeof window === "undefined") return {}
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    // 1. Try to get data from current key
+    let stored = localStorage.getItem(STORAGE_KEY)
+    
+    // 2. Migration: If current key is empty, check old key
+    if (!stored) {
+      const oldStored = localStorage.getItem(OLD_STORAGE_KEY)
+      if (oldStored) {
+        console.log("[Storage] Migrating legacy data to new session key...")
+        stored = oldStored
+        // Save to new key immediately and clean up old key
+        localStorage.setItem(STORAGE_KEY, oldStored)
+        localStorage.removeItem(OLD_STORAGE_KEY)
+      }
+    }
+
     return stored ? JSON.parse(stored) : {}
   } catch (error) {
     console.error("[Storage] Failed to load state:", error)
