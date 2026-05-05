@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       "DNT": "1"
     };
 
-    const fetchWithRetry = async (url: string, retries = 5) => {
+    const fetchWithRetry = async (url: string, retries = 5, asJson = true) => {
       for (let i = 0; i < retries; i++) {
         try {
           const response = await fetch(url, { 
@@ -39,9 +39,11 @@ export async function GET(req: NextRequest) {
             headers,
           });
           
-          if (response.status === 200) return response;
+          if (response.status === 200) {
+            if (asJson) return await response.json();
+            return await response.text();
+          }
           
-          // If we get 503 or 403, we are being throttled or blocked
           console.warn(`Suno API [${response.status}] retry ${i+1}/${retries}: ${url}`);
           
           if (response.status === 404) {
@@ -56,52 +58,104 @@ export async function GET(req: NextRequest) {
           await new Promise(r => setTimeout(r, 2000));
         }
       }
-      return fetch(url, { cache: "no-store", headers });
+      const response = await fetch(url, { cache: "no-store", headers });
+      if (asJson) return response.json();
+      return response.text();
     };
 
-    while (hasMore && page < 10) { 
-      const res = await fetchWithRetry(`https://studio-api.suno.ai/api/playlist/${id}/?page=${page}&_t=${timestamp}`);
+    let clipsToUse = [];
 
-      if (!res.ok) {
-        if (res.status === 503 || res.status === 403) {
-          if (page === 0) {
-            return NextResponse.json({ 
-              error: "Suno API is currently restricted. Please try again later.",
-              isRestricted: true 
-            }, { status: 200 });
-          }
-          break;
-        }
-        const text = await res.text();
-        console.error(`Suno Playlist API Error [${res.status}] for page ${page}:`, text.substring(0, 100));
-        if (page === 0) throw new Error(`Suno API returned ${res.status}`);
-        break;
-      }
-
-      const data = await res.json();
-      playlistName = data.name || playlistName;
+    // TRY 1: HTML SCAPE FIRST (more reliable against Cloudflare)
+    try {
+      const html = await fetchWithRetry(`https://suno.com/playlist/${id}`, 2, false);
       
-      let pageClips = [];
-      if (data.playlist_clips && Array.isArray(data.playlist_clips)) {
-        pageClips = data.playlist_clips.map((pc: any) => pc.clip).filter(Boolean);
-      } else if (data.clips && Array.isArray(data.clips)) {
-        pageClips = data.clips;
-      }
-
-      if (pageClips.length === 0) {
-        hasMore = false;
+      // Look for the JSON part: {"playlist":{"entity_type":"playlist_schema"
+      // It is usually embedded as escaped string or raw JSON in __next_f
+      // Since it's inside RSC payloads, it is usually like {\"playlist\":{\"entity_type\":\"playlist_schema\"
+      const pattern = /\{\\"playlist\\":\\{.*?\\"name\\":\\"(.*?)\\".*?\\"playlist_clips\\":(\[.*?\])\}\}\}/s;
+      const match = html.match(pattern);
+      if (match) {
+        playlistName = match[1].replace(/\\\\/g, "\\");
+        
+        // The array is stringified JSON, but with escaped quotes
+        try {
+          // unescape the JSON string
+          const rawClips = JSON.parse(match[2].replace(/\\"/g, '"').replace(/\\\\/g, "\\"));
+          if (Array.isArray(rawClips) && rawClips.length > 0) {
+            const parsedClips = rawClips.map((pc: any) => pc.clip).filter(Boolean);
+            if (parsedClips.length > 0) {
+              clipsToUse = parsedClips;
+              hasMore = false; // We got them all from SSR
+              page = 10;
+              console.log("Successfully scraped", clipsToUse.length, "clips from HTML");
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to parse clips from HTML", String(e).substring(0, 50));
+        }
       } else {
-        allClips = [...allClips, ...pageClips];
-        // Suno page size is usually 20, but maybe it varies
-        if (pageClips.length < 10) {
+         // Alternative regex search if unescaped
+         const patternUnescaped = /\{"playlist":\{.*?"name":"(.*?)".*?"playlist_clips":(\[.*?\])\}\}\}/s;
+         const matchUnescaped = html.match(patternUnescaped);
+         if (matchUnescaped) {
+             playlistName = matchUnescaped[1];
+             try {
+                 const rawClips = JSON.parse(matchUnescaped[2]);
+                 const parsedClips = rawClips.map((pc: any) => pc.clip).filter(Boolean);
+                 if (parsedClips.length > 0) {
+                     clipsToUse = parsedClips;
+                     hasMore = false;
+                     page = 10;
+                     console.log("Successfully scraped (unescaped) from HTML:", clipsToUse.length);
+                 }
+             } catch (e) { console.warn("Failed unescaped parse"); }
+         }
+      }
+    } catch (err) {
+      console.warn("HTML Scrape failed:", err);
+    }
+
+    if (clipsToUse.length > 0) {
+       allClips = clipsToUse;
+    } else {
+      while (hasMore && page < 10) { 
+        let data: any;
+        try {
+           data = await fetchWithRetry(`https://studio-api.suno.ai/api/playlist/${id}/?page=${page}&_t=${timestamp}`, 3, true);
+        } catch (e: any) {
+           console.warn("API Fetch error:", e);
+           if (page === 0) {
+             return NextResponse.json({ 
+               error: "Suno API is currently restricted. Please try again later.",
+               isRestricted: true 
+             }, { status: 200 });
+           }
+           break;
+        }
+
+        playlistName = data.name || playlistName;
+        
+        let pageClips = [];
+        if (data.playlist_clips && Array.isArray(data.playlist_clips)) {
+          pageClips = data.playlist_clips.map((pc: any) => pc.clip).filter(Boolean);
+        } else if (data.clips && Array.isArray(data.clips)) {
+          pageClips = data.clips;
+        }
+
+        if (pageClips.length === 0) {
           hasMore = false;
         } else {
-          page++;
+          allClips = [...allClips, ...pageClips];
+          if (pageClips.length < 10) {
+            hasMore = false;
+          } else {
+            page++;
+          }
         }
-      }
 
-      if (data.next === null || data.has_more === false) {
-        hasMore = false;
+        if (data.next === null || data.has_more === false) {
+          hasMore = false;
+        }
       }
     }
 
