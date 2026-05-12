@@ -251,6 +251,18 @@
     box-shadow: 0 0 0 2px hsl(var(--primary)), 0 0 20px hsl(var(--primary) / 0.4);
   }
 
+  /* ── Lyric background animation ───────────────────────────────────────── */
+  @keyframes lyricBackground {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  .animate-lyric-bg {
+    background: linear-gradient(270deg, #1a1a1a, #0f172a, #1a1a1a);
+    background-size: 400% 400%;
+    animation: lyricBackground 15s ease infinite;
+  }
+
   /* ── Sidebar active item ──────────────────────────────────────────────── */
   .sidebar-active {
     background: linear-gradient(90deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.08));

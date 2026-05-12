@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, SkipBack, SkipForward, Palette, Link as LinkIcon, Disc, ArrowRight, Check, Repeat, Repeat1, Shuffle, ListMusic, Plus, Trash2, X, Save, Download, Image as ImageIcon } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Palette, Link as LinkIcon, Disc, ArrowRight, Check, Repeat, Repeat1, Shuffle, ListMusic, Plus, Trash2, X, Save, Download, Image as ImageIcon, Mic } from 'lucide-react';
 import VinylRecord from './VinylRecord';
 
 import Image from 'next/image';
@@ -24,10 +24,11 @@ export default function MusicPlayer({ initialSongId }: { initialSongId?: string 
   const [showThemes, setShowThemes] = useState(false);
   const [viewMode, setViewMode] = useState<'vinyl' | 'cover'>('vinyl');
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  const [playlist, setPlaylist] = useState<{id: string, title: string, artist?: string, thumbnail?: string}[]>([
+  const [playlist, setPlaylist] = useState<{id: string, title: string, artist?: string, thumbnail?: string, lyrics?: string}[]>([
     { id: initialSongId || 'bd216e5e-4604-48e2-ac6e-7f1698044908', title: 'Currently Playing' }
   ]);
   const [repeatMode, setRepeatMode] = useState<'off' | 'one' | 'all'>('off');
@@ -232,7 +233,8 @@ export default function MusicPlayer({ initialSongId }: { initialSongId?: string 
               ...track,
               title: fresh.title || track.title,
               artist: fresh.display_name || "Suno AI",
-              thumbnail: latestImg + (latestImg.includes('?') ? `&updated=${timestamp}` : `?updated=${timestamp}`)
+              thumbnail: latestImg + (latestImg.includes('?') ? `&updated=${timestamp}` : `?updated=${timestamp}`),
+              lyrics: fresh.metadata?.prompt || ""
             };
           }
           return track;
@@ -298,6 +300,12 @@ export default function MusicPlayer({ initialSongId }: { initialSongId?: string 
     }
   };
 
+  useEffect(() => {
+    const handlePop = () => setShowLyrics(false);
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, []);
+
   const currentTrackInfo = playlist.find(p => p.id === songId);
 
   return (
@@ -340,10 +348,17 @@ export default function MusicPlayer({ initialSongId }: { initialSongId?: string 
               <Disc className={`w-4 h-4 text-white ${isPlaying ? 'animate-spin-slow' : ''}`} />
             </div>
             <button 
-              onClick={() => setShowPlaylist(!showPlaylist)}
+              onClick={() => { setShowPlaylist(!showPlaylist); if(showLyrics) setShowLyrics(false); }}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showPlaylist ? 'bg-emerald-500 text-black' : 'bg-white/5 text-zinc-400 hover:text-white'}`}
             >
               <ListMusic className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => { setShowLyrics(!showLyrics); if(showPlaylist) setShowPlaylist(false); }}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showLyrics ? 'bg-amber-500 text-black' : 'bg-white/5 text-zinc-400 hover:text-white'}`}
+              title="View Lyrics"
+            >
+              <Mic className="w-4 h-4" />
             </button>
             <button 
               onClick={() => setViewMode(prev => prev === 'vinyl' ? 'cover' : 'vinyl')}
@@ -396,7 +411,7 @@ export default function MusicPlayer({ initialSongId }: { initialSongId?: string 
         <div className="flex flex-col items-center px-6 pb-8">
           
           <AnimatePresence mode="wait">
-            {!showPlaylist ? (
+            {!showPlaylist && !showLyrics ? (
               <motion.div
                 key="player"
                 initial={{ opacity: 0, x: -20 }}
@@ -526,6 +541,35 @@ export default function MusicPlayer({ initialSongId }: { initialSongId?: string 
                   >
                     {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
                   </button>
+                </div>
+              </motion.div>
+            ) : showLyrics ? (
+              <motion.div
+                key="lyrics"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="w-full flex flex-col h-[400px] bg-black/20 rounded-3xl p-6"
+              >
+                <div className="flex justify-between items-center mb-6 text-zinc-400 border-b border-white/5 pb-4">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-amber-500 flex items-center gap-2">
+                    <Mic size={14} /> Lyrics
+                  </h3>
+                  <button onClick={() => setShowLyrics(false)} className="text-zinc-500 hover:text-white"><X size={16}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                  <style>{`.custom-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+                  {currentTrackInfo?.lyrics ? (
+                    <div className="whitespace-pre-wrap text-lg font-medium leading-relaxed text-zinc-200 tracking-tight text-center">
+                      {currentTrackInfo.lyrics}
+                    </div>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-center space-y-4">
+                      <Mic size={48} className="opacity-10" />
+                      <p className="text-sm">No lyrics available for this track.</p>
+                      <p className="text-[10px] uppercase tracking-widest opacity-50">Suno AI Generated</p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ) : (

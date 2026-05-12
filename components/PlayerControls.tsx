@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
   Volume2, VolumeX, List, Youtube, Music2, Video, Music,
-  Type, Minimize2, Maximize2,
+  Type, Minimize2, Maximize2, Mic,
 } from "lucide-react"
 import Image from "next/image"
 import { useApp } from "@/contexts/AppContext"
@@ -489,6 +489,29 @@ export function PlayerControls() {
     if (!playbackSource) setPlaybackSource("youtube")
   }, [playbackSource, setPlaybackSource])
 
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    if (!currentTrack) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      artwork: currentTrack.thumbnail ? [{ src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : [],
+    });
+
+    navigator.mediaSession.setActionHandler('play', () => handlePlayPause());
+    navigator.mediaSession.setActionHandler('pause', () => handlePlayPause());
+    navigator.mediaSession.setActionHandler('previoustrack', () => handlePrevious());
+    navigator.mediaSession.setActionHandler('nexttrack', () => handleNext());
+
+    return () => {
+      navigator.mediaSession.setActionHandler('play', null);
+      navigator.mediaSession.setActionHandler('pause', null);
+      navigator.mediaSession.setActionHandler('previoustrack', null);
+      navigator.mediaSession.setActionHandler('nexttrack', null);
+    };
+  }, [currentTrack, handlePlayPause, handlePrevious, handleNext]);
+
   const saveToListeningHistory = useCallback((track: typeof currentTrack) => {
     if (!track) return
 
@@ -779,7 +802,7 @@ export function PlayerControls() {
                 <SheetContent className="w-full sm:w-96 bg-black/80 backdrop-blur-2xl border-white/[0.07]">
                   <SheetHeader><SheetTitle>Lyrics</SheetTitle></SheetHeader>
                   <div className="mt-6 h-[calc(100vh-8rem)]">
-                    <LyricsDisplay currentTime={currentTime} isPlaying={isPlaying} />
+                    <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} />
                   </div>
                 </SheetContent>
               </Sheet>
@@ -803,22 +826,6 @@ export function PlayerControls() {
                 </SheetContent>
               </Sheet>
 
-              <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost"
-                      className={`h-10 w-10 transition-colors ${playbackSource === "youtube" ? "text-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]" : "text-zinc-400 hover:text-white hover:bg-primary/15"}`}
-                      disabled={!currentTrack}>
-                      <Music2 size={20} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Playback Source: {playbackSource === "youtube" ? "YouTube" : "Suno"}</p></TooltipContent>
-                </Tooltip>
-
-              <Button size="icon" variant="ghost" onClick={() => setIsExpandedPlayer(true)}
-                className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
-                disabled={!currentTrack}>
-                <Maximize2 size={20} />
-              </Button>
             </div>
           </div>
 
@@ -902,7 +909,7 @@ export function PlayerControls() {
                 </Tooltip>
 
                 {/* Repeat */}
-                <Tooltip>
+                <Tooltip>                
                   <TooltipTrigger asChild>
                     <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
                       aria-label={`Repeat: ${repeat}`}
@@ -949,6 +956,18 @@ export function PlayerControls() {
 
           {/* Desktop: right side controls */}
           <div className="hidden md:flex items-center gap-2 flex-1 justify-end">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon" variant="ghost" onClick={() => setLyricsOpen(!isLyricsOpen)} disabled={!currentTrack}
+                    aria-label="Lyrics"
+                    className={`h-10 w-10 transition-colors ${isLyricsOpen ? 'text-primary' : 'text-zinc-400 hover:text-white hover:bg-primary/15'}`}>
+                    <Type size={20} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Lyrics</p>
+                </TooltipContent>
+              </Tooltip>
               <Sheet open={isQueueOpen} onOpenChange={setQueueOpen}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -975,22 +994,7 @@ export function PlayerControls() {
                 </SheetContent>
               </Sheet>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" 
-                    className={`h-10 w-10 transition-colors ${
-                      playbackSource === "youtube" 
-                        ? "text-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]" 
-                        : "text-zinc-400 hover:text-white hover:bg-primary/15"
-                    }`}
-                    disabled={!currentTrack}>
-                    <Music2 size={20} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Playback Source: {playbackSource === "youtube" ? "YouTube" : "Suno"}</p>
-                </TooltipContent>
-              </Tooltip>
+
 
               <Tooltip>
                 <TooltipTrigger asChild>

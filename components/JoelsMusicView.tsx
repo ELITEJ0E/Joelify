@@ -82,7 +82,7 @@ function SortableTrackItem({
           <GripVertical size={18} />
         </div>
 
-        <div className="relative aspect-square w-12 flex-shrink-0 cursor-pointer overflow-hidden border border-white/5" onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail)}>
+        <div className="relative aspect-square w-12 flex-shrink-0 cursor-pointer overflow-hidden border border-white/5" onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail, track.lyrics)}>
           {track.thumbnail ? (
             <Image 
               src={track.thumbnail.includes('?') ? `${track.thumbnail}&v=${Date.now()}` : `${track.thumbnail}?v=${Date.now()}`} 
@@ -101,7 +101,7 @@ function SortableTrackItem({
             <Play size={18} fill="white" className="text-white" />
           </div>
         </div>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail)}>
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail, track.lyrics)}>
           <h3 className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{track.title}</h3>
           <p className="text-xs text-muted-foreground truncate opacity-70 mt-0.5">{track.artist}</p>
         </div>
@@ -270,7 +270,8 @@ export function JoelsMusicView() {
             id: clip.id,
             title: clip.title || "New Song",
             artist: clip.display_name || "Joel",
-            thumbnail: img.includes('?') ? `${img}&_t=${timestamp}` : `${img}?_t=${timestamp}`
+            thumbnail: img.includes('?') ? `${img}&_t=${timestamp}` : `${img}?_t=${timestamp}`,
+            lyrics: clip.metadata?.prompt || ""
           };
         } else if (data.isRestricted || !res.ok) {
            // Fallback if API is down/restricted
@@ -278,7 +279,8 @@ export function JoelsMusicView() {
              id: id,
              title: "Song " + id.substring(0, 4),
              artist: "Joel",
-             thumbnail: `https://cdn2.suno.ai/image_${id}.jpeg`
+             thumbnail: `https://cdn2.suno.ai/image_${id}.jpeg`,
+             lyrics: ""
            };
         } else {
           throw new Error("Song not found");
@@ -289,7 +291,8 @@ export function JoelsMusicView() {
           id: id,
           title: "Song " + id.substring(0, 4),
           artist: "Joel",
-          thumbnail: `https://cdn2.suno.ai/image_${id}.jpeg`
+          thumbnail: `https://cdn2.suno.ai/image_${id}.jpeg`,
+          lyrics: ""
         };
       }
       
@@ -302,7 +305,7 @@ export function JoelsMusicView() {
         });
         
         // Immediately play the song
-        playSunoTrack(song.id, song.title, song.artist, song.thumbnail);
+        playSunoTrack(song.id, song.title, song.artist, song.thumbnail, song.lyrics);
         
         setManualUrl("");
         toast.custom((t) => (
@@ -348,7 +351,8 @@ export function JoelsMusicView() {
               ...song,
               title: fresh.title || song.title,
               artist: fresh.display_name || song.artist,
-              thumbnail: latestImg + buster
+              thumbnail: latestImg + buster,
+              lyrics: fresh.metadata?.prompt || song.lyrics || ""
             };
           }
           return song;
@@ -385,7 +389,7 @@ export function JoelsMusicView() {
     ))
   };
 
-  const playSunoTrack = (id: string, title?: string, artist?: string, thumbnail?: string) => {
+  const playSunoTrack = (id: string, title?: string, artist?: string, thumbnail?: string, lyrics?: string) => {
     setPlaybackSource("suno");
     const timestamp = Date.now();
     const finalThumbnail = thumbnail 
@@ -397,7 +401,8 @@ export function JoelsMusicView() {
       title: title || "Joel's Song",
       artist: artist || "Joel",
       thumbnail: finalThumbnail,
-      duration: "0:00"
+      duration: "0:00",
+      lyrics: lyrics || ""
     });
     setCurrentPlaylistId("joels_music");
   };

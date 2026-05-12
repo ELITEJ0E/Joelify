@@ -14,6 +14,7 @@ export interface Track {
   artist: string
   thumbnail: string
   duration: string
+  lyrics?: string
 }
 
 export interface AppState {

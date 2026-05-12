@@ -47,6 +47,13 @@ export function SearchView() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!query.trim()) return
+    
+    let searchQuery = query;
+    const urlPattern = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = query.match(urlPattern);
+    if (match) {
+        searchQuery = match[1];
+    }
 
     setLastQuery(query)
     setIsLoading(true)
@@ -54,15 +61,15 @@ export function SearchView() {
     setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
 
     try {
-      const cacheKey = `searchCache_${query.trim().toLowerCase()}`
+      const cacheKey = `searchCache_${searchQuery.trim().toLowerCase()}`
       const cached = getCachedData<YouTubeVideo[]>(cacheKey, sessionStorage)
 
       if (cached) {
-        console.log(`[v0] Using cached YouTube search results for "${query}"`)
+        console.log(`[v0] Using cached YouTube search results for "${searchQuery}"`)
         setYoutubeResults(cached)
         if (cached.length > 0) setActiveTab("youtube")
       } else {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`)
         const data = await res.json()
 
         if (data.error) {
