@@ -1,0 +1,201 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useApp } from "@/contexts/AppContext"
+import { Play, Plus, Clock } from "lucide-react"
+import { TrackImage as Image } from "./TrackImage"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { getCachedData, setCachedData, getCacheAge, formatCacheAge } from "@/lib/cache"
+
+interface DiscoverVideo {
+  id: string
+  title: string
+  artist: string
+  thumbnail: string
+}
+
+const DISCOVER_CACHE_KEY = "discoverCache"
+
+export function DiscoverMore() {
+  const { currentTrack, setCurrentTrack, setQueue, addToQueue, playlists, addTrackToPlaylist } = useApp()
+  const [videos, setVideos] = useState<DiscoverVideo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [cacheAge, setCacheAge] = useState<string>("Never")
+
+  useEffect(() => {
+    fetchRecommendations()
+  }, [currentTrack])
+
+  useEffect(() => {
+    const updateCacheAge = () => {
+      const cacheKey = currentTrack ? `discover_${currentTrack.id}` : "discover_default"
+      const age = getCacheAge(cacheKey)
+      setCacheAge(formatCacheAge(age))
+    }
+
+    updateCacheAge()
+    const interval = setInterval(updateCacheAge, 60000) // Update every minute
+
+    return () => clearInterval(interval)
+  }, [videos, currentTrack])
+
+  const fetchRecommendations = async () => {
+    const cacheKey = currentTrack ? `discover_${currentTrack.id}` : "discover_default"
+    const cached = getCachedData<DiscoverVideo[]>(cacheKey)
+    if (cached) {
+      console.log("[v0] Using cached discover data")
+      setVideos(cached)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      let url = `/api/discover`
+      if (currentTrack) {
+        const params = new URLSearchParams()
+        if (currentTrack.id) params.append("videoId", currentTrack.id)
+        if (currentTrack.title) params.append("title", currentTrack.title)
+        if (currentTrack.artist) params.append("artist", currentTrack.artist)
+        url = `/api/discover?${params.toString()}`
+      }
+
+      console.log("[v0] Fetching fresh discover data from API")
+      const response = await fetch(url)
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || "Failed to fetch recommendations")
+      }
+
+      const data = await response.json()
+      setCachedData(cacheKey, data.videos)
+      setVideos(data.videos)
+    } catch (err: any) {
+      console.error("[v0] Discover More error:", err)
+      setError(err.message || "Failed to load recommendations")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePlay = (video: DiscoverVideo) => {
+    setCurrentTrack({
+      id: video.id,
+      title: video.title,
+      artist: video.artist,
+      thumbnail: video.thumbnail,
+      duration: "0:00",
+    })
+    setQueue([])
+  }
+
+  const handleAddToQueue = (video: DiscoverVideo) => {
+    addToQueue({
+      id: video.id,
+      title: video.title,
+      artist: video.artist,
+      thumbnail: video.thumbnail,
+      duration: "0:00",
+    })
+  }
+
+  const handleAddToPlaylist = (video: DiscoverVideo, playlistId: string) => {
+    addTrackToPlaylist(playlistId, {
+      id: video.id,
+      title: video.title,
+      artist: video.artist,
+      thumbnail: video.thumbnail,
+      duration: "0:00",
+    })
+  }
+
+  if (loading) {
+    return (
+      <section className="mb-12">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="bg-card rounded-lg p-4 animate-pulse">
+              <div className="aspect-square bg-secondary rounded-md mb-4" />
+              <div className="h-4 bg-secondary rounded mb-2" />
+              <div className="h-3 bg-secondary rounded w-2/3" />
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  if (error) {
+    return (
+      <section className="mb-12">
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 text-center">
+          <p className="text-destructive">{error}</p>
+          <Button onClick={fetchRecommendations} variant="outline" className="mt-4 bg-transparent">
+            Try Again
+          </Button>
+        </div>
+      </section>
+    )
+  }
+
+  if (videos.length === 0) return null
+
+  return (
+    <section className="mb-12">
+      <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
+        <Clock size={12} />
+        <span>Updated {cacheAge}</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+        {videos.map((video) => (
+          <Card
+            key={video.id}
+            className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl hover:bg-primary/10 rounded-xl p-4 transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10"
+          >
+            <div className="relative mb-4 aspect-square rounded-lg overflow-hidden bg-secondary shadow-lg">
+              <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
+                <Button
+                  size="icon"
+                  className="bg-primary hover:bg-primary/80 text-primary-foreground rounded-full h-12 w-12 shadow-lg shadow-primary/20 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300"
+                  onClick={() => handlePlay(video)}
+                  aria-label={`Play ${video.title}`}
+                >
+                  <Play fill="currentColor" size={20} className="ml-1" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="rounded-full h-10 w-10 bg-black/50 hover:bg-black/70 text-white border-none transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-75"
+                      aria-label="Add to playlist or queue"
+                    >
+                      <Plus size={18} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-black/90 backdrop-blur-xl border-white/10">
+                    <DropdownMenuItem onClick={() => handleAddToQueue(video)} className="hover:bg-primary/20 focus:bg-primary/20 cursor-pointer">Add to Queue</DropdownMenuItem>
+                    {playlists.length > 0 && <DropdownMenuItem disabled className="text-muted-foreground">Add to Playlist:</DropdownMenuItem>}
+                    {playlists.map((playlist) => (
+                      <DropdownMenuItem key={playlist.id} onClick={() => handleAddToPlaylist(video, playlist.id)} className="hover:bg-primary/20 focus:bg-primary/20 cursor-pointer">
+                        {playlist.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+            <h3 className="font-semibold text-sm mb-1 line-clamp-2 group-hover:text-primary transition-colors">{video.title}</h3>
+            <p className="text-xs text-muted-foreground line-clamp-1">{video.artist}</p>
+          </Card>
+        ))}
+      </div>
+    </section>
+  )
+}
