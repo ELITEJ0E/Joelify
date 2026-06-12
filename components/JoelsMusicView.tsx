@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, PlusSquare, Music2, Link, GripVertical, Play, Heart, RefreshCw } from "lucide-react";
+import { Check, Trash2, PlusSquare, Music2, GripVertical, Play, Heart, RefreshCw, Lock, Unlock } from "lucide-react";
 import { CustomToast } from "./CustomToast";
 import { Input } from "@/components/ui/input";
 import { TrackImage as Image } from "./TrackImage";
@@ -28,6 +28,32 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { FALLBACK_JOELS_SONGS as FALLBACK_SONGS, JOEL_PLAYLIST_ID } from "@/lib/constants";
+
+export const PLAYLISTS = [
+  { 
+    id: JOEL_PLAYLIST_ID, 
+    name: "Originals", 
+    type: "public" 
+  },
+  { 
+    id: "627c2d15-0cca-4c07-91b3-5f203c981e6e", 
+    name: "Worship", 
+    type: "password", 
+    password: "joelify", 
+    storageKey: "joelify_worship_unlocked", 
+    label: "Private Worship Sanctuary", 
+    desc: "This Worship collection is private. Enter passcode to unlock and enjoy the spirits of praise." 
+  },
+  { 
+    id: "34ac065b-e68e-4dfa-9780-00c49bae047a", 
+    name: "Upcoming", 
+    type: "password", 
+    password: "joelify", 
+    storageKey: "joelify_special_unlocked", 
+    label: "Upcoming Releases", 
+    desc: "New and exclusive songs are coming soon. Stay tuned! Enter passcode to unlock sneak peaks." 
+  }
+];
 
 interface SortableTrackItemProps {
   track: any;
@@ -154,11 +180,48 @@ export function JoelsMusicView() {
   const [syncError, setSyncError] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  const [manualUrl, setManualUrl] = useState("");
-  const [isAddingSong, setIsAddingSong] = useState(false);
+
+
+  // Password / Lock settings map for private playlists
+  const [unlockedPlaylists, setUnlockedPlaylists] = useState<Record<string, boolean>>({});
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  // Keep track of which playlist IDs have been synced during this mount session
+  const [syncedPlaylistsThisSession, setSyncedPlaylistsThisSession] = useState<Record<string, boolean>>({});
+
+  const loadPlaylistLocalCache = (playlistId: string) => {
+    const cachedKey = `joely_tracks_${playlistId}`;
+    const cachedStr = localStorage.getItem(cachedKey);
+    if (cachedStr) {
+      try {
+        setJoelsSongs(JSON.parse(cachedStr));
+        return true;
+      } catch (e) {
+        console.warn("Error parsing cache", e);
+      }
+    }
+    
+    // Fallback if no cache found
+    if (playlistId === JOEL_PLAYLIST_ID) {
+      setJoelsSongs([...FALLBACK_SONGS].reverse());
+    } else {
+      setJoelsSongs([]);
+    }
+    return false;
+  };
 
   useEffect(() => {
-    // Default to your specific playlist if nothing is saved
+    // Check unlocked state for password-locked playlists
+    const unlockedMap: Record<string, boolean> = {};
+    PLAYLISTS.forEach(p => {
+      if (p.type === "password" && p.storageKey) {
+        unlockedMap[p.id] = localStorage.getItem(p.storageKey) === 'true';
+      }
+    });
+    setUnlockedPlaylists(unlockedMap);
+
+    // Default to saved playlist or Originals
     const savedId = localStorage.getItem('joel_sync_playlist_id') || JOEL_PLAYLIST_ID;
     setSyncPlaylistId(savedId);
   }, []);
@@ -284,20 +347,23 @@ export function JoelsMusicView() {
     }
 
     if (!didServerSucceed) {
-        // Silent fallback - users just see existing or fallback songs
+        // Silent fallback - users just see existing or fallback songs specific to this playlist id
         console.warn("Suno API restricted or proxies failed");
-        if (joelsSongs.length === 0) {
-             setJoelsSongs([...FALLBACK_SONGS].reverse());
+        const cachedKey = `joely_tracks_${id}`;
+        const cachedStr = localStorage.getItem(cachedKey);
+        
+        if (cachedStr) {
+          try {
+            setJoelsSongs(JSON.parse(cachedStr));
+          } catch (e) {
+            setJoelsSongs([]);
+          }
         } else {
-             // Still need to update any old fallback entries with the fresh FALLBACK_SONGS
-             setJoelsSongs(prev => {
-                const updated = prev.map(p => {
-                    const fallback = FALLBACK_SONGS.find(f => f.id === p.id);
-                    return fallback ? { ...p, ...fallback } : p;
-                });
-                const missing = FALLBACK_SONGS.filter(f => !updated.some(u => u.id === f.id));
-                return [...[...missing].reverse(), ...updated];
-             });
+          if (id === JOEL_PLAYLIST_ID) {
+            setJoelsSongs([...FALLBACK_SONGS].reverse());
+          } else {
+            setJoelsSongs([]);
+          }
         }
         setIsSyncing(false);
         setInitialLoading(false);
@@ -312,16 +378,24 @@ export function JoelsMusicView() {
         thumbnail: t.thumbnail ? (t.thumbnail.includes('?') ? `${t.thumbnail}&_t=${timestamp}` : `${t.thumbnail}?_t=${timestamp}`) : t.thumbnail
       }));
       
-      // Merge with existing songs, prioritizing new data for matches, but keeping everything else (like fallbacks)
-      setJoelsSongs(prev => {
-        const newSongs = [...tracksWithBuster];
-        prev.forEach(oldTrack => {
-          if (!newSongs.some((t: any) => t.id === oldTrack.id)) {
-            newSongs.push(oldTrack);
-          }
-        });
-        return newSongs;
+      const cachedKey = `joely_tracks_${id}`;
+      let cachedTracks: any[] = [];
+      const cachedStr = localStorage.getItem(cachedKey);
+      if (cachedStr) {
+        try { cachedTracks = JSON.parse(cachedStr); } catch (e) {}
+      } else if (id === JOEL_PLAYLIST_ID) {
+        cachedTracks = [...FALLBACK_SONGS].reverse();
+      }
+
+      const merged = [...tracksWithBuster];
+      cachedTracks.forEach(oldTrack => {
+        if (!merged.some((t: any) => t.id === oldTrack.id) && oldTrack.id) {
+          merged.push(oldTrack);
+        }
       });
+
+      localStorage.setItem(cachedKey, JSON.stringify(merged));
+      setJoelsSongs(merged);
       
       setSyncPlaylistId(id);
       localStorage.setItem('joel_sync_playlist_id', id);
@@ -331,109 +405,31 @@ export function JoelsMusicView() {
     setInitialLoading(false);
   };
 
-  const handleAddManualUrl = async () => {
-    if (!manualUrl.trim()) return;
-    
-    setIsAddingSong(true);
-    try {
-      const match = manualUrl.match(/(?:song|embed|playlist)\/([a-zA-Z0-9-]+)/);
-      const uuidMatch = manualUrl.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i);
-      let id = (match && match[1]) ? match[1] : (uuidMatch ? uuidMatch[0] : null);
-      
-      if (!id) {
-        // Support direct pasted ID or last segment of URL
-        const trimmed = manualUrl.trim();
-        if (trimmed.length >= 10 && !trimmed.includes(' ')) {
-          const parts = trimmed.split('/');
-          id = parts[parts.length - 1];
-        }
-      }
-      
-      if (!id || id.length < 10) {
-        throw new Error("Invalid URL or ID format");
-      }
-      
-      // Try to fetch metadata, but provide fallback if API is restricted
-      let song;
-      try {
-        const res = await fetch(`/api/suno-metadata?ids=${id}&_t=${Date.now()}`);
-        const text = await res.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          throw new Error(`Invalid JSON response: ${res.status}`);
-        }
-        
-        if (data.clips && Array.isArray(data.clips) && data.clips.length > 0) {
-          const clip = data.clips[0];
-          const timestamp = Date.now();
-          const img = clip.image_url || clip.custom_image_url || `https://cdn2.suno.ai/image_${clip.id}.jpeg`;
-          song = {
-            id: clip.id,
-            title: clip.title || "New Song",
-            artist: clip.display_name || "Joel",
-            thumbnail: img,
-            lyrics: clip.metadata?.prompt || ""
-          };
-        } else if (data.isRestricted || !res.ok) {
-           // Fallback if API is down/restricted
-           song = {
-             id: id,
-             title: "Song " + id.substring(0, 4),
-             artist: "Joel",
-             thumbnail: `https://cdn2.suno.ai/image_${id}.jpeg`,
-             lyrics: ""
-           };
-        } else {
-          throw new Error("Song not found");
-        }
-      } catch (e) {
-        // Ultimate fallback
-        song = {
-          id: id,
-          title: "Song " + id.substring(0, 4),
-          artist: "Joel",
-          thumbnail: `https://cdn2.suno.ai/image_${id}.jpeg`,
-          lyrics: ""
-        };
-      }
-      
-      if (song) {
-        // Prevent duplicates
-        setJoelsSongs(prev => {
-          const exists = prev.find(s => s.id === song.id);
-          if (exists) return prev;
-          return [song, ...prev];
-        });
-        
-        // Immediately play the song
-        playSunoTrack(song.id, song.title, song.artist, song.thumbnail, song.lyrics);
-        
-        setManualUrl("");
-        toast.custom((t) => (
-          <CustomToast 
-            t={t} 
-            title="Song added & playing!" 
-            Icon={Check} 
-          />
-        ))
-      }
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || "Could not add song. Check the URL/ID.");
-    } finally {
-      setIsAddingSong(false);
-    }
-  };
+
 
   useEffect(() => {
-    if (syncPlaylistId) {
+    if (!syncPlaylistId) return;
+
+    const currentPlaylistConfig = PLAYLISTS.find(p => p.id === syncPlaylistId);
+    if (currentPlaylistConfig?.type === "password") {
+      const isUnlocked = unlockedPlaylists[syncPlaylistId];
+      if (!isUnlocked) {
+        setInitialLoading(false);
+        return;
+      }
+    }
+
+    // Load partition cache instantly
+    loadPlaylistLocalCache(syncPlaylistId);
+
+    // Sync live from Suno in background only once per mount session
+    if (!syncedPlaylistsThisSession[syncPlaylistId]) {
+      setSyncedPlaylistsThisSession(prev => ({ ...prev, [syncPlaylistId]: true }));
       syncPlaylist(syncPlaylistId);
     } else {
-      updateMetadataOnly();
+      setInitialLoading(false);
     }
-  }, [syncPlaylistId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [syncPlaylistId, unlockedPlaylists, syncedPlaylistsThisSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateMetadataOnly = async () => {
     try {
@@ -517,8 +513,52 @@ export function JoelsMusicView() {
     }
   };
 
+  const handleVerifyPassword = () => {
+    const currentPlaylistConfig = PLAYLISTS.find(p => p.id === syncPlaylistId);
+    if (!currentPlaylistConfig || currentPlaylistConfig.type !== "password") return;
+
+    const attemptedInput = passwordInput.trim().toLowerCase();
+    const correctPassword = currentPlaylistConfig.password?.toLowerCase();
+
+    if (attemptedInput === correctPassword) {
+      // Store in localStorage
+      if (currentPlaylistConfig.storageKey) {
+        localStorage.setItem(currentPlaylistConfig.storageKey, 'true');
+      }
+
+      // Update state map
+      setUnlockedPlaylists(prev => ({
+        ...prev,
+        [currentPlaylistConfig.id]: true
+      }));
+
+      toast.custom((t) => (
+        <CustomToast 
+          t={t} 
+          title="Playlist Unlocked!" 
+          description={`Unlocked Joel's ${currentPlaylistConfig.name} collection.`} 
+          Icon={Check} 
+        />
+      ));
+      setPasswordError("");
+      setPasswordInput("");
+      
+      // Load and sync instantly
+      loadPlaylistLocalCache(currentPlaylistConfig.id);
+      setSyncedPlaylistsThisSession(prev => ({ ...prev, [currentPlaylistConfig.id]: true }));
+      syncPlaylist(currentPlaylistConfig.id);
+    } else {
+      setPasswordError("Incorrect passkey. Please try again.");
+    }
+  };
+
   const removeSong = (id: string) => {
-    setJoelsSongs(joelsSongs.filter(s => s.id !== id));
+    const updated = joelsSongs.filter(s => s.id !== id);
+    setJoelsSongs(updated);
+    
+    const activeId = syncPlaylistId || JOEL_PLAYLIST_ID;
+    localStorage.setItem(`joely_tracks_${activeId}`, JSON.stringify(updated));
+
     toast.custom((t) => (
       <CustomToast 
         t={t} 
@@ -568,7 +608,11 @@ export function JoelsMusicView() {
     if (over && active.id !== over.id) {
       const oldIndex = joelsSongs.findIndex(s => s.id === active.id);
       const newIndex = joelsSongs.findIndex(s => s.id === over.id);
-      setJoelsSongs(arrayMove(joelsSongs, oldIndex, newIndex));
+      const updated = arrayMove(joelsSongs, oldIndex, newIndex);
+      setJoelsSongs(updated);
+      
+      const activeId = syncPlaylistId || JOEL_PLAYLIST_ID;
+      localStorage.setItem(`joely_tracks_${activeId}`, JSON.stringify(updated));
     }
   };
 
@@ -613,61 +657,124 @@ export function JoelsMusicView() {
           </Button>
         </div>
 
-        {/* URL Input Area */}
-        <div className="bg-black/10 backdrop-blur-md border border-white/5 p-3 rounded-xl flex flex-col md:flex-row gap-2">
-          <div className="relative flex-1">
-            <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground opacity-50" />
-            <Input 
-              placeholder="Paste song URL to play..." 
-              value={manualUrl}
-              onChange={(e) => setManualUrl(e.target.value)}
-              className="bg-transparent border-none pl-10 h-10 focus-visible:ring-0"
-              onKeyDown={(e) => e.key === 'Enter' && handleAddManualUrl()}
-            />
-          </div>
-          <Button 
-            variant="ghost"
-            className="h-10 px-6 font-bold hover:bg-primary/10 hover:text-primary"
-            onClick={handleAddManualUrl}
-            disabled={isAddingSong || !manualUrl.trim()}
-          >
-            {isAddingSong ? "Adding..." : "Add & Play"}
-          </Button>
+        {/* Playlist Tabs Selector */}
+        <div className="flex items-center gap-2 border-b border-white/[0.06] pb-3 overflow-x-auto scrollbar-none">
+          {PLAYLISTS.map((playlist) => {
+            const isSelected = syncPlaylistId === playlist.id;
+            const isLocked = playlist.type === "password" && !unlockedPlaylists[playlist.id];
+            
+            return (
+              <Button
+                key={playlist.id}
+                variant={isSelected ? "default" : "ghost"}
+                onClick={() => setSyncPlaylistId(playlist.id)}
+                className={`h-9 px-4 rounded-xl font-bold transition-all duration-300 flex items-center gap-1.5 shrink-0 ${
+                  isSelected
+                    ? "bg-primary text-white shadow-lg shadow-primary/20"
+                    : "text-muted-foreground hover:text-white"
+                }`}
+              >
+                {playlist.type === "password" ? (
+                  <Lock 
+                    size={14} 
+                    className={isSelected && !isLocked ? "text-primary-foreground" : isLocked ? "text-amber-500 animate-pulse" : "text-muted-foreground"} 
+                  />
+                ) : (
+                  <Music2 size={14} />
+                )}
+                <span>{playlist.name}</span>
+                {isLocked && (
+                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                )}
+              </Button>
+            );
+          })}
         </div>
 
-        {/* Tracks List */}
-        <div className="space-y-1">
-          {joelsSongs.length > 0 ? (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={joelsSongs.map(s => s.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {joelsSongs.map((track, i) => (
-                  <SortableTrackItem
-                    key={track.id}
-                    track={track}
-                    index={i}
-                    playSunoTrack={playSunoTrack}
-                    toggleLikedSong={toggleLikedSong}
-                    isTrackLiked={isTrackLiked}
-                    addToQueue={addToQueue}
-                    removeSong={removeSong}
+        {(() => {
+          const activePlaylistConfig = PLAYLISTS.find(p => p.id === syncPlaylistId);
+          const isCurrentLocked = activePlaylistConfig?.type === "password" && !unlockedPlaylists[syncPlaylistId || ""];
+
+          if (isCurrentLocked) {
+            return (
+              /* Private Playlist Passkey Entry Card */
+              <div className="flex flex-col items-center justify-center py-20 px-6 max-w-md mx-auto text-center bg-black/20 backdrop-blur-md border border-white/5 rounded-3xl space-y-6 shadow-xl shadow-black/40 my-8">
+                <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex items-center justify-center text-amber-500 shadow-lg shadow-amber-500/5 animate-bounce">
+                  <Lock size={30} />
+                </div>
+                
+                <div className="space-y-2">
+                  <h2 className="text-xl font-bold tracking-tight text-white">{activePlaylistConfig?.label || "Private Collection"}</h2>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {activePlaylistConfig?.desc || "This playlist is secure. Please enter the correct passkey to access."}
+                  </p>
+                </div>
+
+                <div className="w-full space-y-3">
+                  <Input
+                    type="password"
+                    placeholder="Enter passcode..."
+                    value={passwordInput}
+                    onChange={(e) => {
+                      setPasswordInput(e.target.value);
+                      setPasswordError("");
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyPassword()}
+                    className="bg-black/35 border-white/10 rounded-xl pr-10 focus-visible:ring-primary h-11 text-center font-mono tracking-widest text-lg"
                   />
-                ))}
-              </SortableContext>
-            </DndContext>
-          ) : (
-            <div className="text-center py-20 bg-black/5 rounded-2xl border border-dashed border-white/5">
-              <Music2 className="w-10 h-10 text-muted-foreground opacity-20 mx-auto mb-3" />
-              <p className="text-muted-foreground text-sm">No tracks found.</p>
-            </div>
-          )}
-        </div>
+                  {passwordError && (
+                    <p className="text-xs text-red-400 font-medium animate-pulse">{passwordError}</p>
+                  )}
+                  <Button
+                    variant="default"
+                    onClick={handleVerifyPassword}
+                    className="w-full h-11 rounded-xl bg-primary hover:bg-primary/95 text-white font-bold tracking-wide shadow-lg shadow-primary/15 transition-all duration-300"
+                  >
+                    Unlock Playlist
+                  </Button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <>
+              {/* Tracks List */}
+              <div className="space-y-1">
+                {joelsSongs.length > 0 ? (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={joelsSongs.map(s => s.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {joelsSongs.map((track, i) => (
+                        <SortableTrackItem
+                          key={track.id}
+                          track={track}
+                          index={i}
+                          playSunoTrack={playSunoTrack}
+                          toggleLikedSong={toggleLikedSong}
+                          isTrackLiked={isTrackLiked}
+                          addToQueue={addToQueue}
+                          removeSong={removeSong}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                ) : (
+                  <div className="text-center py-20 bg-black/5 rounded-2xl border border-dashed border-white/5">
+                    <Music2 className="w-10 h-10 text-muted-foreground opacity-20 mx-auto mb-3" />
+                    <p className="text-muted-foreground text-sm">No tracks found.</p>
+                  </div>
+                )}
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
