@@ -4,6 +4,201 @@ import { FALLBACK_JOELS_SONGS } from "@/lib/constants";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const playlistScrapeCache = new Map<string, any>();
+
+async function fetchSongMetadata(id: string): Promise<any> {
+  const cleanId = id.trim();
+  if (!cleanId) return null;
+  
+  if (playlistScrapeCache.has(cleanId)) {
+    return playlistScrapeCache.get(cleanId);
+  }
+
+  const urlsToTry = [
+    `https://suno.com/song/${cleanId}`,
+    "https://api.allorigins.win/get?url=" + encodeURIComponent(`https://suno.com/song/${cleanId}`),
+    "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(`https://suno.com/song/${cleanId}`),
+    "https://corsproxy.io/?url=" + encodeURIComponent(`https://suno.com/song/${cleanId}`)
+  ];
+
+  for (let u = 0; u < urlsToTry.length; u++) {
+    const url = urlsToTry[u];
+    try {
+      const isProxy = u > 0;
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5"
+        }
+      });
+      if (!response.ok) continue;
+
+      let html = await response.text();
+      if (isProxy && u === 1) {
+        try {
+          const parsed = JSON.parse(html);
+          html = parsed.contents || html;
+        } catch (e) {}
+      }
+
+      if (!html || typeof html !== "string" || !html.includes("Suno")) continue;
+
+      const payloads: string[] = [];
+      let index = 0;
+      while (true) {
+        const pushIdx = html.indexOf('__next_f.push(', index);
+        if (pushIdx === -1) break;
+        
+        const startIdx = pushIdx + '__next_f.push('.length; 
+        let parenCount = 1;
+        let inString = false;
+        let stringChar = '';
+        let isEscaped = false;
+        let foundEnd = -1;
+        
+        for (let i = startIdx; i < html.length; i++) {
+          const char = html[i];
+          if (inString) {
+            if (isEscaped) {
+              isEscaped = false;
+            } else if (char === '\\') {
+              isEscaped = true;
+            } else if (char === stringChar) {
+              inString = false;
+            }
+          } else {
+            if (char === '"' || char === "'") {
+              inString = true;
+              stringChar = char;
+              isEscaped = false;
+            } else if (char === '(') {
+              parenCount++;
+            } else if (char === ')') {
+              parenCount--;
+              if (parenCount === 0) {
+                foundEnd = i;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (foundEnd !== -1) {
+          const argumentStr = html.substring(startIdx, foundEnd).trim();
+          try {
+            const arr = JSON.parse(argumentStr);
+            if (Array.isArray(arr) && typeof arr[1] === 'string') {
+              payloads.push(arr[1]);
+            }
+          } catch (e) {
+            const strMatch = argumentStr.match(/^\[\s*\d+\s*,\s*"([\s\S]*)"\s*\]$/);
+            if (strMatch) {
+              try {
+                const decoded = JSON.parse(`"${strMatch[1]}"`);
+                payloads.push(decoded);
+              } catch (err) {
+                let s = strMatch[1]
+                  .replace(/\\"/g, '"')
+                  .replace(/\\n/g, '\n')
+                  .replace(/\\r/g, '\r')
+                  .replace(/\\t/g, '\t')
+                  .replace(/\\\\/g, '\\');
+                payloads.push(s);
+              }
+            }
+          }
+          index = foundEnd + 1;
+        } else {
+          index = pushIdx + 1;
+        }
+      }
+
+      const combinedDecodedText = payloads.join("");
+      
+      const clipIdx = combinedDecodedText.indexOf('"clip":');
+      if (clipIdx !== -1) {
+        let braceCount = 0;
+        let objStart = combinedDecodedText.indexOf('{', clipIdx);
+        if (objStart !== -1) {
+          for (let i = objStart; i < combinedDecodedText.length; i++) {
+            if (combinedDecodedText[i] === '{') braceCount++;
+            else if (combinedDecodedText[i] === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                const objStr = combinedDecodedText.substring(objStart, i + 1);
+                try {
+                  const parsed = JSON.parse(objStr);
+                  const clipObj = parsed.clip || parsed;
+                  if (clipObj && clipObj.id === cleanId) {
+                    playlistScrapeCache.set(cleanId, clipObj);
+                    return clipObj;
+                  }
+                } catch (e) {}
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      const titleMatch = combinedDecodedText.match(/"title"\s*:\s*"([^"]+)"/);
+      const artistMatch = combinedDecodedText.match(/"display_name"\s*:\s*"([^"]+)"/) || combinedDecodedText.match(/"handle"\s*:\s*"([^"]+)"/);
+      const imageMatch = combinedDecodedText.match(/"image_url"\s*:\s*"([^"]+)"/) || combinedDecodedText.match(/"image_large_url"\s*:\s*"([^"]+)"/);
+      const audioMatch = combinedDecodedText.match(/"audio_url"\s*:\s*"([^"]+)"/);
+      
+      if (titleMatch || artistMatch || imageMatch || audioMatch) {
+        const clipObj = {
+          id: cleanId,
+          title: titleMatch ? titleMatch[1] : `Track ${cleanId.substring(0, 5)}`,
+          display_name: artistMatch ? artistMatch[1] : "ELITEJOE",
+          audio_url: audioMatch ? audioMatch[1] : `https://cdn1.suno.ai/${cleanId}.mp3`,
+          image_url: imageMatch ? imageMatch[1] : `https://cdn2.suno.ai/image_${cleanId}.jpeg`,
+          cover_url: imageMatch ? imageMatch[1] : `https://cdn2.suno.ai/image_${cleanId}.jpeg`,
+          metadata: {
+            prompt: "",
+            tags: ""
+          }
+        };
+        playlistScrapeCache.set(cleanId, clipObj);
+        return clipObj;
+      }
+
+      const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+      const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+      const descMatch = html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
+      
+      if (ogTitleMatch) {
+        let artist = "ELITEJOE";
+        if (descMatch) {
+          const byMatch = descMatch[1].match(/(.*?)\s+by\s+(.*?)\s+\(/);
+          if (byMatch && byMatch[2]) {
+            artist = byMatch[2];
+          }
+        }
+        const clipObj = {
+          id: cleanId,
+          title: ogTitleMatch[1],
+          display_name: artist,
+          audio_url: `https://cdn1.suno.ai/${cleanId}.mp3`,
+          image_url: ogImageMatch ? ogImageMatch[1] : `https://cdn2.suno.ai/image_${cleanId}.jpeg`,
+          cover_url: ogImageMatch ? ogImageMatch[1] : `https://cdn2.suno.ai/image_${cleanId}.jpeg`,
+          metadata: {
+            prompt: "",
+            tags: ""
+          }
+        };
+        playlistScrapeCache.set(cleanId, clipObj);
+        return clipObj;
+      }
+    } catch (e) {
+      console.warn(`Parallel playlist sync crawl failed for ID ${cleanId}:`, e);
+    }
+  }
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id") || "";
@@ -74,43 +269,277 @@ export async function GET(req: NextRequest) {
       throw lastError || new Error(`Failed to fetch ${url}`);
     };
 
-    let clipsToUse = [];
+    let clipsToUse: any[] = [];
 
     const extractClips = (html: string) => {
       let foundClips: any[] = [];
       let foundName = playlistName;
-      for (const match of html.matchAll(/self\.__next_f\.push\((\[1,"(?:\\.|[^"\\])*"\])\)/g)) {
-        try {
-          const arr = JSON.parse(match[1]);
-          const str = arr[1];
-          if (typeof str !== 'string') continue;
 
-          let startIdx = str.indexOf('"playlist_clips":');
-          if (startIdx !== -1) {
-              const objStart = str.lastIndexOf('{', startIdx);
-              if (objStart !== -1) {
-                  let braceCount = 0;
-                  for (let i = objStart; i < str.length; i++) {
-                      if (str[i] === '{') braceCount++;
-                      else if (str[i] === '}') {
-                          braceCount--;
-                          if (braceCount === 0) {
-                              try {
-                                 const json = JSON.parse(str.substring(objStart, i + 1));
-                                 if (json?.playlist_clips?.length > 0) {
-                                     foundClips = json.playlist_clips.map((pc: any) => pc.clip).filter(Boolean);
-                                     foundName = json.name || foundName;
-                                     break;
+      // Tier 1: Next.js __next_f.push extraction and reassembly
+      const payloads: string[] = [];
+      let index = 0;
+      while (true) {
+        const pushIdx = html.indexOf('__next_f.push(', index);
+        if (pushIdx === -1) break;
+        
+        const startIdx = pushIdx + '__next_f.push('.length; 
+        let parenCount = 1;
+        let inString = false;
+        let stringChar = '';
+        let isEscaped = false;
+        let foundEnd = -1;
+        
+        for (let i = startIdx; i < html.length; i++) {
+          const char = html[i];
+          
+          if (inString) {
+            if (isEscaped) {
+              isEscaped = false;
+            } else if (char === '\\') {
+              isEscaped = true;
+            } else if (char === stringChar) {
+              inString = false;
+            }
+          } else {
+            if (char === '"' || char === "'") {
+              inString = true;
+              stringChar = char;
+              isEscaped = false;
+            } else if (char === '(') {
+              parenCount++;
+            } else if (char === ')') {
+              parenCount--;
+              if (parenCount === 0) {
+                foundEnd = i;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (foundEnd !== -1) {
+            const argumentStr = html.substring(startIdx, foundEnd).trim();
+            try {
+                const arr = JSON.parse(argumentStr);
+                if (Array.isArray(arr) && typeof arr[1] === 'string') {
+                    payloads.push(arr[1]);
+                }
+            } catch (e) {
+                // regex match on literal string
+                const strMatch = argumentStr.match(/^\[\s*\d+\s*,\s*"([\s\S]*)"\s*\]$/);
+                if (strMatch) {
+                    try {
+                        const decoded = JSON.parse(`"${strMatch[1]}"`);
+                        payloads.push(decoded);
+                    } catch (err) {
+                        let s = strMatch[1]
+                            .replace(/\\"/g, '"')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\r/g, '\r')
+                            .replace(/\\t/g, '\t')
+                            .replace(/\\\\/g, '\\');
+                        payloads.push(s);
+                    }
+                }
+            }
+            index = foundEnd + 1;
+        } else {
+            index = pushIdx + 1;
+        }
+      }
+
+      const combinedDecodedText = payloads.join("");
+
+      if (combinedDecodedText) {
+         // Tier 1a: Try to extract as structured array from playlist_clips
+         const playlistClipsIdx = combinedDecodedText.indexOf('"playlist_clips":');
+         if (playlistClipsIdx !== -1) {
+             const startArrIdx = combinedDecodedText.indexOf('[', playlistClipsIdx);
+             if (startArrIdx !== -1) {
+                 let bracketCount = 0;
+                 for (let i = startArrIdx; i < combinedDecodedText.length; i++) {
+                     if (combinedDecodedText[i] === '[') bracketCount++;
+                     else if (combinedDecodedText[i] === ']') {
+                         bracketCount--;
+                         if (bracketCount === 0) {
+                             const arrayStr = combinedDecodedText.substring(startArrIdx, i + 1);
+                             try {
+                                 const arr = JSON.parse(arrayStr);
+                                 if (Array.isArray(arr) && arr.length > 0) {
+                                     foundClips = arr.map((item: any) => item.clip || item).filter(Boolean);
                                  }
-                              } catch(e) {}
+                             } catch (e) {
+                                 console.warn("Failed to parse extracted playlist_clips array", e);
+                             }
+                             break;
+                         }
+                     }
+                 }
+             }
+         }
+
+         // Try clips array directly if playlist_clips is missing or empty
+         if (foundClips.length === 0) {
+             const clipsIdx = combinedDecodedText.indexOf('"clips":');
+             if (clipsIdx !== -1) {
+                 const startArrIdx = combinedDecodedText.indexOf('[', clipsIdx);
+                 if (startArrIdx !== -1) {
+                     let bracketCount = 0;
+                     for (let i = startArrIdx; i < combinedDecodedText.length; i++) {
+                         if (combinedDecodedText[i] === '[') bracketCount++;
+                         else if (combinedDecodedText[i] === ']') {
+                             bracketCount--;
+                             if (bracketCount === 0) {
+                                 const arrayStr = combinedDecodedText.substring(startArrIdx, i + 1);
+                                 try {
+                                     const arr = JSON.parse(arrayStr);
+                                     if (Array.isArray(arr) && arr.length > 0) {
+                                         foundClips = arr.map((item: any) => item.clip || item).filter(Boolean);
+                                     }
+                                 } catch (e) {
+                                     console.warn("Failed to parse extracted clips array", e);
+                                 }
+                                 break;
+                             }
+                         }
+                     }
+                 }
+             }
+         }
+
+         // Tier 1b: Extract individual clips by sweeping all UUIDs in the RSC string
+         if (foundClips.length === 0) {
+             console.log("No contiguous arrays found. Parsing individual clip objects from RSC...");
+             const uuidRegex = /"id"\s*:\s*"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})"/gi;
+             let match;
+             const seenIds = new Set<string>();
+             while ((match = uuidRegex.exec(combinedDecodedText)) !== null) {
+                 const id = match[1];
+                 if (seenIds.has(id)) continue;
+                 const matchIndex = match.index;
+                 
+                 let braceCount = 0;
+                 let objStart = -1;
+                 for (let i = matchIndex; i >= 0; i--) {
+                     if (combinedDecodedText[i] === '}') braceCount++;
+                     else if (combinedDecodedText[i] === '{') {
+                         if (braceCount === 0) {
+                             objStart = i;
+                             break;
+                         } else {
+                             braceCount--;
+                         }
+                     }
+                 }
+                 
+                 if (objStart !== -1) {
+                     braceCount = 0;
+                     let objEnd = -1;
+                     for (let i = objStart; i < combinedDecodedText.length; i++) {
+                         if (combinedDecodedText[i] === '{') braceCount++;
+                         else if (combinedDecodedText[i] === '}') {
+                             braceCount--;
+                             if (braceCount === 0) {
+                                 objEnd = i;
+                                 break;
+                             }
+                         }
+                     }
+                     
+                     if (objEnd !== -1) {
+                         const objectStr = combinedDecodedText.substring(objStart, objEnd + 1);
+                         try {
+                             const parsed = JSON.parse(objectStr);
+                             const clip = parsed.clip || parsed;
+                             if (clip && typeof clip === 'object' && clip.id === id && (clip.audio_url || clip.video_url || clip.title)) {
+                                 foundClips.push(clip);
+                                 seenIds.add(id);
+                             }
+                         } catch (e) {
+                             // Substring was not standalone valid JSON
+                         }
+                     }
+                 }
+             }
+         }
+
+         // Try to find playlist/page name in reconstituted text
+         const nameRegexes = [
+             /"name"\s*:\s*"([^"]+)"/,
+             /"title"\s*:\s*"([^"]+)"/
+         ];
+         for (const r of nameRegexes) {
+             const m = combinedDecodedText.match(r);
+             if (m && m[1] && m[1] !== "Suno Playlist" && m[1].length > 2 && m[1].length < 100) {
+                 if (!["chirp", "v4", "v3", "Suno", "Suno AI"].includes(m[1])) {
+                     foundName = m[1];
+                     break;
+                 }
+             }
+         }
+      }
+
+      // Tier 2: Absolute worst-case scenario. Extract any Suno audio links from raw HTML
+      if (foundClips.length === 0) {
+         console.warn("RSC extraction yielded nothing. Running regex fallbacks direct from raw HTML...");
+         // Match cdn1.suno.ai paths
+         const audioUrlRegex = /https:\/\/cdn1\.suno\.ai\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.mp3/gi;
+         let match;
+         const seenIds = new Set<string>();
+         while ((match = audioUrlRegex.exec(html)) !== null) {
+             const id = match[1];
+             if (seenIds.has(id)) continue;
+             seenIds.add(id);
+             
+             let trackTitle = "Track " + id.substring(0, 5);
+             foundClips.push({
+                 id,
+                 title: trackTitle,
+                 display_name: "Suno AI",
+                 audio_url: `https://cdn1.suno.ai/${id}.mp3`,
+                 image_url: `https://cdn2.suno.ai/image_${id}.jpeg`,
+                 metadata: {
+                     tags: "scraped-fallback"
+                 }
+             });
+         }
+      }
+
+      // Legacy pattern search as a final safety check
+      if (foundClips.length === 0) {
+          for (const match of html.matchAll(/self\.__next_f\.push\((\[1,"(?:\\.|[^"\\])*"\])\)/g)) {
+            try {
+              const arr = JSON.parse(match[1]);
+              const str = arr[1];
+              if (typeof str !== 'string') continue;
+
+              let startIdx = str.indexOf('"playlist_clips":');
+              if (startIdx !== -1) {
+                  const objStart = str.lastIndexOf('{', startIdx);
+                  if (objStart !== -1) {
+                      let braceCount = 0;
+                      for (let i = objStart; i < str.length; i++) {
+                          if (str[i] === '{') braceCount++;
+                          else if (str[i] === '}') {
+                              braceCount--;
+                              if (braceCount === 0) {
+                                  try {
+                                     const json = JSON.parse(str.substring(objStart, i + 1));
+                                     if (json?.playlist_clips?.length > 0) {
+                                         foundClips = json.playlist_clips.map((pc: any) => pc.clip).filter(Boolean);
+                                         foundName = json.name || foundName;
+                                         break;
+                                     }
+                                  } catch(e) {}
+                              }
                           }
                       }
                   }
               }
+            } catch (e) {}
           }
-          if (foundClips.length > 0) break;
-        } catch (e) {}
       }
+
       return { foundClips, foundName };
     };
 
@@ -119,8 +548,9 @@ export async function GET(req: NextRequest) {
         const response = await fetch(urlStr, { 
           cache: "no-store", 
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5"
           }
         });
         if (response.ok) {
@@ -204,9 +634,31 @@ export async function GET(req: NextRequest) {
     });
     let clips = Array.from(uniqueClipsMap.values());
 
-    const tracks = clips.map(clip => {
+    const tracksPromises = clips.map(async (clip) => {
       const fallbackTrack = FALLBACK_JOELS_SONGS.find(t => t.id === clip.id);
       
+      let title = clip.title || "Untitled";
+      let artist = clip.display_name || "Suno AI";
+      let latestImg = clip.image_url || clip.cover_url || clip.artwork_url || `https://cdn2.suno.ai/image_${clip.id}.jpeg`;
+      let rawLyrics = clip.metadata?.prompt || "";
+      let tags = clip.metadata?.tags || "";
+      
+      // If it has fallen back to a generic name and is not in hardcoded fallbacks, perform parallel crawl resolve
+      if (!fallbackTrack && (title === "Untitled" || title.startsWith("Track "))) {
+        try {
+          const resolved = await fetchSongMetadata(clip.id);
+          if (resolved) {
+            title = resolved.title || title;
+            artist = resolved.display_name || resolved.artist || artist;
+            latestImg = resolved.image_url || resolved.cover_url || latestImg;
+            rawLyrics = resolved.metadata?.prompt || rawLyrics;
+            tags = resolved.metadata?.tags || tags;
+          }
+        } catch (e) {
+          console.warn("Could not resolve individual clip metadata inside playlist sync", clip.id);
+        }
+      }
+
       let sunoProvidedMp4 = null;
       if (clip.video_cover_url?.includes('.mp4') || clip.video_cover_url?.includes('video_upload')) {
         sunoProvidedMp4 = clip.video_cover_url;
@@ -214,28 +666,38 @@ export async function GET(req: NextRequest) {
         sunoProvidedMp4 = clip.video_url;
       }
 
-      let latestImg = sunoProvidedMp4 || clip.custom_image_url || clip.image_url || clip.cover_url || clip.artwork_url || `https://cdn2.suno.ai/image_${clip.id}.jpeg`;
-      
-      // If Suno didn't provide a custom MP4 but the static fallback has one, use the fallback
       if (!sunoProvidedMp4 && (fallbackTrack?.thumbnail?.includes('.mp4') || fallbackTrack?.thumbnail?.includes('video_upload'))) {
         latestImg = fallbackTrack.thumbnail;
       }
 
-      let rawLyrics = clip.metadata?.prompt || "";
+      if (fallbackTrack) {
+        title = fallbackTrack.title;
+        artist = fallbackTrack.artist;
+        latestImg = fallbackTrack.thumbnail;
+      }
+
+      let buster = latestImg.includes('?') ? `&updated=${timestamp}` : `?updated=${timestamp}`;
+      if (latestImg.includes('.mp4')) {
+        buster = "";
+      }
+
       if (typeof rawLyrics === 'string' && rawLyrics.startsWith('$') && rawLyrics.length < 15) {
         rawLyrics = "";
       }
 
       return {
         id: clip.id,
-        title: clip.title || "Untitled",
-        artist: clip.display_name || "Suno AI",
-        thumbnail: latestImg.includes('.mp4') ? latestImg : latestImg + (latestImg.includes('?') ? `&updated=${timestamp}` : `?updated=${timestamp}`),
-        tags: clip.metadata?.tags || "",
+        title,
+        artist,
+        thumbnail: latestImg.includes('.mp4') ? latestImg : latestImg + buster,
+        tags,
         lyrics: rawLyrics,
         createdAt: clip.created_at || ""
       };
-    }).reverse();
+    });
+
+    const resolvedTracks = await Promise.all(tracksPromises);
+    const tracks = resolvedTracks.reverse();
 
     return NextResponse.json({ 
       name: playlistName,

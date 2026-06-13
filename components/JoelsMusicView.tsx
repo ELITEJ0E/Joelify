@@ -286,35 +286,128 @@ export function JoelsMusicView() {
           if (!html || typeof html !== "string") continue;
           
           let foundClips: any[] = [];
-          for (const match of html.matchAll(/self\.__next_f\.push\((\[1,"(?:\\.|[^"\\])*"\])\)/g)) {
-              try {
-                const arr = JSON.parse(match[1]);
-                const str = arr[1];
-                if (typeof str !== 'string') continue;
-                let startIdx = str.indexOf('"playlist_clips":');
-                if (startIdx !== -1) {
-                    const objStart = str.lastIndexOf('{', startIdx);
-                    if (objStart !== -1) {
-                        let braceCount = 0;
-                        for (let i = objStart; i < str.length; i++) {
-                            if (str[i] === '{') braceCount++;
-                            else if (str[i] === '}') {
-                                braceCount--;
-                                if (braceCount === 0) {
-                                    try {
-                                        const jsonObj = JSON.parse(str.substring(objStart, i + 1));
-                                        if (jsonObj?.playlist_clips?.length > 0) {
-                                            foundClips = jsonObj.playlist_clips.map((pc: any) => pc.clip).filter(Boolean);
-                                            break;
-                                        }
-                                    } catch(e) {}
-                                }
-                            }
+          const payloads: string[] = [];
+          let idx = 0;
+          while (true) {
+            const pushIdx = html.indexOf('__next_f.push(', idx);
+            if (pushIdx === -1) break;
+            
+            const startIdx = pushIdx + '__next_f.push('.length; 
+            let parenCount = 1;
+            let inString = false;
+            let stringChar = '';
+            let isEscaped = false;
+            let foundEnd = -1;
+            
+            for (let i = startIdx; i < html.length; i++) {
+              const char = html[i];
+              
+              if (inString) {
+                if (isEscaped) {
+                  isEscaped = false;
+                } else if (char === '\\') {
+                  isEscaped = true;
+                } else if (char === stringChar) {
+                  inString = false;
+                }
+              } else {
+                if (char === '"' || char === "'") {
+                  inString = true;
+                  stringChar = char;
+                  isEscaped = false;
+                } else if (char === '(') {
+                  parenCount++;
+                } else if (char === ')') {
+                  parenCount--;
+                  if (parenCount === 0) {
+                    foundEnd = i;
+                    break;
+                  }
+                }
+              }
+            }
+            
+            if (foundEnd !== -1) {
+                const argumentStr = html.substring(startIdx, foundEnd).trim();
+                try {
+                    const arr = JSON.parse(argumentStr);
+                    if (Array.isArray(arr) && typeof arr[1] === 'string') {
+                        payloads.push(arr[1]);
+                    }
+                } catch (e) {
+                    const strMatch = argumentStr.match(/^\[\s*\d+\s*,\s*"([\s\S]*)"\s*\]$/);
+                    if (strMatch) {
+                        try {
+                            const decoded = JSON.parse(`"${strMatch[1]}"`);
+                            payloads.push(decoded);
+                        } catch (err) {
+                            let s = strMatch[1]
+                                .replace(/\\"/g, '"')
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\r/g, '\r')
+                                .replace(/\\t/g, '\t')
+                                .replace(/\\\\/g, '\\');
+                            payloads.push(s);
                         }
                     }
                 }
-                if (foundClips.length > 0) break;
-              } catch(e) {}
+                idx = foundEnd + 1;
+            } else {
+                idx = pushIdx + 1;
+            }
+          }
+
+          const combinedDecodedText = payloads.join("");
+          if (combinedDecodedText) {
+             const playlistClipsIdx = combinedDecodedText.indexOf('"playlist_clips":');
+             if (playlistClipsIdx !== -1) {
+                 const startArrIdx = combinedDecodedText.indexOf('[', playlistClipsIdx);
+                 if (startArrIdx !== -1) {
+                     let bracketCount = 0;
+                     for (let i = startArrIdx; i < combinedDecodedText.length; i++) {
+                         if (combinedDecodedText[i] === '[') bracketCount++;
+                         else if (combinedDecodedText[i] === ']') {
+                             bracketCount--;
+                             if (bracketCount === 0) {
+                                 const arrayStr = combinedDecodedText.substring(startArrIdx, i + 1);
+                                 try {
+                                     const arr = JSON.parse(arrayStr);
+                                     if (Array.isArray(arr) && arr.length > 0) {
+                                         foundClips = arr.map((item: any) => item.clip || item).filter(Boolean);
+                                     }
+                                 } catch (e) {}
+                                 break;
+                             }
+                         }
+                     }
+                 }
+             }
+
+             if (foundClips.length === 0) {
+                 const clipsIdx = combinedDecodedText.indexOf('"clips":');
+                 if (clipsIdx !== -1) {
+                     const startArrIdx = combinedDecodedText.indexOf('[', clipsIdx);
+                     if (startArrIdx !== -1) {
+                         let bracketCount = 0;
+                         for (let i = startArrIdx; i < combinedDecodedText.length; i++) {
+                             if (combinedDecodedText[i] === '[') bracketCount++;
+                             else if (combinedDecodedText[i] === ']') {
+                                 bracketCount--;
+                                 if (bracketCount === 0) {
+                                     const arrayStr = combinedDecodedText.substring(startArrIdx, i + 1);
+                                     try {
+                                         const arr = JSON.parse(arrayStr);
+                                         if (Array.isArray(arr) && arr.length > 0) {
+                                             foundClips = arr.map((item: any) => item.clip || item).filter(Boolean);
+                                         }
+                                     } catch (e) {}
+                                     break;
+                                 }
+                             }
+                         }
+                     }
+                 }
+             }
           }
 
           const formatDuration = (val: number) => {
@@ -399,6 +492,9 @@ export function JoelsMusicView() {
       
       setSyncPlaylistId(id);
       localStorage.setItem('joel_sync_playlist_id', id);
+
+      // Auto-trigger background metadata refresh (especially critical for regex fallback)
+      updateMetadataOnly(merged, id);
     }
     
     setIsSyncing(false);
@@ -431,9 +527,9 @@ export function JoelsMusicView() {
     }
   }, [syncPlaylistId, unlockedPlaylists, syncedPlaylistsThisSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const updateMetadataOnly = async () => {
+  const updateMetadataOnly = async (tracksToUpdate = joelsSongs, id = syncPlaylistId || JOEL_PLAYLIST_ID) => {
     try {
-      const allIds = joelsSongs.map(s => s.id);
+      const allIds = tracksToUpdate.map(s => s.id).filter(Boolean);
       if (allIds.length === 0) return;
 
       // Ensure we don't exceed URL length limits (around 2048 chars for safety)
@@ -467,7 +563,7 @@ export function JoelsMusicView() {
       if (isRestricted || allClips.length === 0) return;
       
       const timestamp = Date.now();
-      const updatedSongs = joelsSongs.map(song => {
+      const updatedSongs = tracksToUpdate.map(song => {
         const fresh = allClips.find((c: any) => c.id === song.id);
         if (fresh) {
           const fallbackTrack = FALLBACK_SONGS.find(f => f.id === song.id);
@@ -499,6 +595,7 @@ export function JoelsMusicView() {
         }
         return song;
       });
+      localStorage.setItem(`joely_tracks_${id}`, JSON.stringify(updatedSongs));
       setJoelsSongs(updatedSongs);
     } catch (error) {
       console.error("Metadata update error", error);
