@@ -464,12 +464,15 @@ export function JoelsMusicView() {
     }
     
     if (serverData?.tracks) {
-      // Apply cache buster to images
+      // Apply cache buster to images, but NOT to video (.mp4 or video_upload) files to prevent stuttering
       const timestamp = Date.now();
-      const tracksWithBuster = serverData.tracks.map((t: any) => ({
-        ...t,
-        thumbnail: t.thumbnail ? (t.thumbnail.includes('?') ? `${t.thumbnail}&_t=${timestamp}` : `${t.thumbnail}?_t=${timestamp}`) : t.thumbnail
-      }));
+      const tracksWithBuster = serverData.tracks.map((t: any) => {
+        const isVideo = t.thumbnail ? (t.thumbnail.includes('.mp4') || t.thumbnail.includes('video_upload')) : false;
+        return {
+          ...t,
+          thumbnail: t.thumbnail ? (isVideo ? t.thumbnail : (t.thumbnail.includes('?') ? `${t.thumbnail}&_t=${timestamp}` : `${t.thumbnail}?_t=${timestamp}`)) : t.thumbnail
+        };
+      });
       
       const cachedKey = `joely_tracks_${id}`;
       let cachedTracks: any[] = [];
@@ -590,12 +593,13 @@ export function JoelsMusicView() {
             }
           }
           
+          const isLatestImgVideo = latestImg.includes('.mp4') || latestImg.includes('video_upload');
           const buster = latestImg.includes("?") ? `&_t=${timestamp}` : `?_t=${timestamp}`;
           return {
             ...song,
             title: fresh.title || song.title,
             artist: fresh.display_name || song.artist,
-            thumbnail: latestImg.includes('.mp4') ? latestImg : latestImg + buster,
+            thumbnail: isLatestImgVideo ? latestImg : latestImg + buster,
             lyrics: fresh.metadata?.prompt || song.lyrics || ""
           };
         }

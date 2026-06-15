@@ -676,8 +676,9 @@ export async function GET(req: NextRequest) {
         latestImg = fallbackTrack.thumbnail;
       }
 
+      const isVideo = latestImg.includes('.mp4') || latestImg.includes('video_upload');
       let buster = latestImg.includes('?') ? `&updated=${timestamp}` : `?updated=${timestamp}`;
-      if (latestImg.includes('.mp4')) {
+      if (isVideo) {
         buster = "";
       }
 
@@ -689,7 +690,7 @@ export async function GET(req: NextRequest) {
         id: clip.id,
         title,
         artist,
-        thumbnail: latestImg.includes('.mp4') ? latestImg : latestImg + buster,
+        thumbnail: isVideo ? latestImg : latestImg + buster,
         tags,
         lyrics: rawLyrics,
         createdAt: clip.created_at || ""
