@@ -221,8 +221,8 @@ export function JoelsMusicView() {
     });
     setUnlockedPlaylists(unlockedMap);
 
-    // Default to saved playlist or Originals
-    const savedId = localStorage.getItem('joel_sync_playlist_id') || JOEL_PLAYLIST_ID;
+    // Default to Originals playlist every time upon initial load
+    const savedId = JOEL_PLAYLIST_ID;
     setSyncPlaylistId(savedId);
   }, []);
 
@@ -480,12 +480,18 @@ export function JoelsMusicView() {
         cachedTracks = [...FALLBACK_SONGS].reverse();
       }
 
-      const merged = [...tracksWithBuster];
-      cachedTracks.forEach(oldTrack => {
-        if (!merged.some((t: any) => t.id === oldTrack.id) && oldTrack.id) {
-          merged.push(oldTrack);
-        }
+      // Sync list properly: remove any cached track that is no longer returned in Suno's live track scope,
+      // while keeping custom ordering of remaining tracks and appending new ones.
+      const liveTrackIds = new Set(tracksWithBuster.map((t: any) => t.id));
+      const activeCached = cachedTracks.filter((t: any) => t && t.id && liveTrackIds.has(t.id));
+      
+      const updatedCached = activeCached.map((oldTrack: any) => {
+        const liveTrack = tracksWithBuster.find((t: any) => t.id === oldTrack.id);
+        return { ...oldTrack, ...liveTrack };
       });
+      
+      const uniqueNewTracks = tracksWithBuster.filter((t: any) => !activeCached.some((old: any) => old && old.id === t.id));
+      const merged = [...updatedCached, ...uniqueNewTracks];
 
       localStorage.setItem(cachedKey, JSON.stringify(merged));
       setJoelsSongs(merged);
