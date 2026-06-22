@@ -37,7 +37,11 @@ const VinylRecord = memo(function VinylRecord({ isPlaying, coverImage }: VinylRe
           className="absolute inset-0 rounded-full overflow-hidden"
           style={{
             animation: 'spin 3.5s linear infinite',
-            animationPlayState: isPlaying ? 'running' : 'paused'
+            animationPlayState: isPlaying ? 'running' : 'paused',
+            transform: 'translate3d(0, 0, 0)',
+            willChange: 'transform',
+            backfaceVisibility: 'hidden',
+            perspective: 1000,
           }}
         >
           {/* Base Vinyl Color and Grooves */}

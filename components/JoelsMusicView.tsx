@@ -497,6 +497,33 @@ export function JoelsMusicView() {
       const merged = [...updatedCached, ...uniqueNewTracks];
 
       localStorage.setItem(cachedKey, JSON.stringify(merged));
+      localStorage.setItem(`joely_playlist_synced_${id}`, 'true');
+
+      // Update global synced thumbnails & lyrics cache
+      let thumbCache: Record<string, string> = {};
+      try {
+        const existing = localStorage.getItem("joely_synced_thumbnails_cache");
+        if (existing) thumbCache = JSON.parse(existing);
+      } catch {}
+
+      let lyricsCache: Record<string, string> = {};
+      try {
+        const existing = localStorage.getItem("joely_synced_lyrics_cache");
+        if (existing) lyricsCache = JSON.parse(existing);
+      } catch {}
+
+      merged.forEach((t: any) => {
+        if (t.id) {
+          if (t.thumbnail) thumbCache[t.id] = t.thumbnail;
+          if (t.lyrics) lyricsCache[t.id] = t.lyrics;
+        }
+      });
+
+      try {
+        localStorage.setItem("joely_synced_thumbnails_cache", JSON.stringify(thumbCache));
+        localStorage.setItem("joely_synced_lyrics_cache", JSON.stringify(lyricsCache));
+      } catch (e) {}
+
       setJoelsSongs(merged);
       
       setSyncPlaylistId(id);
@@ -527,8 +554,9 @@ export function JoelsMusicView() {
     // Load partition cache instantly
     loadPlaylistLocalCache(syncPlaylistId);
 
-    // Sync live from Suno in background only once per mount session
-    if (!syncedPlaylistsThisSession[syncPlaylistId]) {
+    // Sync live from Suno in background only once per mount session IF NOT already synced previously
+    const hasSyncedBefore = localStorage.getItem(`joely_playlist_synced_${syncPlaylistId}`) === 'true';
+    if (!hasSyncedBefore && !syncedPlaylistsThisSession[syncPlaylistId]) {
       setSyncedPlaylistsThisSession(prev => ({ ...prev, [syncPlaylistId]: true }));
       syncPlaylist(syncPlaylistId);
     } else {
@@ -678,8 +706,9 @@ export function JoelsMusicView() {
   const playSunoTrack = (id: string, title?: string, artist?: string, thumbnail?: string, lyrics?: string) => {
     setPlaybackSource("suno");
     const timestamp = Date.now();
+    const isVideo = thumbnail ? (thumbnail.includes('.mp4') || thumbnail.includes('video_upload')) : false;
     const finalThumbnail = thumbnail 
-      ? (thumbnail.includes('?') ? `${thumbnail}&_t=${timestamp}` : `${thumbnail}?_t=${timestamp}`)
+      ? (isVideo ? thumbnail : (thumbnail.includes('?') ? `${thumbnail}&_t=${timestamp}` : `${thumbnail}?_t=${timestamp}`))
       : `https://cdn2.suno.ai/image_${id}.jpeg?v=${timestamp}`;
       
     setCurrentTrack({

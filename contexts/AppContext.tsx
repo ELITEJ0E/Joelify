@@ -73,13 +73,40 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | undefined>(undefined)
 
 const mergeTrackWithFallback = (track: Track, fallback?: Track) => {
-  if (!fallback) return track;
-  const isFallbackVideo = fallback.thumbnail?.includes('.mp4') || fallback.thumbnail?.includes('video_upload');
+  let syncedThumbnail = undefined;
+  let syncedLyrics = undefined;
+  if (typeof window !== "undefined") {
+    try {
+      const globalThumbnailsStr = localStorage.getItem("joely_synced_thumbnails_cache");
+      if (globalThumbnailsStr) {
+        const cache = JSON.parse(globalThumbnailsStr);
+        if (cache && cache[track.id]) {
+          syncedThumbnail = cache[track.id];
+        }
+      }
+      const globalLyricsStr = localStorage.getItem("joely_synced_lyrics_cache");
+      if (globalLyricsStr) {
+        const cache = JSON.parse(globalLyricsStr);
+        if (cache && cache[track.id]) {
+          syncedLyrics = cache[track.id];
+        }
+      }
+    } catch {}
+  }
+
+  const base = fallback ? { ...fallback, ...track } : track;
+  const isFallbackVideo = fallback?.thumbnail?.includes('.mp4') || fallback?.thumbnail?.includes('video_upload');
   const isTrackVideo = track.thumbnail?.includes('.mp4') || track.thumbnail?.includes('video_upload');
+  
+  let finalThumbnail = syncedThumbnail || track.thumbnail || fallback?.thumbnail;
+  if (!track.thumbnail && isFallbackVideo) {
+    finalThumbnail = fallback?.thumbnail;
+  }
+
   return {
-    ...fallback,
-    ...track,
-    thumbnail: (!isTrackVideo && isFallbackVideo) ? fallback.thumbnail : (track.thumbnail || fallback.thumbnail)
+    ...base,
+    thumbnail: finalThumbnail,
+    lyrics: syncedLyrics || track.lyrics || fallback?.lyrics || ""
   };
 };
 
@@ -170,28 +197,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (stored.playbackSource) setPlaybackSource(stored.playbackSource as PlaybackSource)
       if (stored.audioSettings) setAudioSettingsState(stored.audioSettings)
       
-      const savedJoels = localStorage.getItem('joels_custom_songs')
-      if (savedJoels) {
+      const JOEL_PLAYLIST_ID = "ff247038-e0ae-4778-989d-0529e575027b";
+      const activePlaylistId = localStorage.getItem('joel_sync_playlist_id') || JOEL_PLAYLIST_ID;
+      const cachedKey = `joely_tracks_${activePlaylistId}`;
+      const savedTracksStr = localStorage.getItem(cachedKey) || localStorage.getItem('joels_custom_songs');
+      
+      let joelSongsToLoad: Track[] = [];
+      if (savedTracksStr) {
         try {
-          let parsed: Track[] = JSON.parse(savedJoels)
-          // Ensure all fallback songs are present and updated with latest hardcoded thumbnail data
+          let parsed: Track[] = JSON.parse(savedTracksStr);
           parsed = parsed.map(pTrack => {
             const fallback = FALLBACK_JOELS_SONGS.find(f => f.id === pTrack.id);
             return mergeTrackWithFallback(pTrack, fallback);
           });
-
-          const missingFallbacks = FALLBACK_JOELS_SONGS.filter(
-            f => !parsed.some(p => p.id === f.id)
-          )
-          if (missingFallbacks.length > 0) {
-            parsed = [...missingFallbacks, ...parsed]
+          
+          if (activePlaylistId === JOEL_PLAYLIST_ID) {
+            const missingFallbacks = FALLBACK_JOELS_SONGS.filter(
+              f => !parsed.some(p => p.id === f.id)
+            );
+            if (missingFallbacks.length > 0) {
+              parsed = [...missingFallbacks, ...parsed];
+            }
           }
-          setJoelsSongs(parsed)
+          joelSongsToLoad = parsed;
         } catch (e) {
-          console.error("Failed to load Joel's music from storage", e)
-          setJoelsSongs(FALLBACK_JOELS_SONGS)
+          console.error("Failed to load Joel's partition music from storage", e);
+          joelSongsToLoad = [...FALLBACK_JOELS_SONGS].reverse();
         }
+      } else {
+        joelSongsToLoad = [...FALLBACK_JOELS_SONGS].reverse();
       }
+      
+      // Ensure all tracks in joelSongsToLoad have their synced thumbnails resolved
+      joelSongsToLoad = joelSongsToLoad.map(s => {
+        const fb = FALLBACK_JOELS_SONGS.find(f => f.id === s.id);
+        return mergeTrackWithFallback(s, fb);
+      });
+      setJoelsSongs(joelSongsToLoad);
 
       setIsInitialized(true)
     }
@@ -505,6 +547,116 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCurrentTrack(null)
     }
   }
+
+  // Background Sync Service for Joel's Music Playlists
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const backgroundSyncPlaylists = async () => {
+      const PLAY_IDS = [
+        "ff247038-e0ae-4778-989d-0529e575027b", // Originals
+        "627c2d15-0cca-4c07-91b3-5f203c981e6e", // Worship
+        "34ac065b-e68e-4dfa-9780-00c49bae047a"  // Upcoming
+      ];
+
+      for (const id of PLAY_IDS) {
+        const isSyncedAlready = localStorage.getItem(`joely_playlist_synced_${id}`) === "true";
+        const hasCachedTracks = !!localStorage.getItem(`joely_tracks_${id}`);
+        
+        // If already synced and has cached tracks, skip to save bandwidth & respect preferences
+        if (isSyncedAlready && hasCachedTracks) {
+          console.log(`[Joelify Sync] Playlist ${id} is already cached and synced previously. Skipping background sync.`);
+          continue;
+        }
+
+        console.log(`[Joelify Sync] Background fetching Joel's playlist: ${id}...`);
+        
+        try {
+          const res = await fetch(`/api/suno-playlist?id=${id}&_t=${Date.now()}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const serverData = await res.json();
+          
+          if (serverData?.tracks && serverData.tracks.length > 0) {
+            // Success! Save tracks partition
+            processAndCacheSyncedPlaylist(id, serverData.tracks);
+          }
+        } catch (err) {
+          console.warn(`[Joelify Sync] Background sync failed for ${id}. Error:`, err);
+        }
+      }
+    };
+
+    const processAndCacheSyncedPlaylist = (id: string, incomingTracks: Track[]) => {
+      const cachedKey = `joely_tracks_${id}`;
+      
+      // Update our global thumbnail & lyrics cache first
+      let thumbCache: Record<string, string> = {};
+      try {
+        const existing = localStorage.getItem("joely_synced_thumbnails_cache");
+        if (existing) thumbCache = JSON.parse(existing);
+      } catch {}
+
+      let lyricsCache: Record<string, string> = {};
+      try {
+        const existing = localStorage.getItem("joely_synced_lyrics_cache");
+        if (existing) lyricsCache = JSON.parse(existing);
+      } catch {}
+
+      incomingTracks.forEach((t) => {
+        if (t.id) {
+          if (t.thumbnail) thumbCache[t.id] = t.thumbnail;
+          if (t.lyrics) lyricsCache[t.id] = t.lyrics;
+        }
+      });
+
+      try {
+        localStorage.setItem("joely_synced_thumbnails_cache", JSON.stringify(thumbCache));
+        localStorage.setItem("joely_synced_lyrics_cache", JSON.stringify(lyricsCache));
+      } catch (e) {
+        console.error("Failed to save global caches", e);
+      }
+
+      // Read current cached tracks or fallbacks to merge and preserve user customization/ordering
+      let cachedTracks: Track[] = [];
+      const cachedStr = localStorage.getItem(cachedKey);
+      if (cachedStr) {
+        try { cachedTracks = JSON.parse(cachedStr); } catch (e) {}
+      } else if (id === "ff247038-e0ae-4778-989d-0529e575027b") {
+        cachedTracks = [...FALLBACK_JOELS_SONGS].reverse();
+      }
+
+      const incomingTrackIds = new Set(incomingTracks.map((t) => t.id));
+      const activeCached = cachedTracks.filter((t) => t && t.id && incomingTrackIds.has(t.id));
+      
+      const updatedCached = activeCached.map((oldTrack) => {
+        const liveTrack = incomingTracks.find((t) => t.id === oldTrack.id);
+        return { ...oldTrack, ...liveTrack };
+      });
+      
+      const uniqueNewTracks = incomingTracks.filter((t) => !activeCached.some((old) => old && old.id === t.id));
+      const mergedTracks = [...updatedCached, ...uniqueNewTracks].map((t) => {
+        const fb = FALLBACK_JOELS_SONGS.find((f) => f.id === t.id);
+        return mergeTrackWithFallback(t, fb);
+      });
+
+      localStorage.setItem(cachedKey, JSON.stringify(mergedTracks));
+      localStorage.setItem(`joely_playlist_synced_${id}`, "true");
+
+      // Exception: if this background synced playlist is the one currently loaded in player/active view,
+      // update the local state instantly so that the ui gets fresh thumbnails automatically!
+      const currentActiveId = localStorage.getItem("joel_sync_playlist_id") || "ff247038-e0ae-4778-989d-0529e575027b";
+      if (id === currentActiveId) {
+        setJoelsSongs(mergedTracks);
+      }
+    };
+
+    // Delay background sync slightly so the initial page mount is ultra responsive
+    const timer = setTimeout(() => {
+      backgroundSyncPlaylists();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [isInitialized]);
 
   return (
     <AppContext.Provider

@@ -1,6 +1,6 @@
 import Image from "next/image"
 import { cn } from "@/lib/utils"
-import { useState } from "react"
+import { useState, memo } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 
 interface TrackImageProps {
@@ -13,11 +13,15 @@ interface TrackImageProps {
   referrerPolicy?: React.HTMLAttributeReferrerPolicy
 }
 
-export function TrackImage({ src, alt = "", width, height, fill, className, referrerPolicy = "no-referrer" }: TrackImageProps) {
+export const TrackImage = memo(function TrackImage({ src, alt = "", width, height, fill, className, referrerPolicy = "no-referrer" }: TrackImageProps) {
   const isVideo = src?.toLowerCase().includes(".mp4") || src?.includes("video_upload")
   const url = src || "/placeholder.svg"
   
   const [isLoaded, setIsLoaded] = useState(false)
+
+  // Extract Suno clip ID for a seamless high-res static poster image
+  const uuidMatch = url.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/)
+  const posterUrl = uuidMatch ? `https://cdn2.suno.ai/image_${uuidMatch[0]}.jpeg` : undefined
 
   return (
     <div 
@@ -36,11 +40,21 @@ export function TrackImage({ src, alt = "", width, height, fill, className, refe
         <video
           key={url}
           src={url}
+          poster={posterUrl}
           autoPlay
           loop
           muted
           playsInline
+          preload="auto"
+          disablePictureInPicture
+          disableRemotePlayback
           onLoadedData={() => setIsLoaded(true)}
+          style={{
+            transform: 'translate3d(0, 0, 0)',
+            backfaceVisibility: 'hidden',
+            perspective: 1000,
+            willChange: 'transform'
+          }}
           className={cn(
             "absolute inset-0 w-full h-full object-cover transition-opacity duration-500",
             isLoaded ? "opacity-100" : "opacity-0"
@@ -63,4 +77,5 @@ export function TrackImage({ src, alt = "", width, height, fill, className, refe
       )}
     </div>
   )
-}
+})
+

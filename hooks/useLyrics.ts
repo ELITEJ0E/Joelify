@@ -7,20 +7,24 @@ export interface LyricLine {
 
 export function useLyrics(trackName?: string, artistName?: string, trackId?: string) {
   const [lyrics, setLyrics] = useState<LyricLine[] | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(!!trackName && !!artistName);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!trackName || !artistName) {
       setLyrics(null);
+      setIsLoading(false);
       return;
     }
 
     let isMounted = true;
 
+    // Immediately clear lyrics and flag as loading to show skeleton loaders instantly
+    setLyrics(null);
+    setIsLoading(true);
+    setError(null);
+
     const fetchLyrics = async () => {
-      setIsLoading(true);
-      setError(null);
       try {
         // Try Suno Lyrics API first if we have a trackId (likely a Suno ID due to format)
         if (trackId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trackId)) {
@@ -28,12 +32,9 @@ export function useLyrics(trackName?: string, artistName?: string, trackId?: str
           if (sunoRes.ok) {
             const sunoData = await sunoRes.json();
             if (sunoData.lyrics && isMounted) {
-               // Suno lyrics might contain timestamps now, so let's parse them properly
                const parsedLyrics = parseLrc(sunoData.lyrics);
-               
-               // But wait! If the parsed lyrics still end up mainly with time: -1 but they actually have timestamps without brackets?
-               // Wait, parseLrc handles falling back to time: -1 per line if there are no timestamps.
                setLyrics(parsedLyrics);
+               if (isMounted) setIsLoading(false);
                return;
             }
           }
@@ -101,8 +102,25 @@ export function sanitizeLyric(text: string): string {
   // 3. Prevent legacy artifacts ($5c, $5d, $5e) from previous double-encoding issues
   clean = clean.replace(/\$5c/gi, '').replace(/\$5d/gi, '').replace(/\$5e/gi, '');
   
-  // 4. Trim whitespace safely
-  return clean.trim();
+  // 4. Filter flight references and HTML status entity/placeholders starting with $, &, or specific error codes (60, $60, &60)
+  const trimmed = clean.trim();
+  const lower = trimmed.toLowerCase();
+  
+  if (
+    /^\$[0-9a-fA-F]+$/.test(trimmed) || 
+    lower === "&60" || 
+    lower === "&#60;" || 
+    lower === "&60;" || 
+    lower === "60" || 
+    lower === "loading" || 
+    lower === "loading..." || 
+    lower === "[loading]"
+  ) {
+    return "";
+  }
+  
+  // 5. Trim whitespace safely
+  return trimmed;
 }
 
 export function parseLrc(lrc: string): LyricLine[] {
