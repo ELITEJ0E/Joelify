@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { TrackImage as Image } from "./TrackImage";
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
@@ -14,13 +13,12 @@ const VinylRecord = memo(function VinylRecord({ isPlaying, coverImage }: VinylRe
   return (
     <div className="relative flex justify-center items-center py-6 group">
       {/* Outer Dynamic Glow */}
-      <motion.div
-        animate={{
-          scale: isPlaying ? [1, 1.05, 1] : 1,
-          opacity: isPlaying ? [0.3, 0.5, 0.3] : 0.1,
+      <div
+        style={{
+          animation: isPlaying ? "vinyl-glow 4s ease-in-out infinite" : "none",
+          opacity: isPlaying ? 0.3 : 0.1
         }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute w-[300px] h-[300px] sm:w-[340px] sm:h-[340px] rounded-full bg-white/20 blur-[60px] pointer-events-none"
+        className="absolute w-[300px] h-[300px] sm:w-[340px] sm:h-[340px] rounded-full bg-white/20 blur-[60px] pointer-events-none transition-opacity duration-700"
       />
 
       {/* Record Base Shadow drop */}
@@ -69,10 +67,11 @@ const VinylRecord = memo(function VinylRecord({ isPlaying, coverImage }: VinylRe
 
           {/* Center Label Area */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100px] h-[100px] sm:w-[120px] sm:h-[120px] rounded-full shadow-[0_0_15px_rgba(0,0,0,0.9)] border-[4px] border-zinc-800 bg-neutral-900 flex items-center justify-center z-10 overflow-hidden">
-            <motion.div 
+            <div 
                className="w-full h-full relative"
-               animate={{ scale: isPlaying ? [1, 1.02, 1] : 1 }}
-               transition={{ duration: 0.5, repeat: Infinity, ease: 'linear' }}
+               style={{
+                 animation: isPlaying ? "label-pulse 0.5s linear infinite" : "none"
+               }}
             >
               {coverImage ? (
                 <Image src={coverImage} alt="Cover" fill className="object-cover opacity-95 pointer-events-none" referrerPolicy="no-referrer" />
@@ -84,7 +83,7 @@ const VinylRecord = memo(function VinylRecord({ isPlaying, coverImage }: VinylRe
                    </div>
                 </div>
               )}
-            </motion.div>
+            </div>
             
             {/* Inner Ring effect on Label */}
             <div className="absolute inset-0 rounded-full border-[2px] border-white/5 shadow-[inset_0_0_15px_rgba(0,0,0,0.8)] z-20 pointer-events-none" />
@@ -190,3 +189,20 @@ const VinylRecord = memo(function VinylRecord({ isPlaying, coverImage }: VinylRe
 });
 
 export default VinylRecord;
+
+const vinylStyles = `
+  @keyframes vinyl-glow {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.05); opacity: 0.5; }
+  }
+  @keyframes label-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+  }
+`;
+
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = vinylStyles;
+  document.head.appendChild(style);
+}
