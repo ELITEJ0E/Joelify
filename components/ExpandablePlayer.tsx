@@ -301,12 +301,8 @@ export function ExpandablePlayer({
   if (!isExpanded) return null
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      className="fixed inset-0 z-50 overflow-hidden overscroll-none"
+    <div
+      className="fixed inset-0 z-50 overflow-hidden overscroll-none animate-fade-in"
       onClick={handleBackdropClick}
     >
       {/* ── Album-art blur backdrop ──────────────────────────────────────── */}
@@ -510,11 +506,9 @@ export function ExpandablePlayer({
           {/* ── RIGHT SIDE: Track info + controls - FIXED POSITION ───────────────── */}
           <div className="lg:flex-1 lg:max-w-md xl:max-w-lg">
             {/* Track info - always in same position */}
-            <motion.div
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-              className="text-center lg:text-left mb-8"
+            <div
+              className="text-center lg:text-left mb-8 animate-fade-in-up"
+              style={{ animationDelay: '0.1s' }}
             >
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance">
                 {currentTrack?.title || "No Track Playing"}
@@ -522,17 +516,15 @@ export function ExpandablePlayer({
               <p className="text-sm sm:text-base md:text-lg text-white/55">
                 {currentTrack?.artist || "Unknown Artist"}
               </p>
-            </motion.div>
+            </div>
 
             {/* Desktop divider */}
             <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
 
             {/* Controls - now built into ExpandablePlayer */}
-            <motion.div
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-              className="w-full"
+            <div
+              className="w-full animate-fade-in-up"
+              style={{ animationDelay: '0.2s' }}
             >
               <div className="flex flex-col items-center w-full gap-4">
                 {/* Progress bar */}
@@ -658,7 +650,7 @@ export function ExpandablePlayer({
                     </Tooltip>
                   </div>
               </div>
-            </motion.div>
+            </div>
 
             {/* Extra bottom padding for mobile */}
             <div className="h-16 lg:h-0" />
@@ -666,7 +658,6 @@ export function ExpandablePlayer({
         </div>
 
         {/* ── Sliding up lyrics panel ─────────────────────────────── */}
-        <AnimatePresence>
           {showLyrics && (
             <div
               className="absolute inset-0 z-[60] bg-zinc-950/95 backdrop-blur-3xl flex flex-col pt-4 animate-slide-up"
@@ -724,11 +715,35 @@ const expanderStyles = `
       transform: translateY(0);
     }
   }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
   .animate-scale-in {
     animation: scale-in 0.45s ease-out;
   }
   .animate-slide-up {
     animation: slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+  }
+  .animate-fade-in-up {
+    animation: fade-in-up 0.4s ease-out;
   }
 `;
 
