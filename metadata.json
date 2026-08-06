@@ -1,4 +1,5 @@
 {
   "name": "Joelify",
-  "description": "Premium music player with Suno integration, playlist management, and custom themes."
+  "description": "Premium music player with Suno integration, playlist management, and custom themes.",
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

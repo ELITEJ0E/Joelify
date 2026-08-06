@@ -19,6 +19,8 @@ import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { LIKED_SONGS_PLAYLIST_ID } from "./LikedSongsView"
+import { getOfflineAudioBlobUrl } from "@/lib/sunoOffline"
+import { getLocalFileBlob } from "@/lib/localFiles"
 
 export function PlayerControls() {
   const {
@@ -45,6 +47,8 @@ export function PlayerControls() {
   const [isQueueOpen, setIsQueueOpen] = useState(false)
   // Local video toggle for the bar — separate from expanded player's video
   const [barVideoMode, setBarVideoMode] = useState(false)
+  const [offlineSunoUrl, setOfflineSunoUrl] = useState<string | null>(null)
+  const [localFileUrl, setLocalFileUrl] = useState<string | null>(null)
 
   // ─── Popstate Handling ───────────────────────────────────────────────────
 
@@ -486,6 +490,26 @@ export function PlayerControls() {
          setPlaybackSource("youtube");
       } else if (currentSource === "youtube" && currentTrack.thumbnail?.includes("suno.ai")) {
          setPlaybackSource("suno");
+      }
+      
+      // Check offline url
+      if (currentTrack.id.startsWith("local-")) {
+        getLocalFileBlob(currentTrack.id).then((blob) => {
+          if (blob) {
+            setLocalFileUrl(URL.createObjectURL(blob));
+          } else {
+            setLocalFileUrl(null);
+          }
+        });
+        setOfflineSunoUrl(null);
+      } else if (currentTrack.thumbnail?.includes("suno.ai") || currentTrack.thumbnail?.includes("suno.com") || currentSource === "suno") {
+        getOfflineAudioBlobUrl(currentTrack.id).then((url) => {
+          setOfflineSunoUrl(url);
+        });
+        setLocalFileUrl(null);
+      } else {
+        setOfflineSunoUrl(null);
+        setLocalFileUrl(null);
       }
       
       setCurrentTime(0); setPlaybackPosition(0); setDuration(0)
@@ -1062,10 +1086,10 @@ export function PlayerControls() {
         </div>
       </div>
     )}
-    {playbackSource === "suno" && (
+    {(playbackSource === "suno" || playbackSource === "local") && (
       <audio
         ref={sunoAudioRef}
-        src={currentTrack ? `https://cdn1.suno.ai/${currentTrack.id}.mp3` : undefined}
+        src={playbackSource === "local" ? (localFileUrl || undefined) : (offlineSunoUrl ? offlineSunoUrl : (currentTrack ? `https://cdn1.suno.ai/${currentTrack.id}.mp3` : undefined))}
         preload="auto"
         className="hidden"
       />

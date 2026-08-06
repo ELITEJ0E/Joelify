@@ -50,9 +50,9 @@ export default function RootLayout({
             <AppProvider>{children}</AppProvider>
           </TooltipProvider>
         </Suspense>
-        <Toaster position="top-center" richColors />
+        
         <FirestoreQuotaWarning />
-        <Analytics />
+        
       </body>
     </html>
   )

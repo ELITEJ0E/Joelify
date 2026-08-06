@@ -15,7 +15,7 @@ import { useApp } from "@/contexts/AppContext"
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
-  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels">("home")
+  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { theme, setTheme, audioSettings, setAudioSettings } = useApp()
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')

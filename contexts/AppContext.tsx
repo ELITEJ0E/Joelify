@@ -13,7 +13,7 @@ interface RecentlyPlayed {
   timestamp: number
 }
 
-type PlaybackSource = "youtube" | "suno"
+type PlaybackSource = "youtube" | "suno" | "local"
 
 interface AppContextType extends AppState {
   setCurrentTrack: (track: Track | null) => void
@@ -126,12 +126,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [customTheme, setCustomThemeState] = useState<{ primary: string; accent: string } | undefined>(undefined)
   const [isInitialized, setIsInitialized] = useState(false)
   const [playbackSource, setPlaybackSource] = useState<PlaybackSource>("youtube")
-  const [audioSettings, setAudioSettingsState] = useState({
+  const [audioSettings, setAudioSettingsState] = useState<{
+    crossfadeDuration: number;
+    gaplessPlayback: boolean;
+    eqPreset: string;
+    customEQ: number[];
+    youtubeQuality: "audio" | "360p" | "720p" | "1080p";
+    realAudioEngine: boolean;
+  }>({
     crossfadeDuration: 0,
     gaplessPlayback: true,
     eqPreset: "Flat",
     customEQ: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    youtubeQuality: "audio" as const,
+    youtubeQuality: "audio",
     realAudioEngine: true,
   })
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)

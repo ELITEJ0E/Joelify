@@ -1,6 +1,29 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { getOfflineAudioBlobUrl } from "@/lib/sunoOffline";
+
 export function SunoPlayer({ songId, isVisible = true }: { songId: string | null; isVisible?: boolean }) {
+  const [offlineUrl, setOfflineUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (songId) {
+      getOfflineAudioBlobUrl(songId).then((url) => {
+        setOfflineUrl(url);
+      });
+    }
+  }, [songId]);
+
   if (!songId || !isVisible) return null;
-  
+
+  if (offlineUrl) {
+    return (
+      <div className="w-full h-[152px] bg-zinc-900 rounded-md flex items-center justify-center">
+        <audio controls src={offlineUrl} className="w-full max-w-sm" />
+      </div>
+    );
+  }
+
   return (
     <iframe
       src={`https://suno.com/embed/${songId}`}

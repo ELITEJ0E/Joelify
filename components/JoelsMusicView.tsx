@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, PlusSquare, Music2, GripVertical, Play, Heart, RefreshCw, Lock, Unlock } from "lucide-react";
+import { Check, Trash2, PlusSquare, Music2, GripVertical, Play, Heart, RefreshCw, Lock, Unlock, Download, X } from "lucide-react";
 import { CustomToast } from "./CustomToast";
 import { Input } from "@/components/ui/input";
 import { TrackImage as Image } from "./TrackImage";
@@ -28,6 +28,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { FALLBACK_JOELS_SONGS as FALLBACK_SONGS, JOEL_PLAYLIST_ID } from "@/lib/constants";
+import { downloadSunoTrack, isSunoDownloaded, deleteSunoDownload } from "@/lib/sunoOffline";
 
 export const PLAYLISTS = [
   { 
@@ -83,6 +84,32 @@ function SortableTrackItem({
     isDragging
   } = useSortable({ id: track.id });
 
+  const [isDownloaded, setIsDownloaded] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
+  useEffect(() => {
+    isSunoDownloaded(track.id).then(setIsDownloaded);
+  }, [track.id]);
+
+  const handleDownloadToggle = async () => {
+    if (isDownloaded) {
+      await deleteSunoDownload(track.id);
+      setIsDownloaded(false);
+      toast.success("Removed from offline storage");
+    } else {
+      try {
+        setDownloadProgress(1);
+        await downloadSunoTrack(track.id, setDownloadProgress);
+        setIsDownloaded(true);
+        setDownloadProgress(0);
+        toast.success("Saved for offline playback");
+      } catch (e) {
+        setDownloadProgress(0);
+        toast.error("Download failed");
+      }
+    }
+  };
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -133,6 +160,15 @@ function SortableTrackItem({
       </div>
       
       <div className="flex items-center gap-1">
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 relative" onClick={handleDownloadToggle}>
+          {downloadProgress > 0 && downloadProgress < 100 ? (
+            <span className="text-[10px] font-medium">{downloadProgress}%</span>
+          ) : isDownloaded ? (
+            <Check size={16} className="text-primary" />
+          ) : (
+            <Download size={16} />
+          )}
+        </Button>
         <Button size="icon" variant="ghost" className={`h-8 w-8 ${isTrackLiked(track.id) ? "text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`} onClick={() => toggleLikedSong(track)}>
           <Heart size={16} fill={isTrackLiked(track.id) ? "currentColor" : "none"} />
         </Button>

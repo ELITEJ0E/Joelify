@@ -1,0 +1,152 @@
+
+> my-v0-project@0.1.0 build
+> next build
+
+ ⚠ You are using a non-standard "NODE_ENV" value in your environment. This creates inconsistencies in the project and is strongly advised against. Read more: https://nextjs.org/docs/messages/non-standard-node-env
+  ▲ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+ ⚠ Using edge runtime on a page currently disables static generation for that page
+   Generating static pages (0/5) ...
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+    at Q (/app/applet/node_modules/next/dist/compiled/next-server/pages.runtime.prod.js:16:5430)
+    at I (/app/applet/.next/server/chunks/682.js:6:1263)
+    at renderWithHooks (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5732:15)
+    at renderElement (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6087:14)
+    at finishClassComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5688:3)
+    at renderClassComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5696:3)
+    at renderElement (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5954:7)
+
+Error occurred prerendering page "/404". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+    at Q (/app/applet/node_modules/next/dist/compiled/next-server/pages.runtime.prod.js:16:5430)
+    at I (/app/applet/.next/server/chunks/682.js:6:1263)
+    at renderWithHooks (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5732:15)
+    at renderElement (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6087:14)
+    at finishClassComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5688:3)
+    at renderClassComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5696:3)
+    at renderElement (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5954:7)
+   Generating static pages (1/5) 
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:109421)
+    at d (/app/applet/.next/server/chunks/722.js:3:230235)
+    at p (/app/applet/.next/server/chunks/722.js:3:222134)
+    at au (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:10446)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:15122
+    at aw (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16908)
+    at a_ (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:49776)
+    at ab (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:11808)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16871
+    at aw (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16908) {
+  digest: '1344787969'
+}
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:109421)
+    at d (/app/applet/.next/server/chunks/722.js:3:230235)
+    at p (/app/applet/.next/server/chunks/722.js:3:222134)
+    at au (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:10446)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:15122
+    at aw (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16908)
+    at a_ (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:49776)
+    at ab (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:11808)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16871
+    at aw (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16908)
+
+Error occurred prerendering page "/_not-found". Read more: https://nextjs.org/docs/messages/prerender-error
+
+TypeError: Cannot read properties of null (reading 'useContext')
+    at t.useContext (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:109421)
+    at d (/app/applet/.next/server/chunks/722.js:3:230235)
+    at p (/app/applet/.next/server/chunks/722.js:3:222134)
+    at au (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:10446)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:15122
+    at aw (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16908)
+    at a_ (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:49776)
+    at ab (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:11808)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16871
+    at aw (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:16908)
+   Generating static pages (2/5) 
+   Generating static pages (3/5) 
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+    at Q (/app/applet/node_modules/next/dist/compiled/next-server/pages.runtime.prod.js:16:5430)
+    at I (/app/applet/.next/server/chunks/682.js:6:1263)
+    at renderWithHooks (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5732:15)
+    at renderElement (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6087:14)
+    at finishClassComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5688:3)
+    at renderClassComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5696:3)
+    at renderElement (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5954:7)
+
+Error occurred prerendering page "/500". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+    at Q (/app/applet/node_modules/next/dist/compiled/next-server/pages.runtime.prod.js:16:5430)
+    at I (/app/applet/.next/server/chunks/682.js:6:1263)
+    at renderWithHooks (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5658:16)
+    at renderIndeterminateComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5732:15)
+    at renderElement (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5957:7)
+    at renderNodeDestructiveImpl (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6115:11)
+    at renderNodeDestructive (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:6087:14)
+    at finishClassComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5688:3)
+    at renderClassComponent (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5696:3)
+    at renderElement (/app/applet/node_modules/react-dom/cjs/react-dom-server.browser.development.js:5954:7)
+TypeError: Cannot read properties of undefined (reading 'call')
+    at Object.t [as require] (/app/applet/.next/server/webpack-runtime.js:1:128)
+    at require (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:40:20064)
+    at c (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:97765)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:113359
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:113446
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:113607
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:115358
+    at t (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:115581) {
+  digest: '3881566064'
+}
+TypeError: Cannot read properties of undefined (reading 'call')
+    at Object.t [as require] (/app/applet/.next/server/webpack-runtime.js:1:128)
+    at require (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:40:20064)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:108376
+    at ea (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:108583)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:110813
+    at Object._fromJSON (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:111370)
+    at JSON.parse (<anonymous>)
+    at ec (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:109078)
+    at eo (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:108123)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:115291
+
+Error occurred prerendering page "/". Read more: https://nextjs.org/docs/messages/prerender-error
+
+TypeError: Cannot read properties of undefined (reading 'call')
+    at Object.t [as require] (/app/applet/.next/server/webpack-runtime.js:1:128)
+    at require (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:40:20064)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:108376
+    at ea (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:108583)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:110813
+    at Object._fromJSON (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:111370)
+    at JSON.parse (<anonymous>)
+    at ec (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:109078)
+    at eo (/app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:108123)
+    at /app/applet/node_modules/next/dist/compiled/next-server/app-page.runtime.dev.js:35:115291
+ ✓ Generating static pages (5/5)
+
+> Export encountered errors on following paths:
+	/_error: /404
+	/_error: /500
+	/_not-found/page: /_not-found
+	/page: /

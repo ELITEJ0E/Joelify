@@ -48,7 +48,7 @@ import { KeyboardShortcuts } from "./KeyboardShortcuts"
 
 
 interface SidebarProps {
-  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels") => void
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded") => void
   isOpen: boolean
   onClose: () => void
 }
@@ -405,7 +405,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     }
   }
 
-  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels") => {
+  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded") => {
     setActiveView(view)
     onNavigate(view)
     onClose()
@@ -481,6 +481,19 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                       >
                         <Search size={20} className="transition-transform duration-300 group-hover:scale-105" />
                         <span className="font-medium text-sm">Search</span>
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => handleNavigate("downloaded")}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                          activeView === "downloaded"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
+                      >
+                        <Download size={20} className="transition-transform duration-300 group-hover:scale-105" />
+                        <span className="font-medium text-sm">Downloads</span>
                       </button>
                     </li>
                     <li>

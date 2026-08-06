@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useApp } from "@/contexts/AppContext"
-import { Play, Music2, Plus } from "lucide-react"
+import { Play, Music2, Plus, Upload } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -16,15 +16,66 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { saveLocalFile, getLocalFiles, deleteLocalFile } from "@/lib/localFiles"
+import { toast } from "sonner"
 
 interface LibraryViewProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library") => void
 }
 
 export function LibraryView({ onNavigate }: LibraryViewProps) {
-  const { playlists, likedSongs, setCurrentPlaylistId, setCurrentTrack, setQueue, addRecentlyPlayed, addPlaylist } = useApp()
+  const { playlists, likedSongs, setCurrentPlaylistId, setCurrentTrack, setQueue, addRecentlyPlayed, addPlaylist, setPlaybackSource } = useApp()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newPlaylistName, setNewPlaylistName] = useState("")
+  const [localFiles, setLocalFiles] = useState<any[]>([])
+
+  useEffect(() => {
+    loadLocalFiles()
+  }, [])
+
+  const loadLocalFiles = async () => {
+    try {
+      const files = await getLocalFiles()
+      setLocalFiles(files)
+    } catch (e) {
+      console.error("Failed to load local files:", e)
+    }
+  }
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    let uploaded = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file.type.startsWith("audio/")) {
+        try {
+          await saveLocalFile(file)
+          uploaded++
+        } catch (e) {
+          console.error("Failed to save file:", file.name, e)
+        }
+      }
+    }
+    
+    if (uploaded > 0) {
+      toast.success(`Successfully added ${uploaded} local track(s)`)
+      loadLocalFiles()
+    } else {
+      toast.error("No valid audio files found")
+    }
+    
+    // Reset input
+    event.target.value = ""
+  }
+
+  const handlePlayLocalFiles = () => {
+    if (localFiles.length === 0) return
+    setCurrentTrack(localFiles[0])
+    setQueue(localFiles.slice(1))
+    setPlaybackSource("local")
+  }
 
   const handlePlayPlaylist = (playlistId: string) => {
     const playlist = playlists.find((p) => p.id === playlistId)
@@ -60,15 +111,30 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
   return (
     <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 gap-4">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Your Library</h1>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full">
-                <Plus size={20} className="mr-2" />
-                Create Playlist
+          <div className="flex gap-2">
+            <div className="relative">
+              <input
+                type="file"
+                multiple
+                accept="audio/*"
+                onChange={handleFileUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                title="Upload local files"
+              />
+              <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
+                <Upload size={20} className="mr-2" />
+                Upload Local
               </Button>
-            </DialogTrigger>
+            </div>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full">
+                  <Plus size={20} className="mr-2" />
+                  Create Playlist
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle className="text-primary">Create New Playlist</DialogTitle>
@@ -101,6 +167,7 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
         <p className="text-muted-foreground mb-8">
           {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"} • {totalTracks}{" "}
@@ -131,6 +198,37 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
                   handlePlayLikedSongs()
                 }}
                 aria-label="Play liked songs"
+              >
+                <Play fill="currentColor" size={24} className="ml-1" />
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* Local Files Card */}
+        {localFiles.length > 0 && (
+          <Card
+            className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] backdrop-blur-xl p-6 mb-8 transition-all duration-300 cursor-pointer group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40"
+            onClick={handlePlayLocalFiles}
+          >
+            <div className="flex items-center gap-6">
+              <div className="w-24 h-24 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Music2 size={48} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-2xl font-bold mb-1">Local Files</h2>
+                <p className="text-muted-foreground">
+                  {localFiles.length} {localFiles.length === 1 ? "song" : "songs"}
+                </p>
+              </div>
+              <Button
+                size="icon"
+                className="bg-primary hover:bg-primary/90 hover:scale-105 text-white rounded-full h-14 w-14 shadow-lg shadow-primary/20 opacity-0 group-hover:opacity-100 transition-all duration-300"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handlePlayLocalFiles()
+                }}
+                aria-label="Play local files"
               >
                 <Play fill="currentColor" size={24} className="ml-1" />
               </Button>
