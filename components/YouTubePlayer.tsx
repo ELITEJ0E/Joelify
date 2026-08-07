@@ -135,7 +135,7 @@ function YouTubeIframePlayer({
 
       playerRef.current = new window.YT.Player("youtube-player", {
         height: "100%", width: "100%",
-        videoId: currentTrack.id,
+        videoId: currentTrack!.id,
         playerVars,
         events: {
           onReady: (event: any) => {
@@ -143,7 +143,7 @@ function YouTubeIframePlayer({
             event.target.setVolume(100)
             if (isValidYouTubeId(currentTrack?.id) && playbackSource === "youtube") {
               if (isPlayingRef.current) {
-                event.target.loadVideoById(currentTrack.id)
+                event.target.loadVideoById(currentTrack!.id)
                 setTimeout(() => {
                   try {
                     if (event.target.getPlayerState?.() !== 1) {
@@ -152,7 +152,7 @@ function YouTubeIframePlayer({
                   } catch (e) { console.warn(e) }
                 }, 150)
               } else {
-                event.target.cueVideoById(currentTrack.id)
+                event.target.cueVideoById(currentTrack!.id)
               }
             }
             startDurationPolling(event.target)
@@ -228,22 +228,22 @@ function YouTubeIframePlayer({
   useEffect(() => {
     if (playerRef.current && isPlayerReadyRef.current && isValidYouTubeId(currentTrack?.id) && playbackSource === "youtube") {
       const currentId = playerRef.current.getVideoData?.()?.video_id;
-      if (currentId === currentTrack.id) return;
+      if (currentId === currentTrack!.id) return;
 
       clearInterval(durationPollIntervalRef.current!)
       durationPollIntervalRef.current = null
       stopProgressTracking()
       
-      if (isValidYouTubeId(currentTrack.id)) {
+      if (isValidYouTubeId(currentTrack!.id)) {
         if (isPlayingRef.current) {
-          playerRef.current.loadVideoById(currentTrack.id)
+          playerRef.current.loadVideoById(currentTrack!.id)
           setTimeout(() => {
             if (playerRef.current?.getPlayerState?.() !== 1) {
               playerRef.current?.playVideo?.()
             }
           }, 150)
         } else {
-          playerRef.current.cueVideoById(currentTrack.id)
+          playerRef.current.cueVideoById(currentTrack!.id)
         }
       }
       

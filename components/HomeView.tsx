@@ -6,6 +6,7 @@ import { TrackImage as Image } from "./TrackImage"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { DiscoverMore } from "./DiscoverMore"
+import { Playlist } from "@/lib/storage"
 
 interface HomeViewProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels") => void
@@ -33,7 +34,6 @@ export function HomeView({ onNavigate }: HomeViewProps) {
       title,
       artist,
       thumbnail: thumbnail || "/placeholder.svg",
-      streamUrl: "", // Handled by SunoPlayer
       duration: "0:00",
     })
     setQueue([])
@@ -65,7 +65,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
   const recentPlaylists = recentlyPlayed
     .filter((item) => item.type === "playlist")
     .map((item) => playlists.find((p) => p.id === item.id))
-    .filter(Boolean)
+    .filter((p): p is Playlist => p !== undefined)
     .slice(0, 6)
 
   const getGreeting = () => {

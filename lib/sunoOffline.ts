@@ -34,7 +34,7 @@ export async function downloadSunoTrack(
       }
     }
 
-    const blob = new Blob(chunks, { type: "audio/mpeg" });
+    const blob = new Blob(chunks as BlobPart[], { type: "audio/mpeg" });
     const cachedResponse = new Response(blob, {
       headers: { "Content-Type": "audio/mpeg" },
     });

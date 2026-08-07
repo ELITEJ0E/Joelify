@@ -13,9 +13,11 @@ interface TrackImageProps {
   fill?: boolean
   className?: string
   referrerPolicy?: React.HTMLAttributeReferrerPolicy
+  priority?: boolean
+  unoptimized?: boolean
 }
 
-export const TrackImage = memo(function TrackImage({ src, alt = "", width, height, fill, className, referrerPolicy = "no-referrer" }: TrackImageProps) {
+export const TrackImage = memo(function TrackImage({ src, alt = "", width, height, fill, className, referrerPolicy = "no-referrer", priority, unoptimized }: TrackImageProps) {
   const isVideo = src?.toLowerCase().includes(".mp4") || src?.includes("video_upload")
   const url = src || "/placeholder.svg"
   
@@ -70,6 +72,8 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
           fill
           sizes={fill ? "100vw" : `${width || 40}px`}
           onLoad={() => setIsLoaded(true)}
+          priority={priority}
+          unoptimized={unoptimized}
           className={cn(
             "object-cover transition-opacity duration-500", 
             isLoaded ? "opacity-100" : "opacity-0"

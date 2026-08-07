@@ -89,7 +89,7 @@ export function AudioEngine({
         analyser.connect(scriptProcessor)
         scriptProcessor.connect(ctx.destination)
 
-        bpmAnalyzerRef.current = new RealTimeBpmAnalyzer({
+        bpmAnalyzerRef.current = new (RealTimeBpmAnalyzer as any)({
           scriptNode: {
             bufferSize: 4096,
             numberOfInputChannels: 1,

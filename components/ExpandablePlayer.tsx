@@ -113,7 +113,7 @@ export function ExpandablePlayer({
       videoPlayerRef.current = new window.YT.Player("expanded-yt-video", {
         height: "100%",
         width: "100%",
-        videoId: currentTrack.id,
+        videoId: currentTrack!.id,
         playerVars: {
           autoplay: 0,
           controls: 1,

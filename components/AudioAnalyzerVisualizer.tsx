@@ -99,7 +99,7 @@ export function AudioAnalyzerVisualizer({
     const frequencyData = frequencyDataRef.current
     
     // Get frequency data
-    analyserRef.current.getByteFrequencyData(frequencyData)
+    analyserRef.current.getByteFrequencyData(frequencyData as any)
     
     // Calculate total energy for threshold
     let totalEnergy = 0

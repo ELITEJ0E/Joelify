@@ -67,7 +67,6 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     setPlaylists,
     audioSettings,
     setAudioSettings,
-    primaryColor = "green-500", // Default to green-500 if not provided
   } = useApp()
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)

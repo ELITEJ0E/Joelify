@@ -202,7 +202,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (stored.videoMode !== undefined) setVideoMode(stored.videoMode)
       if (stored.customTheme) setCustomThemeState(stored.customTheme)
       if (stored.playbackSource) setPlaybackSource(stored.playbackSource as PlaybackSource)
-      if (stored.audioSettings) setAudioSettingsState(stored.audioSettings)
+      if (stored.audioSettings) {
+        setAudioSettingsState(prev => ({ ...prev, ...stored.audioSettings }))
+      }
       
       const JOEL_PLAYLIST_ID = "ff247038-e0ae-4778-989d-0529e575027b";
       const activePlaylistId = localStorage.getItem('joel_sync_playlist_id') || JOEL_PLAYLIST_ID;

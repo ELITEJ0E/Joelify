@@ -127,7 +127,7 @@ export function ShareMenu({ type, data, className = "" }: ShareMenuProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56 bg-black/80 backdrop-blur-2xl border-white/[0.07]">
-        {navigator.share && (
+        {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
           <>
             <DropdownMenuItem onClick={handleNativeShare} className="cursor-pointer">
               <Share2 className="mr-2 h-4 w-4" />

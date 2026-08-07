@@ -34,7 +34,7 @@ export interface AppState {
     primary: string
     accent: string
   }
-  playbackSource?: "youtube" | "suno"
+  playbackSource?: "youtube" | "suno" | "local"
   audioSettings?: {
     crossfadeDuration: number
     gaplessPlayback: boolean
