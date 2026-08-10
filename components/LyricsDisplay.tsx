@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { Music2, RefreshCcw, RefreshCcwDot } from "lucide-react"
+import { Music2, RefreshCcw, RefreshCcwDot, Mic2, ListMusic } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApp } from "@/contexts/AppContext"
-import { useLyrics, parseLrc } from "@/hooks/useLyrics"
+import { useActiveLyrics } from "@/hooks/useActiveLyrics"
+import { KaraokeLyricsView } from "./KaraokeLyricsView"
 
 interface LyricsDisplayProps {
   currentTime: number
@@ -16,38 +17,21 @@ interface LyricsDisplayProps {
 
 export function LyricsDisplay({ currentTime, isPlaying, duration }: LyricsDisplayProps) {
   const { currentTrack } = useApp()
-  const { lyrics: fetchedLyrics, isLoading, error } = useLyrics(currentTrack?.title, currentTrack?.artist, currentTrack?.id)
-  
-  const activeLyrics = useMemo(() => {
-    let lyrics = fetchedLyrics && fetchedLyrics.length > 0 
-      ? fetchedLyrics 
-      : currentTrack?.lyrics 
-        ? parseLrc(currentTrack.lyrics)
-        : [];
+  const { activeLyrics, isLoading, error } = useActiveLyrics()
 
-    // Filter out potential loading/error placeholders, API artifacts or raw HTML/Suno status codes (like &60, &#60;, 60, loading...)
-    const filteredLyrics = lyrics.filter(line => {
-      if (!line.text) return true; // Preserve blank lines for formatting
-      const txt = line.text.trim().toLowerCase();
-      const isFlightRef = /^\$[0-9a-fA-F]+$/.test(txt);
-      const isPlaceholder = 
-        txt === "&60" ||
-        txt === "&#60;" ||
-        txt === "&60;" ||
-        txt === "60" ||
-        txt === "loading" ||
-        txt === "loading..." ||
-        txt === "[loading]" ||
-        isFlightRef;
-      return !isPlaceholder;
-    });
-
-    const hasValidText = filteredLyrics.some(line => line.text && line.text.trim() !== "");
-    if (!hasValidText) {
-      return [];
+  const [lyricsMode, setLyricsMode] = useState<"scroll" | "karaoke">((): "scroll" | "karaoke" => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("joelify_lyrics_mode")
+      if (saved === "scroll" || saved === "karaoke") {
+        return saved
+      }
     }
-    return filteredLyrics;
-  }, [fetchedLyrics, currentTrack?.lyrics]);
+    return "karaoke"
+  })
+
+  useEffect(() => {
+    localStorage.setItem("joelify_lyrics_mode", lyricsMode)
+  }, [lyricsMode])
 
   const [currentLineIndex, setCurrentLineIndex] = useState(0)
   const [isAutoScroll, setIsAutoScroll] = useState(true)
@@ -196,7 +180,17 @@ export function LyricsDisplay({ currentTime, isPlaying, duration }: LyricsDispla
     <div className="flex flex-col h-full w-full relative overflow-hidden bg-background">
       <div className="absolute inset-0 z-0 animate-gradient-move bg-gradient-to-br from-background via-secondary/30 to-background opacity-50"></div>
       
-      <div className="fixed top-[18px] right-12 z-[60]">
+      <div className="fixed top-[18px] right-12 z-[60] flex items-center gap-2">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => setLyricsMode(lyricsMode === "scroll" ? "karaoke" : "scroll")}
+          className={`h-6 px-2 text-xs transition-all ${lyricsMode === "karaoke" ? "text-primary font-semibold" : "text-zinc-500 hover:text-white"}`}
+        >
+          {lyricsMode === "karaoke" ? <Mic2 className="w-3.5 h-3.5 mr-1" /> : <ListMusic className="w-3.5 h-3.5 mr-1" />}
+          {lyricsMode === "karaoke" ? "Karaoke" : "Fade"}
+        </Button>
+
         <Button 
           variant="ghost" 
           size="sm" 
@@ -208,62 +202,70 @@ export function LyricsDisplay({ currentTime, isPlaying, duration }: LyricsDispla
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 p-6 relative z-10" ref={scrollRef}>
-        <div 
-          className="space-y-4 pb-32 text-center pt-16"
-        >
-          {activeLyrics.map((line, index) => {
-            // Strip out RSC wire artifacts just in case, but avoid targeting valid hex/characters
-            const safeText = (line.text || "").replace(/\$5[a-fA-F0-9]{1,2}/gi, "");
-            const textTrimmed = safeText.trim();
-            const isSectionHeader = (textTrimmed.startsWith('[') && textTrimmed.endsWith(']')) || 
-                                    /^(主歌|副歌|桥段|最终副歌|intro|outro|verse|chorus|bridge|pre-chorus|break|final chorus)/i.test(textTrimmed);
-            
-            let baseStyles = "";
-            let textStyles = "";
+      {lyricsMode === "scroll" ? (
+        <ScrollArea className="flex-1 p-6 relative z-10" ref={scrollRef}>
+          <div 
+            className="space-y-4 pb-32 text-center pt-16"
+          >
+            {activeLyrics.map((line, index) => {
+              // Strip out RSC wire artifacts just in case, but avoid targeting valid hex/characters
+              const safeText = (line.text || "").replace(/\$5[a-fA-F0-9]{1,2}/gi, "");
+              const textTrimmed = safeText.trim();
+              const isSectionHeader = (textTrimmed.startsWith('[') && textTrimmed.endsWith(']')) || 
+                                      /^(主歌|副歌|桥段|最终副歌|intro|outro|verse|chorus|bridge|pre-chorus|break|final chorus)/i.test(textTrimmed);
+              
+              let baseStyles = "";
+              let textStyles = "";
 
-            if (isUnsynced) {
-                 if (isSectionHeader) {
-                    baseStyles = "mt-12 mb-4";
-                    textStyles = index <= currentLineIndex ? "text-primary font-bold text-xl" : "text-primary font-bold text-xl opacity-60";
-                 } else {
-                    textStyles = index === currentLineIndex 
-                        ? "text-foreground text-2xl font-bold scale-[1.03]" 
-                        : index < currentLineIndex 
-                            ? "text-muted-foreground text-lg opacity-60" 
-                            : "text-muted-foreground text-lg opacity-40";
-                 }
-            } else {
-                 if (isSectionHeader) {
-                    baseStyles = "mt-12 mb-4";
-                 }
-                 
-                 textStyles = index === currentLineIndex
-                  ? "text-foreground text-2xl font-bold scale-[1.03]"
-                  : index < currentLineIndex
-                    ? "text-muted-foreground text-lg opacity-50"
-                    : "text-muted-foreground text-lg opacity-30";
-                    
-                 if (isSectionHeader && index !== currentLineIndex) {
-                    textStyles = "text-primary/70 font-bold text-xl tracking-wide uppercase text-sm";
-                 } else if (isSectionHeader && index === currentLineIndex) {
-                    textStyles = "text-primary font-bold text-xl tracking-wide uppercase scale-[1.03] shadow-primary/20";
-                 }
-            }
+               if (isUnsynced) {
+                   if (isSectionHeader) {
+                      baseStyles = "mt-12 mb-4";
+                      textStyles = index <= currentLineIndex ? "text-primary font-bold text-lg md:text-xl" : "text-primary font-bold text-lg md:text-xl opacity-60";
+                   } else {
+                      textStyles = index === currentLineIndex 
+                          ? "text-foreground text-lg md:text-xl font-bold" 
+                          : index < currentLineIndex 
+                              ? "text-muted-foreground text-lg md:text-xl opacity-60" 
+                              : "text-muted-foreground text-lg md:text-xl opacity-40";
+                   }
+              } else {
+                   if (isSectionHeader) {
+                      baseStyles = "mt-12 mb-4";
+                   }
+                   
+                   textStyles = index === currentLineIndex
+                    ? "text-foreground text-lg md:text-xl font-bold"
+                    : index < currentLineIndex
+                      ? "text-muted-foreground text-lg md:text-xl opacity-50"
+                      : "text-muted-foreground text-lg md:text-xl opacity-30";
+                      
+                   if (isSectionHeader && index !== currentLineIndex) {
+                      textStyles = "text-primary/70 font-bold tracking-wide uppercase text-sm";
+                   } else if (isSectionHeader && index === currentLineIndex) {
+                      textStyles = "text-primary font-bold tracking-wide uppercase shadow-primary/20 text-base";
+                   }
+              }
 
-            return (
-              <div
-                key={`lyric-${index}`}
-                ref={(el) => { lineRefs.current[index] = el }}
-                className={`transition-all duration-300 transform origin-center px-4 md:px-8 max-w-2xl mx-auto w-full break-words whitespace-normal leading-relaxed ${baseStyles} ${textStyles} ${!textTrimmed ? 'min-h-[2rem]' : ''}`}
-              >
-                {safeText || " "}
-              </div>
-            )
-          })}
-        </div>
-      </ScrollArea>
-      {/* Subtle background refresh state if needed, removed spinner */}
+              return (
+                <div
+                  key={`lyric-${index}`}
+                  ref={(el) => { lineRefs.current[index] = el }}
+                  className={`transition-all duration-300 transform origin-center px-4 md:px-8 max-w-5xl mx-auto w-full break-words whitespace-normal leading-relaxed ${baseStyles} ${textStyles} ${!textTrimmed ? 'min-h-[2rem]' : ''}`}
+                >
+                  {safeText || " "}
+                </div>
+              )
+            })}
+          </div>
+        </ScrollArea>
+      ) : (
+        <KaraokeLyricsView
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          duration={duration}
+          activeLyrics={activeLyrics}
+        />
+      )}
     </div>
   )
 }

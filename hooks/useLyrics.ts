@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 export interface LyricLine {
   time: number;
+  endTime?: number;
   text: string;
 }
 
@@ -177,6 +178,25 @@ export function parseLrc(lrc: string): LyricLine[] {
     } catch (e) {
       // Prevent crash propagation: One bad lyric line must NOT break the entire file
       console.warn("Failed to parse lyric line", e);
+    }
+  }
+
+  // Post-processing to add endTime
+  for (let i = 0; i < parsed.length; i++) {
+    const line = parsed[i];
+    if (line.time >= 0) {
+      let nextTimedLine: LyricLine | undefined = undefined;
+      for (let j = i + 1; j < parsed.length; j++) {
+        if (parsed[j].time >= 0) {
+          nextTimedLine = parsed[j];
+          break;
+        }
+      }
+      if (nextTimedLine) {
+        line.endTime = nextTimedLine.time;
+      } else {
+        line.endTime = line.time + 5.0;
+      }
     }
   }
 

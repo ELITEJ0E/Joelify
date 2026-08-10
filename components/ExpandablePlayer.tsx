@@ -719,7 +719,7 @@ export function ExpandablePlayer({
 
               {/* Prevent drag on scroll area */}
               <div 
-                 className="flex-1 w-full max-w-4xl mx-auto overflow-hidden relative cursor-auto overscroll-none overscroll-y-none"
+                 className="flex-1 w-full max-w-6xl mx-auto overflow-hidden relative cursor-auto overscroll-none overscroll-y-none"
                  onPointerDown={(e) => e.stopPropagation()}
                  onTouchStart={(e) => e.stopPropagation()}
               >
