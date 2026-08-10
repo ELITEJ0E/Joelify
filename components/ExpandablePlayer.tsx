@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { motion, useMotionValue, useTransform, type PanInfo, AnimatePresence, animate } from "motion/react"
+import { motion, useMotionValue, useTransform, type PanInfo, AnimatePresence, animate } from "framer-motion"
 import { 
   ChevronDown, Music, AudioLinesIcon, Video, VideoOff,
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,

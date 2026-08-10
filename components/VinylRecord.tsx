@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { TrackImage as Image } from "./TrackImage";
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
