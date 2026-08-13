@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 
 import { Toaster } from "sonner"
 import { FirestoreQuotaWarning } from "@/components/FirestoreQuotaWarning"
+import { PWARegister } from "@/components/PWARegister"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
@@ -52,7 +53,7 @@ export default function RootLayout({
         </Suspense>
         
         <FirestoreQuotaWarning />
-        
+        <PWARegister />
       </body>
     </html>
   )

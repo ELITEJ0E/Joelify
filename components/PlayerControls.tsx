@@ -541,24 +541,98 @@ export function PlayerControls() {
     if (!('mediaSession' in navigator)) return;
     if (!currentTrack) return;
 
+    const artwork = currentTrack.thumbnail
+      ? [
+          { src: currentTrack.thumbnail, sizes: '96x96', type: 'image/jpeg' },
+          { src: currentTrack.thumbnail, sizes: '128x128', type: 'image/jpeg' },
+          { src: currentTrack.thumbnail, sizes: '192x192', type: 'image/jpeg' },
+          { src: currentTrack.thumbnail, sizes: '256x256', type: 'image/jpeg' },
+          { src: currentTrack.thumbnail, sizes: '384x384', type: 'image/jpeg' },
+          { src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' },
+        ]
+      : [
+          { src: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
+        ];
+
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentTrack.title,
-      artist: currentTrack.artist,
-      artwork: currentTrack.thumbnail ? [{ src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : [],
+      title: currentTrack.title || "Unknown Title",
+      artist: currentTrack.artist || "Unknown Artist",
+      album: currentTrack.album || "Joelify",
+      artwork,
     });
 
-    navigator.mediaSession.setActionHandler('play', () => handlePlayPause());
-    navigator.mediaSession.setActionHandler('pause', () => handlePlayPause());
-    navigator.mediaSession.setActionHandler('previoustrack', () => handlePrevious());
-    navigator.mediaSession.setActionHandler('nexttrack', () => handleNext());
+    const safePlay = () => {
+      if (!isPlaying) handlePlayPause();
+    };
+
+    const safePause = () => {
+      if (isPlaying) handlePlayPause();
+    };
+
+    try {
+      navigator.mediaSession.setActionHandler('play', safePlay);
+      navigator.mediaSession.setActionHandler('pause', safePause);
+      navigator.mediaSession.setActionHandler('previoustrack', handlePrevious);
+      navigator.mediaSession.setActionHandler('nexttrack', handleNext);
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined && details.seekTime !== null) {
+          handleSeek([details.seekTime]);
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        const offset = details.seekOffset || 10;
+        handleSeek([Math.max(0, currentTime - offset)]);
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        const offset = details.seekOffset || 10;
+        handleSeek([Math.min(duration || 0, currentTime + offset)]);
+      });
+      navigator.mediaSession.setActionHandler('stop', safePause);
+    } catch (e) {
+      console.warn("MediaSession setActionHandler error:", e);
+    }
 
     return () => {
-      navigator.mediaSession.setActionHandler('play', null);
-      navigator.mediaSession.setActionHandler('pause', null);
-      navigator.mediaSession.setActionHandler('previoustrack', null);
-      navigator.mediaSession.setActionHandler('nexttrack', null);
+      try {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+        navigator.mediaSession.setActionHandler('seekto', null);
+        navigator.mediaSession.setActionHandler('seekbackward', null);
+        navigator.mediaSession.setActionHandler('seekforward', null);
+        navigator.mediaSession.setActionHandler('stop', null);
+      } catch (e) {}
     };
-  }, [currentTrack, handlePlayPause, handlePrevious, handleNext]);
+  }, [
+    currentTrack,
+    isPlaying,
+    currentTime,
+    duration,
+    handlePlayPause,
+    handlePrevious,
+    handleNext,
+    handleSeek,
+  ]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !('setPositionState' in navigator.mediaSession)) return;
+    if (duration > 0 && Number.isFinite(duration) && Number.isFinite(currentTime)) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: Math.max(0, duration),
+          playbackRate: 1,
+          position: Math.min(Math.max(0, currentTime), duration),
+        });
+      } catch (e) {}
+    }
+  }, [currentTime, duration]);
 
   const saveToListeningHistory = useCallback((track: typeof currentTrack) => {
     if (!track) return
