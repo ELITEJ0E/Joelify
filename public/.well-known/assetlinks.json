@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.joelify.twa",
+        "sha256_cert_fingerprints": ["C5:4A:B4:35:06:48:25:57:52:76:2A:26:8B:60:87:9B:45:20:8C:A4:BC:6F:20:A0:7D:29:8D:6D:B3:34:4B:88"]
+      }
+    }]
