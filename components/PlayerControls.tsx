@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { motion, AnimatePresence, useMotionValue, animate, useReducedMotion, type PanInfo } from "framer-motion"
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
   Volume2, VolumeX, List, Youtube, Music2, Video, Music,
-  Type, Minimize2, Maximize2, Mic,
+  Type, Minimize2, Maximize2, Mic, ChevronDown,
 } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import { useApp } from "@/contexts/AppContext"
@@ -49,6 +50,19 @@ export function PlayerControls() {
   const [barVideoMode, setBarVideoMode] = useState(false)
   const [offlineSunoUrl, setOfflineSunoUrl] = useState<string | null>(null)
   const [localFileUrl, setLocalFileUrl] = useState<string | null>(null)
+
+  const barY = useMotionValue(0)
+  const shouldReduceMotion = useReducedMotion()
+  const springConfig = shouldReduceMotion 
+    ? { duration: 0.15 } 
+    : { type: "spring", stiffness: 300, damping: 30 }
+
+  const handleBarDragEnd = useCallback((_: any, info: PanInfo) => {
+    if (info.offset.y < -50 || info.velocity.y < -400) {
+      setIsExpandedPlayer(true)
+    }
+    animate(barY, 0, springConfig)
+  }, [barY, springConfig])
 
   // ─── Popstate Handling ───────────────────────────────────────────────────
 
@@ -818,31 +832,42 @@ export function PlayerControls() {
         isPlaying={isPlaying}
       />
 
-      <ExpandablePlayer
-        isExpanded={isExpandedPlayer}
-        onExpandChange={(expanded) => {
-          if (expanded) setIsExpandedPlayer(true);
-          else closeExpandedPlayer();
-        }}
-        currentTime={currentTime}
-        isPlaying={isPlaying}
-        duration={duration}
-        volume={volume}
-        shuffle={shuffle}
-        repeat={repeat}
-        onPlayPause={handlePlayPause}
-        onPrevious={handlePrevious}
-        onNext={handleNext}
-        onToggleShuffle={toggleShuffle}
-        onToggleRepeat={toggleRepeat}
-        onSeek={handleSeek}
-        formatTime={formatTime}
-        onVideoActiveChange={handleVideoActiveChange}
-      />
+      <AnimatePresence>
+        {isExpandedPlayer && (
+          <ExpandablePlayer
+            isExpanded={isExpandedPlayer}
+            onExpandChange={(expanded) => {
+              if (expanded) setIsExpandedPlayer(true);
+              else closeExpandedPlayer();
+            }}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            duration={duration}
+            volume={volume}
+            shuffle={shuffle}
+            repeat={repeat}
+            onPlayPause={handlePlayPause}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onToggleShuffle={toggleShuffle}
+            onToggleRepeat={toggleRepeat}
+            onSeek={handleSeek}
+            formatTime={formatTime}
+            onVideoActiveChange={handleVideoActiveChange}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Collapsed bar ─────────────────────────────────────────────────── */}
       {!isExpandedPlayer && (
-        <div className="bg-black/40 backdrop-blur-2xl border-t border-white/[0.07] text-white p-3 md:p-4 w-full z-50 relative">
+        <motion.div
+          drag="y"
+          dragConstraints={{ top: -300, bottom: 0 }}
+          dragElastic={{ top: 0.2, bottom: 0 }}
+          style={{ y: barY }}
+          onDragEnd={handleBarDragEnd}
+          className="bg-black/40 backdrop-blur-2xl border-t border-white/[0.07] text-white p-3 md:p-4 w-full z-50 relative cursor-pointer touch-pan-y"
+        >
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
 
           {/* Desktop: track info */}
@@ -908,44 +933,24 @@ export function PlayerControls() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              <Sheet open={isLyricsOpen} onOpenChange={setLyricsOpen}>
-                <SheetTrigger asChild>
-                  <Button size="icon" variant="ghost"
-                    className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
-                    aria-label="Show lyrics" disabled={!currentTrack}>
-                    <Type size={20} />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent className="w-full sm:w-96 bg-black/80 backdrop-blur-2xl border-white/[0.07]">
-                  <SheetHeader>
-                    <SheetTitle>Lyrics</SheetTitle>
-                    <SheetDescription className="sr-only">Displaying lyrics for the currently playing track</SheetDescription>
-                  </SheetHeader>
-                  <div className="mt-6 h-[calc(100vh-8rem)]">
-                    <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} />
-                  </div>
-                </SheetContent>
-              </Sheet>
+              <Button size="icon" variant="ghost"
+                onClick={(e) => { e.stopPropagation(); setLyricsOpen(!isLyricsOpen); }}
+                className={`h-10 w-10 transition-colors ${isLyricsOpen ? 'text-primary' : 'text-zinc-400 hover:text-white hover:bg-primary/15'}`}
+                aria-label="Show lyrics" disabled={!currentTrack}>
+                <Type size={20} />
+              </Button>
 
-              <Sheet open={isQueueOpen} onOpenChange={setQueueOpen}>
-                <SheetTrigger asChild>
-                  <Button size="icon" variant="ghost"
-                    className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors"
-                    aria-label="Open queue">
-                    <List size={20} />
-                    {queue.length > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                        {queue.length}
-                      </span>
-                    )}
-                  </Button>
-                </SheetTrigger>
-                <SheetContent className="w-full sm:w-96 bg-black/80 backdrop-blur-2xl border-white/[0.07]">
-                  <SheetHeader><SheetTitle>Queue</SheetTitle></SheetHeader>
-                  <div className="mt-6 h-[calc(100vh-8rem)]"><QueueSheet /></div>
-                </SheetContent>
-              </Sheet>
-
+              <Button size="icon" variant="ghost"
+                onClick={(e) => { e.stopPropagation(); setQueueOpen(!isQueueOpen); }}
+                className={`h-10 w-10 relative transition-colors ${isQueueOpen ? 'text-primary' : 'text-zinc-400 hover:text-white hover:bg-primary/15'}`}
+                aria-label="Open queue">
+                <List size={20} />
+                {queue.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                    {queue.length}
+                  </span>
+                )}
+              </Button>
             </div>
           </div>
 
@@ -1088,31 +1093,24 @@ export function PlayerControls() {
                   <p>Lyrics</p>
                 </TooltipContent>
               </Tooltip>
-              <Sheet open={isQueueOpen} onOpenChange={setQueueOpen}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SheetTrigger asChild>
-                      <Button size="icon" variant="ghost"
-                        className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors"
-                        aria-label="Queue">
-                        <List size={20} />
-                        {queue.length > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center rounded-[6px]">
-                            {queue.length}
-                          </span>
-                        )}
-                      </Button>
-                    </SheetTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Queue</p>
-                  </TooltipContent>
-                </Tooltip>
-                <SheetContent className="w-96 bg-black/80 backdrop-blur-2xl border-white/[0.07]">
-                  <SheetHeader><SheetTitle>Queue</SheetTitle></SheetHeader>
-                  <div className="mt-6 h-[calc(100vh-8rem)]"><QueueSheet /></div>
-                </SheetContent>
-              </Sheet>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon" variant="ghost"
+                    onClick={(e) => { e.stopPropagation(); setQueueOpen(!isQueueOpen); }}
+                    className={`text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors ${isQueueOpen ? 'text-primary' : ''}`}
+                    aria-label="Queue">
+                    <List size={20} />
+                    {queue.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center rounded-[6px]">
+                        {queue.length}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Queue</p>
+                </TooltipContent>
+              </Tooltip>
 
 
 
@@ -1158,8 +1156,96 @@ export function PlayerControls() {
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     )}
+
+    {/* ── Gesture-Driven Queue Sheet ─────────────────────────────── */}
+    <AnimatePresence>
+      {isQueueOpen && !isExpandedPlayer && (
+        <motion.div
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.7 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 80 || info.velocity.y > 400) {
+              setQueueOpen(false)
+            }
+          }}
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "100%", opacity: 0 }}
+          transition={springConfig}
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setQueueOpen(false)}
+              className="text-white/70 hover:text-white rounded-full"
+              aria-label="Close Queue"
+            >
+              <ChevronDown size={24} />
+            </Button>
+            <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+            <div className="text-xs font-semibold text-white/80">Up Next</div>
+          </div>
+
+          <div 
+            className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            <QueueSheet />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* ── Gesture-Driven Lyrics Sheet ─────────────────────────────── */}
+    <AnimatePresence>
+      {isLyricsOpen && !isExpandedPlayer && (
+        <motion.div
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.7 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 80 || info.velocity.y > 400) {
+              setLyricsOpen(false)
+            }
+          }}
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "100%", opacity: 0 }}
+          transition={springConfig}
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setLyricsOpen(false)}
+              className="text-white/70 hover:text-white rounded-full"
+              aria-label="Close Lyrics"
+            >
+              <ChevronDown size={24} />
+            </Button>
+            <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+            <div className="text-xs font-semibold text-white/80">Lyrics</div>
+          </div>
+
+          <div 
+            className="flex-1 w-full max-w-5xl mx-auto overflow-hidden p-6 cursor-auto"
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
     {(playbackSource === "suno" || playbackSource === "local") && (
       <audio
         ref={sunoAudioRef}

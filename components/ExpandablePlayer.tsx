@@ -2,13 +2,14 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { motion, useMotionValue, useTransform, type PanInfo, AnimatePresence, animate } from "framer-motion"
+import { motion, useMotionValue, useTransform, type PanInfo, AnimatePresence, animate, useReducedMotion } from "framer-motion"
 import { 
   ChevronDown, Music, AudioLinesIcon, Video, VideoOff,
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
-  Disc, Image as ImageIcon, Type
+  Disc, Image as ImageIcon, Type, ListMusic, Sparkles
 } from "lucide-react"
 import { LyricsDisplay } from "./LyricsDisplay"
+import { QueueSheet } from "./QueueSheet"
 import { TrackImage as Image } from "./TrackImage"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
@@ -16,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { SimpleVisualizer } from "./SimpleVisualizer"
 import VinylRecord from "./VinylRecord"
 import { useApp } from "@/contexts/AppContext"
+import { extractAmbientColors, type AmbientColors } from "@/lib/ambientColor"
 
 interface ExpandablePlayerProps {
   isExpanded: boolean
@@ -60,11 +62,28 @@ export function ExpandablePlayer({
   formatTime,
   onVideoActiveChange,
 }: ExpandablePlayerProps) {
-  const { currentTrack, playbackSource } = useApp()
+  const { currentTrack, playbackSource, queue } = useApp()
   const [showVisualizer, setShowVisualizer] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
   const [viewMode, setViewMode] = useState<'vinyl' | 'cover'>('cover')
   const [showLyrics, setShowLyrics] = useState(false)
+  const [showQueue, setShowQueue] = useState(false)
+  const [ambientColors, setAmbientColors] = useState<AmbientColors | null>(null)
+
+  // ── Ambient Color Extraction ──────────────────────────────
+  useEffect(() => {
+    let isSubscribed = true
+    if (currentTrack?.thumbnail) {
+      extractAmbientColors(currentTrack.thumbnail, currentTrack.title).then((colors) => {
+        if (isSubscribed) setAmbientColors(colors)
+      })
+    } else if (currentTrack?.title) {
+      extractAmbientColors(null, currentTrack.title).then((colors) => {
+        if (isSubscribed) setAmbientColors(colors)
+      })
+    }
+    return () => { isSubscribed = false }
+  }, [currentTrack?.thumbnail, currentTrack?.title])
 
   // ── Local video YT instance ────────
   const videoPlayerRef = useRef<any>(null)
@@ -74,6 +93,11 @@ export function ExpandablePlayer({
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.95])
+
+  const shouldReduceMotion = useReducedMotion()
+  const springConfig = shouldReduceMotion 
+    ? { duration: 0.15 } 
+    : { type: "spring", stiffness: 300, damping: 30 }
 
   const getRepeatLabel = () => {
     return repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"
@@ -85,6 +109,8 @@ export function ExpandablePlayer({
       y.set(0)
       setShowVisualizer(false)
       setShowVideo(false)
+      setShowLyrics(false)
+      setShowQueue(false)
       destroyVideoPlayer()
     }
   }, [isExpanded, y])
@@ -154,7 +180,7 @@ export function ExpandablePlayer({
     } catch (error) {
       console.warn("Error syncing expanded YouTube player (initial):", error)
     }
-  }, [isPlaying, currentTime]) // Added dependency array
+  }, [isPlaying, currentTime])
 
   // ── Keep video in sync ───────────────────────────────
   useEffect(() => {
@@ -178,16 +204,14 @@ export function ExpandablePlayer({
     }
   }, [showVideo, playbackSource, destroyVideoPlayer])
 
-  // ── Swipe handling for opening lyrics ─────────────
+  // ── Swipe handling for lyrics & queue ─────────────
   const wheelAccumulator = useRef<number>(0)
 
   const handleWheel = (e: React.WheelEvent) => {
-    if (showLyrics) return;
+    if (showLyrics || showQueue) return;
     
     wheelAccumulator.current += e.deltaY;
     
-    // Scroll down (which moves page up) -> open lyrics
-    // Trackpads can have small but rapid deltaY values
     if (wheelAccumulator.current > 40) {
       openLyrics()
       wheelAccumulator.current = 0;
@@ -195,13 +219,13 @@ export function ExpandablePlayer({
       wheelAccumulator.current = 0;
     }
     
-    // Reset accumulator quickly to avoid false positives
     setTimeout(() => {
         wheelAccumulator.current = 0;
     }, 150);
   }
 
   const openLyrics = useCallback(() => {
+    setShowQueue(false);
     window.history.pushState({ modal: true, type: 'expandableLyrics' }, "");
     showLyricsRef.current = true;
     setShowLyrics(true);
@@ -213,7 +237,6 @@ export function ExpandablePlayer({
     setShowLyrics(false);
     animate(y, 0, { type: "spring", stiffness: 300, damping: 30 });
     
-    // Defer history back so UI updates immediately
     setTimeout(() => {
       if (window.history.state?.type === 'expandableLyrics') {
         window.history.back();
@@ -221,11 +244,33 @@ export function ExpandablePlayer({
     }, 0);
   }, [y]);
 
+  const openQueue = useCallback(() => {
+    setShowLyrics(false);
+    window.history.pushState({ modal: true, type: 'expandableQueue' }, "");
+    showQueueRef.current = true;
+    setShowQueue(true);
+    animate(y, 0, { type: "spring", stiffness: 300, damping: 30 });
+  }, [y]);
+
+  const closeQueue = useCallback(() => {
+    showQueueRef.current = false;
+    setShowQueue(false);
+    animate(y, 0, { type: "spring", stiffness: 300, damping: 30 });
+    
+    setTimeout(() => {
+      if (window.history.state?.type === 'expandableQueue') {
+        window.history.back();
+      }
+    }, 0);
+  }, [y]);
+
   const showLyricsRef = useRef(false);
+  const showQueueRef = useRef(false);
   
   useEffect(() => {
     showLyricsRef.current = showLyrics;
-  }, [showLyrics]);
+    showQueueRef.current = showQueue;
+  }, [showLyrics, showQueue]);
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
@@ -234,38 +279,46 @@ export function ExpandablePlayer({
         setShowLyrics(false);
         animate(y, 0, { type: "spring", stiffness: 300, damping: 30 });
       }
+      if (e.state?.type !== 'expandableQueue' && showQueueRef.current) {
+        showQueueRef.current = false;
+        setShowQueue(false);
+        animate(y, 0, { type: "spring", stiffness: 300, damping: 30 });
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [y]);
 
   const handleDragEnd = useCallback((_: any, info: PanInfo) => {
-    // If dragging down (close player)
+    // If dragging down (close player or close current sheet)
     if (info.offset.y > 100 || info.velocity.y > 500) {
       if (showLyrics) {
         closeLyrics()
+      } else if (showQueue) {
+        closeQueue()
       } else {
         onExpandChange(false)
       }
     } 
     // If dragging up (open lyrics)
     else if (info.offset.y < -50 || info.velocity.y < -400) {
-      if (!showLyrics) {
+      if (!showLyrics && !showQueue) {
         openLyrics()
       }
     }
-  }, [onExpandChange, showLyrics, openLyrics, closeLyrics])
+  }, [onExpandChange, showLyrics, showQueue, openLyrics, closeLyrics, closeQueue])
 
   const handleBackdropClick = useCallback(() => {
     if (window.innerWidth >= 1024) onExpandChange(false)
   }, [onExpandChange])
 
-  // Optional: escape key closes the player or lyrics
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (showLyrics) {
           closeLyrics();
+        } else if (showQueue) {
+          closeQueue();
         } else {
           onExpandChange(false);
         }
@@ -277,15 +330,12 @@ export function ExpandablePlayer({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     }
-  }, [isExpanded, onExpandChange, showLyrics, closeLyrics])
+  }, [isExpanded, onExpandChange, showLyrics, showQueue, closeLyrics, closeQueue])
 
-  // Prevent pull-to-refresh globally when expanded
   useEffect(() => {
     if (isExpanded) {
       document.documentElement.style.overscrollBehavior = 'none';
       document.body.style.overscrollBehavior = 'none';
-      
-      // Cleanup existing just in case
       let style = document.getElementById('prevent-pull-to-refresh');
       if (!style) {
         style = document.createElement('style');
@@ -316,183 +366,208 @@ export function ExpandablePlayer({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
+      initial={{ y: "100%", opacity: 0.8 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: "100%", opacity: 0 }}
+      transition={springConfig}
       className="fixed inset-0 z-50 overflow-hidden overscroll-none"
       onClick={handleBackdropClick}
     >
-      {/* ── Album-art blur backdrop ──────────────────────────────────────── */}
+      {/* ── Ambient color extraction background with smooth crossfade ────────── */}
+      <div 
+        className="absolute inset-0 z-0 transition-all duration-700 ease-out"
+        style={{
+          background: ambientColors?.darkBackdrop || "radial-gradient(ellipse at 50% 30%, rgba(30,30,45,0.8) 0%, rgba(5,5,8,0.98) 100%)",
+        }}
+      />
+
+      {/* Album-art blur backdrop layer */}
       {currentTrack?.thumbnail && !showVisualizer && (
         <div
-          className="absolute inset-0 z-0"
+          className="absolute inset-0 z-0 transition-opacity duration-1000"
           style={{
             backgroundImage: `url(${(currentTrack.thumbnail.includes('.mp4') || currentTrack.thumbnail.includes('video_upload')) ? "https://cdn2.suno.ai/image_" + currentTrack.id + ".jpeg" : currentTrack.thumbnail})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
-            filter: "blur(60px) brightness(0.15) saturate(2)",
-            transform: "scale(1.15)",
+            filter: "blur(80px) brightness(0.2) saturate(2.2)",
+            transform: "scale(1.2)",
           }}
         />
       )}
 
-      {/* Solid dark background to prevent transparency */}
-      <div className="absolute inset-0 z-0 bg-zinc-950" />
-      
-      {/* Subtle animating gradient over the solid background */}
-      <div className="absolute inset-0 z-0 bg-gradient-to-br from-black via-primary/20 to-black animate-gradient-move" />
+      {/* Solid dark base overlay for maximum contrast */}
+      <div className="absolute inset-0 z-0 bg-black/40 backdrop-blur-3xl" />
 
-      {/* ── Visualizer ──────────────────────────────────────────────────── */}
+      {/* Visualizer */}
       {showVisualizer && (
-        <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 z-0 pointer-events-none opacity-80">
           <SimpleVisualizer isPlaying={isPlaying} currentTime={currentTime} volume={volume} bpm={128} />
         </div>
       )}
 
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/20 via-black/40 to-black/80 pointer-events-none" />
-
       {/* ── Draggable panel ─────────────────────────────────────────────── */}
       <motion.div
         drag="y"
-        dragListener={!showLyrics}
+        dragListener={!showLyrics && !showQueue}
         dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0.1, bottom: 0.5 }}
+        dragElastic={{ top: 0.05, bottom: 0.5 }}
         onDragEnd={handleDragEnd}
         onWheel={handleWheel}
         style={{ y, opacity, scale }}
-        className="relative h-full w-full flex flex-col z-20"
+        className="relative h-full w-full flex flex-col z-20 glass-specular"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
-          <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
-            {/* Collapse / close with ChevronDown - updated hover style */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
+          {/* Collapse button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost" size="icon"
+                onClick={() => onExpandChange(false)}
+                className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all active:scale-95"
+                aria-label="Close player"
+              >
+                <ChevronDown size={22} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom"><p>Minimize</p></TooltipContent>
+          </Tooltip>
+
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 backdrop-blur-md">
+            <Sparkles size={12} className="text-primary animate-pulse" />
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-white/80 select-none">
+              Now Playing
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {/* Queue Toggle */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost" size="icon"
-                  onClick={() => onExpandChange(false)}
-                  className="text-white/60 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
-                  aria-label="Close player"
+                  onClick={() => showQueue ? closeQueue() : openQueue()}
+                  aria-label={showQueue ? "Hide Queue" : "Show Queue"}
+                  className={`h-10 w-10 rounded-full transition-all relative ${
+                    showQueue
+                      ? "text-primary bg-primary/20 border border-primary/40 shadow-lg shadow-primary/20"
+                      : "text-white/70 hover:text-white hover:bg-white/10"
+                  }`}
                 >
-                  <ChevronDown size={20} />
+                  <ListMusic size={18} />
+                  {queue.length > 0 && (
+                    <span className="absolute top-1 right-1 bg-primary text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-1 flex items-center justify-center">
+                      {queue.length}
+                    </span>
+                  )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom"><p>Close</p></TooltipContent>
+              <TooltipContent side="bottom"><p>{showQueue ? "Hide Queue" : "Show Queue"}</p></TooltipContent>
             </Tooltip>
 
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/45 select-none">
-              Now Playing
-            </p>
+            {/* Lyrics Toggle */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost" size="icon"
+                  onClick={() => showLyrics ? closeLyrics() : openLyrics()}
+                  aria-label={showLyrics ? "Hide Lyrics" : "Show Lyrics"}
+                  className={`h-10 w-10 rounded-full transition-all ${
+                    showLyrics
+                      ? "text-primary bg-primary/20 border border-primary/40 shadow-lg shadow-primary/20"
+                      : "text-white/70 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  <Type size={18} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p>{showLyrics ? "Hide Lyrics" : "Show Lyrics"}</p></TooltipContent>
+            </Tooltip>
 
-            <div className="flex items-center gap-1">
+            {playbackSource === "youtube" && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost" size="icon"
-                    onClick={() => showLyrics ? closeLyrics() : openLyrics()}
-                    aria-label={showLyrics ? "Hide Lyrics" : "Show Lyrics"}
-                    className={`h-10 w-10 transition-colors ${
-                      showLyrics
-                        ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-white/60 hover:text-white hover:bg-primary/15"
+                    onClick={() => setShowVideo((v) => !v)}
+                    disabled={!currentTrack}
+                    aria-label={showVideo ? "Hide video" : "Show video"}
+                    className={`h-10 w-10 rounded-full transition-all ${
+                      showVideo
+                        ? "text-primary bg-primary/20 border border-primary/40"
+                        : "text-white/70 hover:text-white hover:bg-white/10"
                     }`}
                   >
-                    <Type size={18} />
+                    {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom"><p>{showLyrics ? "Hide Lyrics" : "Show Lyrics"}</p></TooltipContent>
+                <TooltipContent side="bottom"><p>{showVideo ? "Hide Video" : "Show Video"}</p></TooltipContent>
               </Tooltip>
+            )}
 
-              {playbackSource === "youtube" && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost" size="icon"
-                      onClick={() => setShowVideo((v) => !v)}
-                      disabled={!currentTrack}
-                      aria-label={showVideo ? "Hide video" : "Show video"}
-                      className={`h-10 w-10 transition-colors ${
-                        showVideo
-                          ? "text-primary bg-primary/10 hover:bg-primary/20"
-                          : "text-white/60 hover:text-white hover:bg-primary/15"
-                      }`}
-                    >
-                      {showVideo ? <VideoOff size={18} /> : <Video size={18} />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom"><p>{showVideo ? "Hide Video" : "Show Video"}</p></TooltipContent>
-                </Tooltip>
-              )}
+            {/* Visualizer toggle */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost" size="icon"
+                  onClick={() => setShowVisualizer((v) => !v)}
+                  aria-label={showVisualizer ? "Hide visualizer" : "Show visualizer"}
+                  className={`h-10 w-10 rounded-full transition-all ${
+                    showVisualizer
+                      ? "text-primary bg-primary/20 border border-primary/40"
+                      : "text-white/70 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  <AudioLinesIcon size={18} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p>{showVisualizer ? "Hide Visualizer" : "Show Visualizer"}</p></TooltipContent>
+            </Tooltip>
 
-              {/* Visualizer toggle - updated hover style */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost" size="icon"
-                    onClick={() => setShowVisualizer((v) => !v)}
-                    aria-label={showVisualizer ? "Hide visualizer" : "Show visualizer"}
-                    className={`h-10 w-10 transition-colors ${
-                      showVisualizer
-                        ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-white/60 hover:text-white hover:bg-primary/15"
-                    }`}
-                  >
-                    <AudioLinesIcon size={18} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom"><p>{showVisualizer ? "Hide Visualizer" : "Show Visualizer"}</p></TooltipContent>
-              </Tooltip>
-
-              {/* Vinyl/Cover toggle */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost" size="icon"
-                    onClick={() => setViewMode(prev => prev === 'vinyl' ? 'cover' : 'vinyl')}
-                    aria-label={viewMode === 'vinyl' ? "Switch to cover view" : "Switch to vinyl view"}
-                    className="h-10 w-10 text-white/60 hover:text-white hover:bg-primary/15 transition-colors"
-                  >
-                    {viewMode === 'vinyl' ? <ImageIcon size={18} /> : <Disc size={18} />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p>{viewMode === 'vinyl' ? "Switch to Cover" : "Switch to Vinyl"}</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
+            {/* Vinyl/Cover toggle */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost" size="icon"
+                  onClick={() => setViewMode(prev => prev === 'vinyl' ? 'cover' : 'vinyl')}
+                  aria-label={viewMode === 'vinyl' ? "Switch to cover view" : "Switch to vinyl view"}
+                  className="h-10 w-10 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all"
+                >
+                  {viewMode === 'vinyl' ? <ImageIcon size={18} /> : <Disc size={18} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>{viewMode === 'vinyl' ? "Switch to Cover" : "Switch to Vinyl"}</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
-
-        {/* Mobile drag handle */}
-        <div className="flex justify-center mb-2 lg:hidden group cursor-pointer" onClick={() => onExpandChange(false)}>
-          <div className="w-12 h-1 bg-white/20 rounded-full group-hover:w-16 group-hover:bg-white/40 transition-all duration-300" />
         </div>
 
-        {/* ── Main content with responsive layout ───────────────────── */}
-        {/* Fixed height container to prevent shifting */}
+        {/* Mobile drag handle indicator */}
+        <div className="flex justify-center mb-2 lg:hidden group cursor-pointer" onClick={() => onExpandChange(false)}>
+          <div className="w-12 h-1.5 bg-white/20 rounded-full group-hover:w-16 group-hover:bg-white/40 transition-all duration-300" />
+        </div>
+
+        {/* ── Main content layout ───────────────────── */}
         <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-5 md:px-8 lg:px-12 pb-safe overflow-hidden">
-          {/* LEFT SIDE - Fixed height container */}
+          {/* LEFT SIDE: Album Artwork */}
           <div className="lg:flex-1 lg:flex lg:justify-end w-full">
             <div className="flex flex-col items-center w-full">
-              {/* Media container with fixed dimensions */}
               <motion.div
-                initial={{ scale: 0.85, opacity: 0 }}
+                initial={{ scale: 0.88, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.45 }}
+                transition={{ type: "spring", stiffness: 260, damping: 25 }}
                 className="w-full flex justify-center"
               >
                 <div
                   className={[
-                    "relative overflow-hidden rounded-2xl shadow-2xl shadow-black/60 ring-1 ring-white/10 transition-all duration-300",
-                    // When video is NOT showing, keep it square
+                    "relative overflow-hidden rounded-2xl shadow-2xl shadow-black/80 ring-1 ring-white/15 transition-all duration-300",
                     !showVideo && "w-full max-w-[min(85vw,380px)] aspect-square lg:w-96 lg:h-96",
-                    // When video IS showing, take up at least half screen height on mobile, expand on desktop
                     showVideo && "w-full h-[50vh] md:h-[60vh] lg:max-w-[800px] lg:aspect-video lg:h-auto",
                   ].filter(Boolean).join(" ")}
                 >
-                  {/* Content that adapts but container stays same size */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                     <div className={`w-full h-full flex items-center justify-center bg-black ${showVideo ? 'block' : 'hidden'}`}>
                       <div id="expanded-yt-video" className="w-full h-full" />
                     </div>
@@ -506,7 +581,7 @@ export function ExpandablePlayer({
                           src={currentTrack.thumbnail}
                           alt={currentTrack.title || "Album art"}
                           fill
-                          className="object-cover rounded-2xl"
+                          className="object-cover rounded-2xl transition-transform duration-700 hover:scale-105"
                           priority
                           referrerPolicy="no-referrer"
                         />
@@ -520,42 +595,40 @@ export function ExpandablePlayer({
                 </div>
               </motion.div>
 
-              {/* Spacer that maintains consistent height */}
               <div className="h-4 lg:h-6" />
             </div>
           </div>
 
-          {/* ── RIGHT SIDE: Track info + controls - FIXED POSITION ───────────────── */}
+          {/* ── RIGHT SIDE: Track info + controls ───────────────── */}
           <div className="lg:flex-1 lg:max-w-md xl:max-w-lg">
-            {/* Track info - always in same position */}
+            {/* Track info */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="text-center lg:text-left mb-8"
+              className="text-center lg:text-left mb-6"
             >
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance">
+              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance tracking-tight">
                 {currentTrack?.title || "No Track Playing"}
               </h1>
-              <p className="text-sm sm:text-base md:text-lg text-white/55">
+              <p className="text-sm sm:text-base md:text-lg text-white/60 font-medium">
                 {currentTrack?.artist || "Unknown Artist"}
               </p>
             </motion.div>
 
-            {/* Desktop divider */}
             <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
 
-            {/* Controls - now built into ExpandablePlayer */}
+            {/* Controls */}
             <motion.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.2 }}
               className="w-full"
             >
-              <div className="flex flex-col items-center w-full gap-4">
+              <div className="flex flex-col items-center w-full gap-5">
                 {/* Progress bar */}
-                <div className="flex items-center gap-2 w-full max-w-2xl mx-auto">
-                  <span className="text-sm text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
+                <div className="flex items-center gap-3 w-full max-w-2xl mx-auto">
+                  <span className="text-xs font-medium text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
                   <div className="flex-1">
                     <Slider 
                       value={[currentTime]} 
@@ -563,127 +636,171 @@ export function ExpandablePlayer({
                       step={0.1}
                       onValueChange={onSeek} 
                       disabled={!currentTrack || duration === 0} 
-                      className="[&_.slider-thumb]:bg-primary"
+                      className="[&_.slider-thumb]:bg-primary [&_.slider-thumb]:border-2 [&_.slider-thumb]:border-white"
                     />
                   </div>
-                  <span className="text-sm text-white/60 w-10">{formatTime(duration)}</span>
+                  <span className="text-xs font-medium text-white/60 w-10">{formatTime(duration)}</span>
                 </div>
 
                 {/* Control buttons */}
-                  <div className="flex items-center justify-center gap-4">
-                    {/* Shuffle */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={onToggleShuffle} 
-                          disabled={!currentTrack}
-                          className={`h-14 w-14 transition-colors ${
-                            shuffle 
-                              ? "text-primary bg-primary/10" 
-                              : "text-white/60 hover:text-white hover:bg-primary/15"
-                          }`}
-                        >
-                          <Shuffle size={24} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                <div className="flex items-center justify-center gap-4">
+                  {/* Shuffle */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={onToggleShuffle} 
+                        disabled={!currentTrack}
+                        className={`h-12 w-12 rounded-full transition-all ${
+                          shuffle 
+                            ? "text-primary bg-primary/20 border border-primary/30" 
+                            : "text-white/70 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        <Shuffle size={22} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-                    {/* Previous */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={onPrevious} 
-                          disabled={!currentTrack}
-                          className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary/15 transition-colors"
-                        >
-                          <SkipBack size={28} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <p>Previous</p>
-                      </TooltipContent>
-                    </Tooltip>
+                  {/* Previous */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={onPrevious} 
+                        disabled={!currentTrack}
+                        className="h-12 w-12 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-90"
+                      >
+                        <SkipBack size={26} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Previous</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-                    {/* Play/Pause */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 hover:bg-primary hover:text-white transition-all shadow-lg shadow-primary/20 ring-2 ring-primary/20"
-                          onClick={onPlayPause} 
-                          disabled={!currentTrack}
-                        >
-                          {isPlaying ? 
-                            <Pause fill="currentColor" size={32} className="stroke-[1.5]" /> : 
-                            <Play fill="currentColor" size={32} className="stroke-[1.5] ml-0.5" />
-                          }
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <p>{isPlaying ? "Pause" : "Play"}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                  {/* Play/Pause */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 active:scale-95 hover:bg-primary hover:text-white transition-all shadow-xl shadow-primary/25 ring-4 ring-white/10"
+                        onClick={onPlayPause} 
+                        disabled={!currentTrack}
+                      >
+                        {isPlaying ? 
+                          <Pause fill="currentColor" size={28} className="stroke-[1.5]" /> : 
+                          <Play fill="currentColor" size={28} className="stroke-[1.5] ml-0.5" />
+                        }
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>{isPlaying ? "Pause" : "Play"}</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-                    {/* Next */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={onNext} 
-                          disabled={!currentTrack}
-                          className="h-14 w-14 text-white/60 hover:text-white hover:bg-primary/15 transition-colors"
-                        >
-                          <SkipForward size={28} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <p>Next</p>
-                      </TooltipContent>
-                    </Tooltip>
+                  {/* Next */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={onNext} 
+                        disabled={!currentTrack}
+                        className="h-12 w-12 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-90"
+                      >
+                        <SkipForward size={26} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Next</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-                    {/* Repeat */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={onToggleRepeat} 
-                          disabled={!currentTrack}
-                          className={`h-14 w-14 relative transition-colors ${
-                            repeat !== "off" 
-                              ? "text-primary bg-primary/10 hover:bg-primary/20" 
-                              : "text-white/60 hover:text-white hover:bg-primary/15"
-                          }`}
-                        >
-                          {repeat === "one" ? <Repeat1 size={24} /> : <Repeat size={24} />}
-                          {/* Active dot — same pattern as shuffle */}
-                          {repeat !== "off" && (
-                            <span className="absolute bottom-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <p>{getRepeatLabel()}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
+                  {/* Repeat */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={onToggleRepeat} 
+                        disabled={!currentTrack}
+                        className={`h-12 w-12 rounded-full relative transition-all ${
+                          repeat !== "off" 
+                            ? "text-primary bg-primary/20 border border-primary/30" 
+                            : "text-white/70 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {repeat === "one" ? <Repeat1 size={22} /> : <Repeat size={22} />}
+                        {repeat !== "off" && (
+                          <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>{getRepeatLabel()}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
             </motion.div>
 
-            {/* Extra bottom padding for mobile */}
             <div className="h-16 lg:h-0" />
           </div>
         </div>
 
-        {/* ── Sliding up lyrics panel ─────────────────────────────── */}
+        {/* ── Sliding up Queue / Up Next sheet ─────────────────────────────── */}
+        <AnimatePresence>
+          {showQueue && (
+            <motion.div
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.7 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 80 || info.velocity.y > 400) {
+                  closeQueue()
+                }
+              }}
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={springConfig}
+              className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={closeQueue}
+                  className="text-white/70 hover:text-white rounded-full"
+                  aria-label="Close Queue"
+                >
+                  <ChevronDown size={24} />
+                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+                </div>
+                <div className="text-xs font-semibold text-white/80">Up Next</div>
+              </div>
+
+              <div 
+                className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
+                <QueueSheet />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Sliding up Lyrics sheet ─────────────────────────────── */}
         <AnimatePresence>
           {showLyrics && (
             <motion.div
@@ -698,30 +815,28 @@ export function ExpandablePlayer({
               initial={{ y: "100%", opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="absolute inset-0 z-[60] bg-zinc-950/95 backdrop-blur-3xl flex flex-col pt-4"
-              onClick={(e) => e.stopPropagation()} // don't close player when clicking lyrics
+              transition={springConfig}
+              className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+              onClick={(e) => e.stopPropagation()}
             >
-              {/* Drag handle / Header for lyrics */}
-              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-2 border-b border-white/5 cursor-grab active:cursor-grabbing">
+              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
                 <Button 
-                   variant="ghost" 
-                   size="icon" 
-                   onClick={closeLyrics}
-                   className="text-white/60 hover:text-white"
-                   aria-label="Close Lyrics"
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={closeLyrics}
+                  className="text-white/70 hover:text-white rounded-full"
+                  aria-label="Close Lyrics"
                 >
-                   <ChevronDown size={28} />
+                  <ChevronDown size={24} />
                 </Button>
-                <div className="w-12 h-1.5 bg-white/20 rounded-full" />
-                <div className="w-10"></div> {/* placeholder for balance */}
+                <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+                <div className="text-xs font-semibold text-white/80">Lyrics</div>
               </div>
 
-              {/* Prevent drag on scroll area */}
               <div 
-                 className="flex-1 w-full max-w-6xl mx-auto overflow-hidden relative cursor-auto overscroll-none overscroll-y-none"
-                 onPointerDown={(e) => e.stopPropagation()}
-                 onTouchStart={(e) => e.stopPropagation()}
+                className="flex-1 w-full max-w-5xl mx-auto overflow-hidden relative cursor-auto"
+                onPointerDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
               >
                 <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} />
               </div>
@@ -732,3 +847,4 @@ export function ExpandablePlayer({
     </motion.div>
   )
 }
+

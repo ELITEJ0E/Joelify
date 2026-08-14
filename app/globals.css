@@ -277,4 +277,64 @@
   .hover-scale-smaller:hover {
     transform: scale(1.04);
   }
+
+  /* ── Liquid Glass Theme System ───────────────────────────────────────── */
+  .theme-liquid-glass {
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-bg-hover: rgba(255, 255, 255, 0.09);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-border-light: rgba(255, 255, 255, 0.2);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --glass-blur: blur(24px) saturate(1.8);
+  }
+
+  .theme-liquid-glass .liquid-glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+
+  .theme-liquid-glass .liquid-glass-card {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px) saturate(1.6);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+
+  .theme-liquid-glass .liquid-glass-card:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 20px hsl(var(--primary) / 0.15);
+  }
+
+  .liquid-glass-pill {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+
+  .liquid-glass-pill:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.24);
+  }
+
+  /* Specular Highlight Sheen */
+  .glass-specular {
+    position: relative;
+    overflow: hidden;
+  }
+  .glass-specular::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.25) 50%, transparent 100%);
+    pointer-events: none;
+  }
 }
