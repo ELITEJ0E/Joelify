@@ -137,21 +137,8 @@ export function KaraokeLyricsView({ currentTime, isPlaying, duration, activeLyri
     return { activeLine, nextLine, opacity, progress }
   }, [smoothTime, duration, activeLyrics, isUnsynced])
 
-  if (!activeLine) {
-    // Blank/empty state, render nothing (or show upcoming next line preview if available)
-    if (nextLine) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-center px-6 md:px-12 relative z-10 select-none">
-          <div className="text-muted-foreground/30 text-lg md:text-xl font-medium max-w-2xl animate-pulse">
-            {nextLine.text.replace(/\$5[a-fA-F0-9]{1,2}/gi, "")}
-          </div>
-        </div>
-      )
-    }
-    return null
-  }
-
-  const activeText = activeLine.text.replace(/\$5[a-fA-F0-9]{1,2}/gi, "")
+  // Compute text and progress tokens before any return statements to obey Rules of Hooks
+  const activeText = activeLine ? activeLine.text.replace(/\$5[a-fA-F0-9]{1,2}/gi, "") : ""
   const nextText = nextLine ? nextLine.text.replace(/\$5[a-fA-F0-9]{1,2}/gi, "") : ""
   
   const tokensWithProgress = useMemo(() => {
@@ -166,6 +153,20 @@ export function KaraokeLyricsView({ currentTime, isPlaying, duration, activeLyri
       return { token, startProgress, endProgress };
     });
   }, [activeText]);
+
+  if (!activeLine) {
+    // Blank/empty state, render nothing (or show upcoming next line preview if available)
+    if (nextLine) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center px-6 md:px-12 relative z-10 select-none">
+          <div className="text-muted-foreground/30 text-lg md:text-xl font-medium max-w-2xl animate-pulse">
+            {nextLine.text.replace(/\$5[a-fA-F0-9]{1,2}/gi, "")}
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
 
   return (
     <div className="flex flex-col items-center justify-center h-full text-center px-6 md:px-12 relative z-10 select-none">
