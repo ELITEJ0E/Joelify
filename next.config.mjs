@@ -57,6 +57,9 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ["youtubei.js"],
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
