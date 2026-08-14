@@ -279,6 +279,7 @@
   }
 
   /* ── Liquid Glass Theme System ───────────────────────────────────────── */
+  html[data-surface="liquid-glass"],
   .theme-liquid-glass {
     --glass-bg: rgba(255, 255, 255, 0.05);
     --glass-bg-hover: rgba(255, 255, 255, 0.09);
@@ -286,6 +287,41 @@
     --glass-border-light: rgba(255, 255, 255, 0.2);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     --glass-blur: blur(24px) saturate(1.8);
+  }
+
+  /* Scoped Liquid Glass Surface Overrides */
+  html[data-surface="liquid-glass"] .sidebar-container,
+  .theme-liquid-glass .sidebar-container {
+    background: rgba(18, 18, 24, 0.5) !important;
+    backdrop-filter: blur(28px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.8) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37) !important;
+  }
+
+  html[data-surface="liquid-glass"] .bottom-player-bar,
+  .theme-liquid-glass .bottom-player-bar {
+    background: rgba(14, 14, 18, 0.45) !important;
+    backdrop-filter: blur(28px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.8) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  }
+
+  html[data-surface="liquid-glass"] .sheet-surface,
+  .theme-liquid-glass .sheet-surface {
+    background: rgba(12, 12, 16, 0.6) !important;
+    backdrop-filter: blur(32px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(1.8) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.14) !important;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  }
+
+  html[data-surface="liquid-glass"] .expandable-player-bg,
+  .theme-liquid-glass .expandable-player-bg {
+    background: rgba(10, 10, 15, 0.5) !important;
+    backdrop-filter: blur(36px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(36px) saturate(1.8) !important;
   }
 
   .theme-liquid-glass .liquid-glass-panel {

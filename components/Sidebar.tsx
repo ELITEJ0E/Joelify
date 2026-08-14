@@ -415,7 +415,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
       {isOpen && <div className="fixed inset-0 bg-black/60 z-[60] lg:hidden" onClick={onClose} aria-hidden="true" />}
 
       <div
-        className={`fixed lg:relative inset-y-0 left-0 z-[70] w-70 bg-black/40 backdrop-blur-2xl border-r border-white/[0.07] text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
+        className={`fixed lg:relative inset-y-0 left-0 z-[70] w-70 sidebar-container bg-black/40 backdrop-blur-2xl border-r border-white/[0.07] text-gray-100 flex flex-col transform transition-transform duration-300 ease-in-out lg:transform-none ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >

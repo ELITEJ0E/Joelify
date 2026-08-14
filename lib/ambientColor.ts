@@ -69,14 +69,14 @@ export function extractAmbientColors(imageUrl?: string | null, fallbackKey?: str
           return;
         }
 
-        canvas.width = 24;
-        canvas.height = 24;
-        ctx.drawImage(img, 0, 0, 24, 24);
+        canvas.width = 10;
+        canvas.height = 10;
+        ctx.drawImage(img, 0, 0, 10, 10);
 
-        const data = ctx.getImageData(0, 0, 24, 24).data;
+        const data = ctx.getImageData(0, 0, 10, 10).data;
         let r = 0, g = 0, b = 0, count = 0;
 
-        for (let i = 0; i < data.length; i += 16) {
+        for (let i = 0; i < data.length; i += 4) {
           const red = data[i];
           const green = data[i + 1];
           const blue = data[i + 2];

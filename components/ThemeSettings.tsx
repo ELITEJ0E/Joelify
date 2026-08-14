@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Palette, Sparkles, Check } from "lucide-react"
+import { Palette, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -11,7 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Switch } from "@/components/ui/switch"
 
 const THEME_PRESETS = [
   { name: "Spotify Green", hsl: "142 76% 36%" },
@@ -38,30 +37,35 @@ const THEME_PRESETS = [
 
 export function ThemeSettings() {
   const [currentTheme, setCurrentTheme] = useState(THEME_PRESETS[0].hsl)
-  const [isLiquidGlass, setIsLiquidGlass] = useState(true)
+  const [surfaceStyle, setSurfaceStyle] = useState<"joelify" | "liquid-glass">("joelify")
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme-accent")
-    if (saved) {
-      setCurrentTheme(saved)
-      applyTheme(saved)
+    const savedAccent = localStorage.getItem("theme-accent")
+    if (savedAccent) {
+      setCurrentTheme(savedAccent)
+      applyTheme(savedAccent)
     }
-    const savedGlass = localStorage.getItem("theme-liquid-glass")
-    if (savedGlass !== null) {
-      const isGlass = savedGlass === "true"
-      setIsLiquidGlass(isGlass)
-      document.documentElement.classList.toggle("theme-liquid-glass", isGlass)
+
+    const savedSurface = localStorage.getItem("theme-surface")
+    if (savedSurface === "liquid-glass" || savedSurface === "joelify") {
+      applySurface(savedSurface as "joelify" | "liquid-glass")
     } else {
-      // Default on for native liquid aesthetic
-      document.documentElement.classList.add("theme-liquid-glass")
-      localStorage.setItem("theme-liquid-glass", "true")
+      const savedGlass = localStorage.getItem("theme-liquid-glass")
+      if (savedGlass === "true") {
+        applySurface("liquid-glass")
+      } else {
+        applySurface("joelify")
+      }
     }
   }, [])
 
-  const toggleLiquidGlass = (enabled: boolean) => {
-    setIsLiquidGlass(enabled)
-    document.documentElement.classList.toggle("theme-liquid-glass", enabled)
-    localStorage.setItem("theme-liquid-glass", enabled ? "true" : "false")
+  const applySurface = (style: "joelify" | "liquid-glass") => {
+    setSurfaceStyle(style)
+    const isGlass = style === "liquid-glass"
+    document.documentElement.setAttribute("data-surface", style)
+    document.documentElement.classList.toggle("theme-liquid-glass", isGlass)
+    localStorage.setItem("theme-surface", style)
+    localStorage.setItem("theme-liquid-glass", isGlass ? "true" : "false")
   }
 
   const applyTheme = (hsl: string) => {
@@ -89,19 +93,32 @@ export function ThemeSettings() {
         align="end"
         className="w-64 max-h-80 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] bg-black/85 backdrop-blur-2xl border-white/[0.1] shadow-2xl p-2"
       >
-        <div className="flex items-center justify-between px-2 py-2 mb-1 bg-white/[0.04] border border-white/[0.08] rounded-lg">
-          <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-primary" />
-            <div>
-              <p className="text-xs font-semibold text-white">Liquid Glass</p>
-              <p className="text-[10px] text-muted-foreground">Translucent glass UI</p>
+        <DropdownMenuLabel className="text-xs text-muted-foreground font-semibold px-2">
+          Surface Style
+        </DropdownMenuLabel>
+
+        <div className="space-y-0.5 mt-1 mb-2">
+          <DropdownMenuItem
+            onClick={() => applySurface("joelify")}
+            className="flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer hover:bg-white/[0.08]"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border border-white/20 bg-zinc-900 shrink-0" />
+              <span className="text-xs text-white/90">Joelify (Default)</span>
             </div>
-          </div>
-          <Switch
-            checked={isLiquidGlass}
-            onCheckedChange={toggleLiquidGlass}
-            aria-label="Toggle Liquid Glass Theme"
-          />
+            {surfaceStyle === "joelify" && <Check size={14} className="text-primary" />}
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => applySurface("liquid-glass")}
+            className="flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer hover:bg-white/[0.08]"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded border border-white/30 bg-white/10 backdrop-blur-sm shrink-0" />
+              <span className="text-xs text-white/90">Liquid Glass</span>
+            </div>
+            {surfaceStyle === "liquid-glass" && <Check size={14} className="text-primary" />}
+          </DropdownMenuItem>
         </div>
 
         <DropdownMenuSeparator className="bg-white/10 my-2" />

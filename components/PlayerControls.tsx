@@ -866,7 +866,7 @@ export function PlayerControls() {
           dragElastic={{ top: 0.2, bottom: 0 }}
           style={{ y: barY }}
           onDragEnd={handleBarDragEnd}
-          className="bg-black/40 backdrop-blur-2xl border-t border-white/[0.07] text-white p-3 md:p-4 w-full z-50 relative cursor-pointer touch-pan-y"
+          className="bottom-player-bar bg-black/40 backdrop-blur-2xl border-t border-white/[0.07] text-white p-3 md:p-4 w-full z-50 relative cursor-pointer touch-pan-y"
         >
         <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
 
@@ -1175,7 +1175,7 @@ export function PlayerControls() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: "100%", opacity: 0 }}
           transition={springConfig}
-          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+          className="fixed inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
@@ -1219,7 +1219,7 @@ export function PlayerControls() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: "100%", opacity: 0 }}
           transition={springConfig}
-          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+          className="fixed inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">

@@ -374,29 +374,24 @@ export function ExpandablePlayer({
       onClick={handleBackdropClick}
     >
       {/* ── Ambient color extraction background with smooth crossfade ────────── */}
-      <div 
-        className="absolute inset-0 z-0 transition-all duration-700 ease-out"
-        style={{
-          background: ambientColors?.darkBackdrop || "radial-gradient(ellipse at 50% 30%, rgba(30,30,45,0.8) 0%, rgba(5,5,8,0.98) 100%)",
-        }}
-      />
-
-      {/* Album-art blur backdrop layer */}
-      {currentTrack?.thumbnail && !showVisualizer && (
-        <div
-          className="absolute inset-0 z-0 transition-opacity duration-1000"
-          style={{
-            backgroundImage: `url(${(currentTrack.thumbnail.includes('.mp4') || currentTrack.thumbnail.includes('video_upload')) ? "https://cdn2.suno.ai/image_" + currentTrack.id + ".jpeg" : currentTrack.thumbnail})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            filter: "blur(80px) brightness(0.2) saturate(2.2)",
-            transform: "scale(1.2)",
-          }}
-        />
-      )}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        <AnimatePresence mode="popLayout">
+          <motion.div
+            key={currentTrack?.id || "default-ambient"}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+            className="absolute inset-0"
+            style={{
+              background: ambientColors?.darkBackdrop || "radial-gradient(ellipse at 50% 30%, rgba(30,30,45,0.8) 0%, rgba(5,5,8,0.98) 100%)",
+            }}
+          />
+        </AnimatePresence>
+      </div>
 
       {/* Solid dark base overlay for maximum contrast */}
-      <div className="absolute inset-0 z-0 bg-black/40 backdrop-blur-3xl" />
+      <div className="absolute inset-0 z-0 expandable-player-bg bg-black/40 backdrop-blur-3xl" />
 
       {/* Visualizer */}
       {showVisualizer && (
@@ -770,7 +765,7 @@ export function ExpandablePlayer({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
               transition={springConfig}
-              className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
@@ -816,7 +811,7 @@ export function ExpandablePlayer({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
               transition={springConfig}
-              className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
