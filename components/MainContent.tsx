@@ -8,15 +8,22 @@ import { LibraryView } from "./LibraryView"
 import { StatisticsView } from "./StatisticsView"
 import { JoelsMusicView } from "./JoelsMusicView"
 import { DownloadedView } from "./DownloadedView"
+import { ChartsView } from "./ChartsView"
+import { ExploreView } from "./ExploreView"
 
 interface MainContentProps {
-  view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded"
-  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded") => void
+  view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore"
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore") => void
+  onOpenSidebar?: () => void
 }
 
-export function MainContent({ view, onNavigate }: MainContentProps) {
-  if (view === "search") {
-    return <SearchView />
+export function MainContent({ view, onNavigate, onOpenSidebar }: MainContentProps) {
+  if (view === "charts") {
+    return <ChartsView onNavigate={onNavigate} onOpenSidebar={onOpenSidebar} />
+  }
+
+  if (view === "search" || view === "explore") {
+    return <SearchView onNavigate={onNavigate} onOpenSidebar={onOpenSidebar} />
   }
 
   if (view === "playlist") {
@@ -43,5 +50,5 @@ export function MainContent({ view, onNavigate }: MainContentProps) {
     return <DownloadedView />
   }
 
-  return <HomeView onNavigate={onNavigate} />
+  return <HomeView onNavigate={onNavigate} onOpenSidebar={onOpenSidebar} />
 }

@@ -2,13 +2,35 @@
 
 import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Search, Play, Plus, ExternalLink, Loader2, Heart, Compass, Music2, Disc3, User, ListMusic } from 'lucide-react'
+import {
+  Search,
+  Play,
+  Plus,
+  ExternalLink,
+  Loader2,
+  Heart,
+  Compass,
+  Music2,
+  Disc3,
+  User,
+  ListMusic,
+  Menu,
+  ChevronDown,
+  ArrowLeft,
+  MoreVertical,
+} from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import type { SearchResult } from "@/lib/music/types"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { DiscoverMore } from "./DiscoverMore"
 import { getCachedData, setCachedData } from "@/lib/cache"
 
@@ -28,6 +50,34 @@ interface CachedSearch {
   continuation: string | null
 }
 
+interface VideoItem {
+  id: string
+  title: string
+  artist: string
+  thumbnail: string
+  viewCount?: string
+}
+
+const REGIONS = [
+  { code: "US", name: "United States" },
+  { code: "GB", name: "United Kingdom" },
+  { code: "ID", name: "Indonesia" },
+  { code: "KR", name: "South Korea" },
+  { code: "JP", name: "Japan" },
+  { code: "BR", name: "Brazil" },
+]
+
+const GENRES = [
+  { name: "Pop", color: "from-blue-600 to-indigo-900" },
+  { name: "Hip-Hop", color: "from-amber-600 to-red-900" },
+  { name: "K-Pop", color: "from-pink-600 to-purple-900" },
+  { name: "Rock", color: "from-red-600 to-zinc-900" },
+  { name: "R&B", color: "from-purple-600 to-indigo-900" },
+  { name: "EDM", color: "from-emerald-600 to-teal-900" },
+  { name: "Latin", color: "from-orange-600 to-amber-900" },
+  { name: "Indie", color: "from-teal-600 to-slate-900" },
+]
+
 function toTrack(result: SearchResult) {
   return {
     id: result.videoId ?? result.id,
@@ -38,7 +88,12 @@ function toTrack(result: SearchResult) {
   }
 }
 
-export function SearchView() {
+interface SearchViewProps {
+  onNavigate?: (view: any) => void
+  onOpenSidebar?: () => void
+}
+
+export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchResult[]>([])
   const [continuation, setContinuation] = useState<string | null>(null)
@@ -50,6 +105,15 @@ export function SearchView() {
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
   const [lastQuery, setLastQuery] = useState("")
 
+  // Explore State
+  const [regionCode, setRegionCode] = useState("US")
+  const [heroVideos, setHeroVideos] = useState<VideoItem[]>([])
+  const [trendingVideos, setTrendingVideos] = useState<VideoItem[]>([])
+  const [exploreLoading, setExploreLoading] = useState(true)
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null)
+  const [genreVideos, setGenreVideos] = useState<VideoItem[]>([])
+  const [genreLoading, setGenreLoading] = useState(false)
+
   const searchAbortRef = useRef<AbortController | null>(null)
   const suggestAbortRef = useRef<AbortController | null>(null)
   const suggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -59,11 +123,70 @@ export function SearchView() {
     playlists,
     addTrackToPlaylist,
     setCurrentTrack,
+    setQueue,
     addToQueue,
     toggleLikedSong,
     isTrackLiked,
     setPlaybackSource,
   } = useApp()
+
+  // Fetch Explore Feed on load & region change
+  useEffect(() => {
+    fetchExploreData(regionCode)
+  }, [regionCode])
+
+  const fetchExploreData = async (region: string) => {
+    const cacheKey = `explore_data_${region}`
+    const cached = getCachedData<any>(cacheKey)
+    if (cached) {
+      setHeroVideos(cached.hero || [])
+      setTrendingVideos(cached.trending || [])
+      setExploreLoading(false)
+      return
+    }
+
+    setExploreLoading(true)
+
+    try {
+      const res = await fetch(`/api/explore?regionCode=${encodeURIComponent(region)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setHeroVideos(data.hero || [])
+        setTrendingVideos(data.trending || [])
+        setCachedData(cacheKey, data)
+      }
+    } catch (err) {
+      console.error("[SearchView] Explore fetch error:", err)
+    } finally {
+      setExploreLoading(false)
+    }
+  }
+
+  const handleSelectGenre = async (genreName: string) => {
+    setSelectedGenre(genreName)
+    setGenreLoading(true)
+
+    const cacheKey = `genre_${genreName}_${regionCode}`
+    const cached = getCachedData<VideoItem[]>(cacheKey)
+    if (cached) {
+      setGenreVideos(cached)
+      setGenreLoading(false)
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/explore?genre=${encodeURIComponent(genreName)}&regionCode=${encodeURIComponent(regionCode)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setGenreVideos(data.videos || [])
+        setCachedData(cacheKey, data.videos || [])
+      }
+    } catch (err) {
+      console.error("[SearchView] Genre fetch error:", err)
+    } finally {
+      setGenreLoading(false)
+    }
+  }
 
   // Debounced search suggestions with request cancellation
   useEffect(() => {
@@ -85,7 +208,7 @@ export function SearchView() {
           setShowSuggestions(true)
         }
       } catch {
-        // aborted or offline - ignore, suggestions are best-effort
+        // best-effort
       }
     }, 250)
     return () => {
@@ -108,7 +231,6 @@ export function SearchView() {
     const trimmed = rawQuery.trim()
     if (!trimmed) return
 
-    // Direct YouTube URL support
     let searchQuery = trimmed
     const urlPattern = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
     const match = trimmed.match(urlPattern)
@@ -121,7 +243,6 @@ export function SearchView() {
     setError(null)
     setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
 
-    // Cancel any in-flight search
     searchAbortRef.current?.abort()
     const controller = new AbortController()
     searchAbortRef.current = controller
@@ -131,7 +252,6 @@ export function SearchView() {
       const cached = getCachedData<CachedSearch>(cacheKey, sessionStorage)
 
       if (cached) {
-        console.log(`[v0] Using cached search results for "${searchQuery}"`)
         setResults(cached.results)
         setContinuation(cached.continuation)
       } else {
@@ -152,7 +272,7 @@ export function SearchView() {
       setIsLoading(false)
     } catch (err: any) {
       if (err?.name === "AbortError") return
-      console.error("[v0] Search failed:", err)
+      console.error("[SearchView] Search failed:", err)
       setIsLoading(false)
       setError("Failed to fetch search results.")
     }
@@ -183,7 +303,7 @@ export function SearchView() {
       }
       setContinuation(data.continuation ?? null)
     } catch (err) {
-      console.error("[v0] Load more failed:", err)
+      console.error("[SearchView] Load more failed:", err)
       setContinuation(null)
     } finally {
       setIsLoadingMore(false)
@@ -195,12 +315,31 @@ export function SearchView() {
     setCurrentTrack(toTrack(result) as any)
   }
 
+  const handlePlayExploreTrack = (video: VideoItem, list: VideoItem[], index: number) => {
+    setPlaybackSource("youtube")
+    setCurrentTrack({
+      id: video.id,
+      title: video.title,
+      artist: video.artist,
+      thumbnail: video.thumbnail,
+      duration: "0:00",
+    })
+
+    const remaining = list.slice(index + 1).map((v) => ({
+      id: v.id,
+      title: v.title,
+      artist: v.artist,
+      thumbnail: v.thumbnail,
+      duration: "0:00",
+    }))
+    setQueue(remaining)
+  }
+
   const handleAddToQueue = (result: SearchResult) => {
     addToQueue(toTrack(result) as any)
   }
 
   const handleBrowseResult = (result: SearchResult) => {
-    // Albums / artists / playlists re-search so results stay inside Joelify
     const nextQuery = result.type === "artist" ? result.title : `${result.artist} ${result.title}`.trim()
     setQuery(nextQuery)
     runSearch(nextQuery)
@@ -211,66 +350,90 @@ export function SearchView() {
   const albums = results.filter((r) => r.type === "album")
   const playlistResults = results.filter((r) => r.type === "playlist")
 
+  const currentRegionName = REGIONS.find((r) => r.code === regionCode)?.name || "United States"
+
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 overflow-y-auto">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6 md:mb-8">Search</h1>
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 overflow-y-auto pb-28">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* HEADER: SEARCH INPUT */}
+        <div className="pt-2">
 
-        <form onSubmit={handleSearch} className="mb-6 md:mb-8">
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
-            <div className="flex-1 relative" ref={searchBoxRef}>
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={20} />
-              <Input
-                type="text"
-                placeholder="Search for songs, artists, albums, or playlists..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                className="pl-10 h-14 rounded-full bg-secondary/50 border-none text-base ring-1 ring-primary/20 focus-visible:ring-primary/60 transition-all shadow-inner"
-                autoComplete="off"
-              />
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-xl shadow-2xl z-50 overflow-hidden py-1">
-                  {suggestions.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-secondary/60 transition-colors"
-                      onClick={() => handleSuggestionClick(s)}
-                    >
-                      <Search size={14} className="text-muted-foreground shrink-0" />
-                      <span className="line-clamp-1">{s}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <Button type="submit" size="lg" disabled={isLoading} className="bg-primary hover:bg-primary/90 h-14 rounded-full px-8 shadow-lg shadow-primary/20 hover:scale-105 transition-all">
-              {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Search"}
-            </Button>
-          </div>
-        </form>
+          <form onSubmit={handleSearch} className="flex-1 relative" ref={searchBoxRef}>
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
+            <Input
+              type="text"
+              placeholder="Songs, albums or artists..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              className="pl-10 pr-10 h-11 rounded-xl bg-zinc-900/90 border-white/10 text-white placeholder:text-gray-400 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              autoComplete="off"
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-primary/20 hover:text-primary transition-colors"
+                    onClick={() => handleSuggestionClick(s)}
+                  >
+                    <Search size={14} className="text-gray-400 shrink-0" />
+                    <span className="line-clamp-1">{s}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </form>
 
+          {/* Region Selector Pill */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="rounded-full border-white/20 bg-zinc-900/80 text-white text-xs font-medium hover:bg-zinc-800 flex items-center gap-1.5 h-11 px-3 shrink-0"
+              >
+                {regionCode}
+                <ChevronDown size={14} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10 text-white">
+              {REGIONS.map((r) => (
+                <DropdownMenuItem
+                  key={r.code}
+                  onClick={() => setRegionCode(r.code)}
+                  className="hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs"
+                >
+                  {r.name} ({r.code})
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* LOADING STATE FOR SEARCH */}
         {isLoading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="animate-spin text-primary mb-4" size={48} />
-            <p className="text-lg text-muted-foreground">{loadingMessage}</p>
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="animate-spin text-primary mb-4" size={40} />
+            <p className="text-sm text-gray-400">{loadingMessage}</p>
           </div>
         )}
 
+        {/* ERROR STATE FOR SEARCH */}
         {error && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-8">
-            <p className="text-destructive font-semibold mb-2">Oops! Something went wrong</p>
-            <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 mb-6">
+            <p className="text-destructive font-semibold mb-1">Search Error</p>
+            <p className="text-xs text-gray-400 mb-3">{error}</p>
             <Button onClick={() => runSearch(lastQuery || query)} variant="outline" size="sm">
               Try Again
             </Button>
           </div>
         )}
 
+        {/* ACTIVE SEARCH RESULTS GRID */}
         {!isLoading && results.length > 0 && (
-          <div className="mb-12">
-            {lastQuery && <p className="text-sm text-muted-foreground mb-4">Showing results for "{lastQuery}"</p>}
+          <div className="mb-8">
+            {lastQuery && <p className="text-xs text-gray-400 mb-4">Showing results for "{lastQuery}"</p>}
 
             {(artists.length > 0 || albums.length > 0 || playlistResults.length > 0) && (
               <div className="mb-8 space-y-6">
@@ -290,9 +453,9 @@ export function SearchView() {
               <>
                 <div className="flex items-center gap-2 mb-4">
                   <Music2 size={18} className="text-primary" />
-                  <h2 className="text-lg font-bold">Songs</h2>
+                  <h2 className="text-lg font-bold text-white">Songs</h2>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {playable.map((result) => (
                     <SearchResultCard
                       key={result.id}
@@ -320,20 +483,178 @@ export function SearchView() {
           </div>
         )}
 
-        {!isLoading && !error && results.length === 0 && query && (
-          <div className="text-center py-20">
-            <p className="text-lg md:text-xl text-muted-foreground">Looking for "{query}"?</p>
-            <p className="text-sm text-muted-foreground mt-2">Enter to search</p>
+        {/* DEFAULT EXPLORE VIEW CONTENT (When query/results are empty) */}
+        {!isLoading && results.length === 0 && (
+          <div className="space-y-6">
+            {/* IF A GENRE IS SELECTED */}
+            {selectedGenre ? (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-3">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setSelectedGenre(null)}
+                    className="text-primary hover:bg-primary/10 rounded-full"
+                  >
+                    <ArrowLeft size={20} />
+                  </Button>
+                  <h2 className="text-2xl font-bold text-primary">{selectedGenre} Songs</h2>
+                </div>
+
+                {genreLoading ? (
+                  <div className="space-y-3 py-4">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-4 p-2 bg-white/[0.02] rounded-xl animate-pulse">
+                        <div className="w-14 h-14 bg-secondary/60 rounded-xl shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-secondary/60 rounded w-1/2" />
+                          <div className="h-3 bg-secondary/40 rounded w-1/3" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {genreVideos.map((video, idx) => (
+                      <div
+                        key={video.id}
+                        onClick={() => handlePlayExploreTrack(video, genreVideos, idx)}
+                        className="group flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-secondary">
+                            <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-primary transition-colors">
+                              {idx + 1}. {video.title}
+                            </h3>
+                            <p className="text-xs text-gray-400 line-clamp-1">{video.artist}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* HERO FEATURE CAROUSEL */}
+                {!exploreLoading && heroVideos.length > 0 && (
+                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                    {heroVideos.map((item, idx) => (
+                      <div
+                        key={item.id}
+                        onClick={() => handlePlayExploreTrack(item, heroVideos, idx)}
+                        className="flex-shrink-0 w-72 md:w-80 group cursor-pointer"
+                      >
+                        <div className="relative aspect-video rounded-2xl overflow-hidden bg-secondary shadow-lg border border-white/10 mb-2">
+                          <Image
+                            src={item.thumbnail || "/placeholder.svg"}
+                            alt={item.title}
+                            fill
+                            className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Button size="icon" className="bg-primary text-black rounded-full h-12 w-12 shadow-lg">
+                              <Play fill="currentColor" size={20} className="ml-0.5" />
+                            </Button>
+                          </div>
+                        </div>
+                        <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-primary transition-colors">
+                          {item.title}
+                        </h3>
+                        <p className="text-xs text-gray-400 line-clamp-1">{item.artist}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* VIDEO CHARTS CARDS */}
+                <section className="space-y-3">
+                  <h2 className="text-xl font-bold text-primary tracking-tight">Video charts</h2>
+
+                  <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                    {/* Card 1: Trending Top 20 */}
+                    <div
+                      onClick={() => onNavigate?.("charts")}
+                      className="flex-shrink-0 w-44 md:w-48 bg-gradient-to-br from-red-600/80 to-zinc-900 border border-white/10 rounded-2xl p-4 flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
+                    >
+                      <div>
+                        <span className="text-[10px] font-bold tracking-wider uppercase text-red-200">TRENDING</span>
+                        <h3 className="text-2xl font-black text-white mt-1">TOP 20</h3>
+                      </div>
+                      <div className="mt-6">
+                        <p className="text-xs font-semibold text-white">Trending {currentRegionName}</p>
+                        <p className="text-[10px] text-gray-300">Chart • YouTube Music</p>
+                      </div>
+                    </div>
+
+                    {/* Card 2: Live Performances */}
+                    <div
+                      onClick={() => handleSelectGenre("Live Performance")}
+                      className="flex-shrink-0 w-44 md:w-48 bg-gradient-to-br from-zinc-800 to-black border border-white/10 rounded-2xl p-4 flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
+                    >
+                      <div>
+                        <span className="text-[10px] font-bold tracking-wider uppercase text-gray-400">WEEKLY</span>
+                        <h3 className="text-xl font-black text-white mt-1">TOP 100</h3>
+                        <p className="text-xs text-red-400 font-semibold">LIVE SHOWS</p>
+                      </div>
+                      <div className="mt-6">
+                        <p className="text-xs font-semibold text-white">Top Live Shows</p>
+                        <p className="text-[10px] text-gray-400">Chart • YouTube Music</p>
+                      </div>
+                    </div>
+
+                    {/* Card 3: Top Hits */}
+                    <div
+                      onClick={() => handleSelectGenre("Top Hits")}
+                      className="flex-shrink-0 w-44 md:w-48 bg-gradient-to-br from-emerald-600/80 to-zinc-900 border border-white/10 rounded-2xl p-4 flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
+                    >
+                      <div>
+                        <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-200">DAILY</span>
+                        <h3 className="text-2xl font-black text-white mt-1">TOP HITS</h3>
+                      </div>
+                      <div className="mt-6">
+                        <p className="text-xs font-semibold text-white">Daily Top Hits</p>
+                        <p className="text-[10px] text-gray-300">Chart • YouTube Music</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* GENRES GRID */}
+                <section className="space-y-3">
+                  <h2 className="text-xl font-bold text-primary tracking-tight">Genres</h2>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {GENRES.map((g) => (
+                      <div
+                        key={g.name}
+                        onClick={() => handleSelectGenre(g.name)}
+                        className={`bg-gradient-to-br ${g.color} border border-white/10 rounded-2xl p-4 h-28 flex flex-col justify-between cursor-pointer hover:scale-[1.03] transition-transform shadow-lg relative overflow-hidden group`}
+                      >
+                        <span className="text-xs font-bold uppercase tracking-wider text-white/70">TOP 50</span>
+                        <h3 className="text-lg font-bold text-white group-hover:text-primary transition-colors">
+                          {g.name}
+                        </h3>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* DISCOVER MORE */}
+                <section className="pt-4">
+                  <div className="flex items-center gap-3 mb-6">
+                    <Compass size={24} className="text-primary" />
+                    <h2 className="text-xl font-bold text-white">Discover More</h2>
+                  </div>
+                  <DiscoverMore />
+                </section>
+              </>
+            )}
           </div>
         )}
-
-        <section className="mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <Compass size={28} className="text-primary" />
-            <h2 className="text-4xl font-bold tracking-tight text-white">Discover More</h2>
-          </div>
-          <DiscoverMore />
-        </section>
       </div>
     </div>
   )
@@ -358,7 +679,7 @@ function BrowseRow({
         {icon}
         <h2 className="text-lg font-bold text-foreground">{title}</h2>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
         {items.map((item) => (
           <button
             key={item.id}

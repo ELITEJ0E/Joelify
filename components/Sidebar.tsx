@@ -23,6 +23,8 @@ import {
   ClipboardPaste,
   FileText,
   Music2,
+  TrendingUp,
+  Compass,
 } from "lucide-react"
 import { CustomToast } from "./CustomToast"
 import { toast } from "sonner"
@@ -48,7 +50,7 @@ import { KeyboardShortcuts } from "./KeyboardShortcuts"
 
 
 interface SidebarProps {
-  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded") => void
+  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore") => void
   isOpen: boolean
   onClose: () => void
 }
@@ -404,7 +406,7 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
     }
   }
 
-  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded") => {
+  const handleNavigate = (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore") => {
     setActiveView(view)
     onNavigate(view)
     onClose()
@@ -471,15 +473,28 @@ export function Sidebar({ onNavigate, isOpen, onClose }: SidebarProps) {
                     </li>
                     <li>
                       <button
+                        onClick={() => handleNavigate("charts")}
+                        className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
+                          activeView === "charts"
+                            ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
+                            : "hover:bg-primary/10 hover:text-primary"
+                        }`}
+                      >
+                        <TrendingUp size={20} className="transition-transform duration-300 group-hover:scale-105" />
+                        <span className="font-medium text-sm">Top Charts</span>
+                      </button>
+                    </li>
+                    <li>
+                      <button
                         onClick={() => handleNavigate("search")}
                         className={`flex items-center space-x-3 w-full text-left p-2.5 rounded-lg transition-all duration-300 ease-in-out ${
-                          activeView === "search"
+                          activeView === "search" || activeView === "explore"
                             ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-l-4 border-primary shadow-md shadow-primary/10"
                             : "hover:bg-primary/10 hover:text-primary"
                         }`}
                       >
                         <Search size={20} className="transition-transform duration-300 group-hover:scale-105" />
-                        <span className="font-medium text-sm">Search</span>
+                        <span className="font-medium text-sm">Search & Explore</span>
                       </button>
                     </li>
                     <li>

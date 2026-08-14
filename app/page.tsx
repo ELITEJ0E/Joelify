@@ -15,7 +15,7 @@ import { useApp } from "@/contexts/AppContext"
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
-  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded">("home")
+  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore">("home")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { theme, setTheme, audioSettings, setAudioSettings } = useApp()
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -115,7 +115,7 @@ export default function Home() {
           >
             <Sidebar onNavigate={handleNavigate} isOpen={isSidebarOpen} onClose={closeSidebar} />
           </Suspense>
-          <MainContent view={currentView} onNavigate={handleNavigate} />
+          <MainContent view={currentView} onNavigate={handleNavigate} onOpenSidebar={() => setIsSidebarOpen(true)} />
         </div>
 
         <PlayerControls />
