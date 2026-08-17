@@ -89,7 +89,7 @@ export function PlayerControls() {
     } else {
       animate(expandY, vh, springConfig)
     }
-  }, [isExpandedPlayer, vh, expandY, springConfig])
+  }, [isExpandedPlayer, vh])
 
   // ─── Popstate Handling ───────────────────────────────────────────────────
 

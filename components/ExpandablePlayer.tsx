@@ -104,6 +104,7 @@ export function ExpandablePlayer({
   const initialSyncDoneRef = useRef(false)
 
   const x = useMotionValue(0)
+  const lyricsY = useMotionValue(0)
 
   const shouldReduceMotion = useReducedMotion()
   const tweenConfig = shouldReduceMotion 
@@ -118,13 +119,14 @@ export function ExpandablePlayer({
   useEffect(() => {
     if (!isExpanded) {
       x.set(0)
+      lyricsY.set(0)
       setShowVisualizer(false)
       setShowVideo(false)
       setShowLyrics(false)
       setShowQueue(false)
       destroyVideoPlayer()
     }
-  }, [isExpanded, x])
+  }, [isExpanded, x, lyricsY])
 
   const destroyVideoPlayer = useCallback(() => {
     try {
@@ -227,33 +229,31 @@ export function ExpandablePlayer({
     window.history.pushState({ modal: true, type: 'expandableLyrics' }, "");
     showLyricsRef.current = true;
     setShowLyrics(true);
-    animate(x, 0, tweenConfig);
-  }, [x, tweenConfig]);
+    animate(lyricsY, -actualVh, tweenConfig);
+  }, [lyricsY, actualVh, tweenConfig]);
 
   const closeLyrics = useCallback(() => {
     showLyricsRef.current = false;
-    setShowLyrics(false);
-    animate(x, 0, tweenConfig);
+    animate(lyricsY, 0, tweenConfig).then(() => setShowLyrics(false));
     
     setTimeout(() => {
       if (window.history.state?.type === 'expandableLyrics') {
         window.history.back();
       }
     }, 0);
-  }, [x, tweenConfig]);
+  }, [lyricsY, tweenConfig]);
 
   const openQueue = useCallback(() => {
     setShowLyrics(false);
     window.history.pushState({ modal: true, type: 'expandableQueue' }, "");
     showQueueRef.current = true;
     setShowQueue(true);
-    animate(x, 0, tweenConfig);
+    animate(x, -window.innerWidth, tweenConfig);
   }, [x, tweenConfig]);
 
   const closeQueue = useCallback(() => {
     showQueueRef.current = false;
-    setShowQueue(false);
-    animate(x, 0, tweenConfig);
+    animate(x, 0, tweenConfig).then(() => setShowQueue(false));
     
     setTimeout(() => {
       if (window.history.state?.type === 'expandableQueue') {
@@ -383,53 +383,80 @@ export function ExpandablePlayer({
   }, [activeExpandY])
 
   const handlePan = useCallback((_: any, info: PanInfo) => {
-    if (showLyrics || showQueue) return
-
     const absX = Math.abs(info.offset.x)
     const absY = Math.abs(info.offset.y)
 
     // Horizontal swipe for Queue or Track change
     if (absX > absY * 1.5) {
-      x.set(info.offset.x)
+      if (showQueue) {
+        x.set(-window.innerWidth + info.offset.x)
+      } else if (showLyrics) {
+        // do nothing
+      } else {
+        x.set(info.offset.x)
+      }
       return
     }
 
     // Vertical drag:
-    if (info.offset.y > 0) {
-      // Dragging down -> move activeExpandY towards actualVh
-      const targetY = Math.max(0, Math.min(actualVh, panStartYRef.current + info.offset.y))
-      activeExpandY.set(targetY)
+    if (showLyrics) {
+      lyricsY.set(-actualVh + info.offset.y)
+    } else if (showQueue) {
+      // do nothing
     } else {
-      // Dragging up -> slight elastic resistance
-      activeExpandY.set(Math.max(-25, panStartYRef.current + info.offset.y * 0.15))
+      if (info.offset.y > 0) {
+        // Dragging down -> move activeExpandY towards actualVh
+        const targetY = Math.max(0, Math.min(actualVh, panStartYRef.current + info.offset.y))
+        activeExpandY.set(targetY)
+      } else {
+        // Dragging up -> open lyrics!
+        lyricsY.set(Math.max(-actualVh, info.offset.y))
+      }
     }
-  }, [showLyrics, showQueue, activeExpandY, actualVh, x])
+  }, [showLyrics, showQueue, activeExpandY, actualVh, x, lyricsY])
 
   const handlePanEnd = useCallback((_: any, info: PanInfo) => {
-    if (showLyrics || showQueue) return
-
     const absX = Math.abs(info.offset.x)
     const absY = Math.abs(info.offset.y)
 
     // Horizontal swipe check
     if (absX > absY * 1.2 && (absX > 45 || Math.abs(info.velocity.x) > 250)) {
-      if (info.offset.x < 0 || info.velocity.x < -250) {
-        openQueue()
-      } else {
-        if (showQueue) {
+      if (showQueue) {
+        if (info.offset.x > 0 || info.velocity.x > 250) {
           closeQueue()
-        } else if (!showLyrics) {
+        } else {
+          openQueue() // snap back
+        }
+      } else if (!showLyrics) {
+        if (info.offset.x < 0 || info.velocity.x < -250) {
+          openQueue()
+        } else {
           onPrevious()
+          animate(x, 0, tweenConfig)
         }
       }
-      animate(x, 0, tweenConfig)
       return
     }
-    animate(x, 0, tweenConfig)
+
+    if (showQueue) {
+      openQueue()
+      return
+    } else if (!showLyrics) {
+      animate(x, 0, tweenConfig)
+    }
 
     // Vertical drag check
     const currentY = activeExpandY.get()
     const vy = info.velocity.y
+
+    if (showLyrics) {
+      if (info.offset.y > 100 || vy > 300) {
+        closeLyrics()
+      } else {
+        openLyrics()
+      }
+      return
+    }
 
     if (info.offset.y > 0) {
       // Dragged down
@@ -442,14 +469,12 @@ export function ExpandablePlayer({
       }
     } else if (info.offset.y < -40 || vy < -200) {
       // Dragged up when expanded -> open lyrics
-      animate(activeExpandY, 0, { type: "spring", stiffness: 350, damping: 32 })
-      if (!showLyrics && !showQueue) {
-        openLyrics()
-      }
+      openLyrics()
     } else {
+      animate(lyricsY, 0, tweenConfig)
       animate(activeExpandY, 0, { type: "spring", stiffness: 350, damping: 32 })
     }
-  }, [showLyrics, showQueue, openQueue, closeQueue, onPrevious, onExpandChange, openLyrics, activeExpandY, actualVh, x, tweenConfig])
+  }, [showLyrics, showQueue, openQueue, closeQueue, onPrevious, onExpandChange, openLyrics, activeExpandY, actualVh, x, lyricsY, tweenConfig])
 
   const handleBackdropClick = useCallback(() => {
     if (window.innerWidth >= 1024) onExpandChange(false)
@@ -788,7 +813,7 @@ export function ExpandablePlayer({
                 {/* Progress bar */}
                 <div className="flex items-center gap-3 w-full max-w-2xl mx-auto">
                   <span className="text-xs font-medium text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
-                  <div className="flex-1">
+                  <div className="flex-1" onPointerDown={(e) => e.stopPropagation()}>
                     <Slider 
                       value={[currentTime]} 
                       max={duration > 0 ? duration : 1} 
@@ -914,98 +939,63 @@ export function ExpandablePlayer({
         </div>
 
         {/* ── Sliding Queue sheet (Right to Left) ─────────────────────────────── */}
-        <AnimatePresence>
-          {showQueue && (
-            <motion.div
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={{ left: 0, right: 1 }}
-              onDragEnd={(_, info) => {
-                if (info.offset.x > 80 || info.velocity.x > 300) {
-                  closeQueue()
-                }
-              }}
-              onWheel={handleWheel}
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={tweenConfig}
-              style={{ touchAction: "none" }}
-              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 touch-none"
-              onClick={(e) => e.stopPropagation()}
+        <div 
+          className="absolute inset-y-0 left-full w-full z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 touch-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={closeQueue}
+              className="text-white/70 hover:text-white rounded-full"
+              aria-label="Close Queue"
             >
-              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={closeQueue}
-                  className="text-white/70 hover:text-white rounded-full"
-                  aria-label="Close Queue"
-                >
-                  <ChevronRight size={24} />
-                </Button>
-                <div className="flex items-center gap-2">
-                  <div className="w-12 h-1.5 bg-white/30 rounded-full" />
-                </div>
-                <div className="w-10" />
-              </div>
+              <ChevronRight size={24} />
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+            </div>
+            <div className="w-10" />
+          </div>
 
-              <div 
-                className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
-                onPointerDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-              >
-                <QueueSheet />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          <div 
+            className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            <QueueSheet />
+          </div>
+        </div>
 
         {/* ── Sliding up Lyrics sheet ─────────────────────────────── */}
-        <AnimatePresence>
-          {showLyrics && (
-            <motion.div
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0, bottom: 1 }}
-              onDragEnd={(_, info) => {
-                if (info.offset.y > 100 || info.velocity.y > 400) {
-                  closeLyrics()
-                }
-              }}
-              onWheel={handleWheel}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={tweenConfig}
-              style={{ touchAction: "none" }}
-              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 touch-none"
-              onClick={(e) => e.stopPropagation()}
+        <motion.div
+          style={{ y: lyricsY }}
+          className="absolute top-full left-0 w-full h-full z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 touch-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={closeLyrics}
+              className="text-white/70 hover:text-white rounded-full"
+              aria-label="Close Lyrics"
             >
-              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={closeLyrics}
-                  className="text-white/70 hover:text-white rounded-full"
-                  aria-label="Close Lyrics"
-                >
-                  <ChevronDown size={24} />
-                </Button>
-                <div className="w-12 h-1.5 bg-white/30 rounded-full" />
-                <div className="w-10" />
-              </div>
+              <ChevronDown size={24} />
+            </Button>
+            <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+            <div className="w-10" />
+          </div>
 
-              <div 
-                className="flex-1 w-full max-w-5xl mx-auto overflow-hidden relative cursor-auto"
-                onPointerDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-              >
-                <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          <div 
+            className="flex-1 w-full max-w-5xl mx-auto overflow-hidden relative cursor-auto"
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
+          </div>
+        </motion.div>
       </motion.div>
     </motion.div>
   )
