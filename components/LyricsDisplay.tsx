@@ -13,9 +13,10 @@ interface LyricsDisplayProps {
   currentTime: number
   isPlaying: boolean
   duration?: number
+  onSeek?: (value: number[]) => void
 }
 
-export function LyricsDisplay({ currentTime, isPlaying, duration }: LyricsDisplayProps) {
+export function LyricsDisplay({ currentTime, isPlaying, duration, onSeek }: LyricsDisplayProps) {
   const { currentTrack } = useApp()
   const { activeLyrics, isLoading, error } = useActiveLyrics()
 
@@ -246,11 +247,26 @@ export function LyricsDisplay({ currentTime, isPlaying, duration }: LyricsDispla
                    }
               }
 
+              const isClickable = !isUnsynced && typeof line.time === 'number' && !isNaN(line.time) && line.time >= 0 && !isSectionHeader && Boolean(textTrimmed) && Boolean(onSeek);
+              const interactiveStyles = isClickable 
+                ? "cursor-pointer hover:opacity-100 hover:scale-[1.02] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 rounded-lg py-1 select-none" 
+                : "";
+
               return (
                 <div
                   key={`lyric-${index}`}
                   ref={(el) => { lineRefs.current[index] = el }}
-                  className={`transition-all duration-300 transform origin-center px-4 md:px-8 max-w-5xl mx-auto w-full break-words whitespace-normal leading-relaxed ${baseStyles} ${textStyles} ${!textTrimmed ? 'min-h-[2rem]' : ''}`}
+                  onClick={isClickable ? () => onSeek?.([line.time]) : undefined}
+                  onKeyDown={isClickable ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSeek?.([line.time]);
+                    }
+                  } : undefined}
+                  role={isClickable ? "button" : undefined}
+                  tabIndex={isClickable ? 0 : undefined}
+                  aria-label={isClickable ? `Seek to ${Math.floor(line.time / 60)}:${Math.floor(line.time % 60).toString().padStart(2, '0')}` : undefined}
+                  className={`transition-all duration-300 transform origin-center px-4 md:px-8 max-w-5xl mx-auto w-full break-words whitespace-normal leading-relaxed ${baseStyles} ${textStyles} ${interactiveStyles} ${!textTrimmed ? 'min-h-[2rem]' : ''}`}
                 >
                   {safeText || " "}
                 </div>
@@ -264,6 +280,7 @@ export function LyricsDisplay({ currentTime, isPlaying, duration }: LyricsDispla
           isPlaying={isPlaying}
           duration={duration}
           activeLyrics={activeLyrics}
+          onSeek={onSeek}
         />
       )}
     </div>

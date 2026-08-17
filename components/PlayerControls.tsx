@@ -52,17 +52,15 @@ export function PlayerControls() {
   const [localFileUrl, setLocalFileUrl] = useState<string | null>(null)
 
   const barY = useMotionValue(0)
+  const trackX = useMotionValue(0)
+  const panAxisRef = useRef<"x" | "y" | null>(null)
+  const isPanActiveRef = useRef(false)
+  const hasMovedRef = useRef(false)
+
   const shouldReduceMotion = useReducedMotion()
   const springConfig = shouldReduceMotion 
     ? { duration: 0.15 } 
     : { type: "spring", stiffness: 300, damping: 30 }
-
-  const handleBarDragEnd = useCallback((_: any, info: PanInfo) => {
-    if (info.offset.y < -50 || info.velocity.y < -400) {
-      setIsExpandedPlayer(true)
-    }
-    animate(barY, 0, springConfig)
-  }, [barY, springConfig])
 
   // ─── Popstate Handling ───────────────────────────────────────────────────
 
@@ -304,27 +302,41 @@ export function PlayerControls() {
 
   const handlePlayPause = useCallback(() => {
     if (!currentTrack) return
-    if (!isReady && playbackSource !== "suno") return
     if (playbackSource === "youtube") {
-      if (!youtubePlayer) return
+      if (!youtubePlayer) {
+        setIsPlaying((prev) => !prev)
+        return
+      }
       try {
-        if (isPlaying && typeof youtubePlayer.pauseVideo === 'function') youtubePlayer.pauseVideo()
-        else if (!isPlaying && typeof youtubePlayer.playVideo === 'function') youtubePlayer.playVideo()
-      } catch (e) { console.warn("YT play/pause error", e) }
+        if (isPlaying) {
+          if (typeof youtubePlayer.pauseVideo === 'function') youtubePlayer.pauseVideo()
+          setIsPlaying(false)
+        } else {
+          if (typeof youtubePlayer.playVideo === 'function') youtubePlayer.playVideo()
+          setIsPlaying(true)
+        }
+      } catch (e) {
+        console.warn("YT play/pause error", e)
+        setIsPlaying((prev) => !prev)
+      }
     } else if (playbackSource === "suno" && sunoAudioRef.current) {
       try {
         if (isPlaying) {
-            sunoAudioRef.current.pause();
+          sunoAudioRef.current.pause()
+          setIsPlaying(false)
         } else {
-            const playPromise = sunoAudioRef.current.play();
-            if (playPromise !== undefined) playPromise.catch(e => console.warn("Suno play rejected:", e));
+          const playPromise = sunoAudioRef.current.play()
+          if (playPromise !== undefined) playPromise.catch(e => console.warn("Suno play rejected:", e))
+          setIsPlaying(true)
         }
-        setIsPlaying(!isPlaying);
       } catch (e) {
-          console.warn("Suno play/pause error", e);
+        console.warn("Suno play/pause error", e)
+        setIsPlaying((prev) => !prev)
       }
+    } else {
+      setIsPlaying((prev) => !prev)
     }
-  }, [youtubePlayer, currentTrack, isReady, isPlaying, playbackSource])
+  }, [youtubePlayer, currentTrack, isPlaying, playbackSource])
 
   // ─── seek ────────────────────────────────────────────────────────────────────
 
@@ -389,6 +401,128 @@ export function PlayerControls() {
       else { sunoAudioRef.current.volume = 0; setIsMuted(true); }
     }
   }, [youtubePlayer, isMuted, volume, playbackSource])
+
+  // ─── Mini Progress Bar Hover & Seek ─────────────────────────────────────────
+  const miniProgressRef = useRef<HTMLDivElement>(null)
+  const [hoverTime, setHoverTime] = useState<number | null>(null)
+  const [hoverPercent, setHoverPercent] = useState<number | null>(null)
+  const [hoverPos, setHoverPos] = useState<number | null>(null)
+
+  const handleMiniProgressHover = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!miniProgressRef.current || duration <= 0) return
+    const rect = miniProgressRef.current.getBoundingClientRect()
+    const offsetX = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+    const pct = (offsetX / rect.width) * 100
+    const time = (offsetX / rect.width) * duration
+    setHoverTime(time)
+    setHoverPercent(pct)
+    setHoverPos(offsetX)
+  }, [duration])
+
+  const handleMiniProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!miniProgressRef.current || duration <= 0) return
+    const rect = miniProgressRef.current.getBoundingClientRect()
+    const offsetX = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+    const newTime = (offsetX / rect.width) * duration
+    handleSeek([newTime])
+  }, [duration, handleSeek])
+
+  // ─── Swipe & Pan Gesture Handlers ──────────────────────────────────────────
+
+  const handlePanStart = useCallback(() => {
+    panAxisRef.current = null
+    isPanActiveRef.current = true
+    hasMovedRef.current = false
+  }, [])
+
+  const handlePan = useCallback((_: any, info: PanInfo) => {
+    if (!isPanActiveRef.current) return
+
+    const absX = Math.abs(info.offset.x)
+    const absY = Math.abs(info.offset.y)
+
+    // Disambiguate axis once movement passes initial threshold
+    if (panAxisRef.current === null) {
+      if (absX >= 6 || absY >= 6) {
+        hasMovedRef.current = true
+        if (absX > absY) {
+          panAxisRef.current = "x"
+        } else {
+          panAxisRef.current = "y"
+        }
+      }
+    }
+
+    if (panAxisRef.current === "x") {
+      trackX.set(info.offset.x)
+    } else if (panAxisRef.current === "y") {
+      // 1:1 direct manipulation: as you slowly drag up, the bar translates up with your finger
+      if (info.offset.y < 0) {
+        barY.set(info.offset.y)
+      } else {
+        barY.set(info.offset.y * 0.15)
+      }
+    }
+  }, [barY, trackX])
+
+  const handlePanEnd = useCallback((_: any, info: PanInfo) => {
+    isPanActiveRef.current = false
+    const axis = panAxisRef.current
+    panAxisRef.current = null
+
+    if (axis === "x") {
+      const isSwipeLeft = info.offset.x < -50 || info.velocity.x < -300
+      const isSwipeRight = info.offset.x > 50 || info.velocity.x > 300
+
+      if (isSwipeLeft) {
+        if (shouldReduceMotion) {
+          handleNext()
+          trackX.set(0)
+        } else {
+          animate(trackX, -150, { duration: 0.12, ease: "easeOut" }).then(() => {
+            handleNext()
+            trackX.set(120)
+            animate(trackX, 0, springConfig)
+          })
+        }
+      } else if (isSwipeRight) {
+        if (shouldReduceMotion) {
+          handlePrevious()
+          trackX.set(0)
+        } else {
+          animate(trackX, 150, { duration: 0.12, ease: "easeOut" }).then(() => {
+            handlePrevious()
+            trackX.set(-120)
+            animate(trackX, 0, springConfig)
+          })
+        }
+      } else {
+        animate(trackX, 0, springConfig)
+      }
+      animate(barY, 0, springConfig)
+    } else if (axis === "y") {
+      // Release check: if dragged up enough or flicked, open player smoothly
+      if (info.offset.y < -50 || info.velocity.y < -250) {
+        setIsExpandedPlayer(true)
+      }
+      animate(barY, 0, springConfig)
+      animate(trackX, 0, springConfig)
+    } else {
+      animate(barY, 0, springConfig)
+      animate(trackX, 0, springConfig)
+    }
+
+    setTimeout(() => {
+      hasMovedRef.current = false
+    }, 60)
+  }, [barY, trackX, springConfig, shouldReduceMotion, handleNext, handlePrevious])
+
+  const handleBarClick = useCallback((e: React.MouseEvent) => {
+    if (hasMovedRef.current || Math.abs(barY.get()) > 8 || Math.abs(trackX.get()) > 8) {
+      return
+    }
+    setIsExpandedPlayer(true)
+  }, [barY, trackX])
 
   // ─── YouTube callbacks ───────────────────────────────────────────────────────
 
@@ -861,124 +995,195 @@ export function PlayerControls() {
       {/* ── Collapsed bar ─────────────────────────────────────────────────── */}
       {!isExpandedPlayer && (
         <motion.div
-          drag="y"
-          dragConstraints={{ top: -300, bottom: 0 }}
-          dragElastic={{ top: 0.2, bottom: 0 }}
           style={{ y: barY }}
-          onDragEnd={handleBarDragEnd}
-          className="bottom-player-bar bg-black/40 backdrop-blur-2xl border-t border-white/[0.07] text-white p-3 md:p-4 w-full z-50 relative cursor-pointer touch-pan-y"
+          onPanStart={handlePanStart}
+          onPan={handlePan}
+          onPanEnd={handlePanEnd}
+          onClick={handleBarClick}
+          className="bottom-player-bar fixed bottom-[50px] lg:bottom-0 left-0 right-0 z-40 bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-none"
         >
-        <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
-
-          {/* Desktop: track info */}
+          {/* ── Top Interactive Seeker Bar on Mini-Player (with hover timeframe display) ── */}
           <div
-            className="hidden md:flex items-center gap-4 flex-1 min-w-0 cursor-pointer rounded-lg p-2 hover:bg-primary/15 transition-colors duration-150"
-            onClick={() => setIsExpandedPlayer(true)}
+            ref={miniProgressRef}
+            className="group/seeker absolute -top-2.5 left-0 right-0 h-5 cursor-pointer z-50 flex items-center px-0"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleMiniProgressClick(e)
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseMove={handleMiniProgressHover}
+            onMouseLeave={() => {
+              setHoverTime(null)
+              setHoverPercent(null)
+              setHoverPos(null)
+            }}
           >
-            {currentTrack ? (
-              <>
-                {currentTrack.thumbnail ? (
-                  <Image src={currentTrack.thumbnail || "/placeholder.svg"} width={56} height={56}
-                    alt={currentTrack.title || "Track"} className={`w-14 h-14 rounded object-cover flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`} />
-                ) : (
-                  <div className={`w-14 h-14 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`}>
-                    <span className="text-2xl text-zinc-500">♪</span>
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
-                    <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
-                    {playbackSource === "suno" && <span className="text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded ml-1 flex-shrink-0">Joel's Music</span>}
-                  </div>
-                  <p className="text-xs text-zinc-400 line-clamp-1">{currentTrack.artist}</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="w-14 h-14 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl text-zinc-500">♪</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-zinc-500">No track playing</p>
-                  <p className="text-xs text-zinc-600">Search for music to get started</p>
-                </div>
-              </>
+            {/* Base track */}
+            <div className="w-full h-[2.5px] group-hover/seeker:h-[6px] bg-white/15 overflow-hidden transition-all duration-150 relative">
+              {/* Progress fill */}
+              <div
+                className="h-full bg-primary relative transition-[width] duration-75 ease-linear"
+                style={{
+                  width: duration > 0 ? `${Math.min(100, Math.max(0, (currentTime / duration) * 100))}%` : "0%",
+                }}
+              >
+                {/* Glow Thumb on hover */}
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md opacity-0 group-hover/seeker:opacity-100 transition-opacity" />
+              </div>
+
+              {/* Hover preview marker */}
+              {hoverPercent !== null && (
+                <div
+                  className="absolute top-0 bottom-0 bg-white/20 pointer-events-none"
+                  style={{ left: 0, width: `${hoverPercent}%` }}
+                />
+              )}
+            </div>
+
+            {/* Hover Timestamp Tooltip */}
+            {hoverTime !== null && hoverPos !== null && (
+              <div
+                className="absolute -top-7 px-2 py-0.5 rounded-md bg-zinc-950/95 border border-white/20 text-white text-[11px] font-mono shadow-2xl pointer-events-none -translate-x-1/2 z-50 whitespace-nowrap backdrop-blur-md"
+                style={{ left: `${Math.max(28, Math.min(hoverPos, (typeof window !== 'undefined' ? window.innerWidth : 800) - 28))}px` }}
+              >
+                {formatTime(hoverTime)}
+              </div>
             )}
           </div>
 
-          {/* Mobile: track info + extras */}
-          <div className="md:hidden w-full flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer rounded-lg p-1 hover:bg-primary/15 transition-colors duration-150"
-              onClick={() => setIsExpandedPlayer(true)}>
+          {/* Mobile minimal mini player (<md) */}
+          <div className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full">
+            <motion.div
+              style={{ x: trackX }}
+              className="flex items-center gap-3 flex-1 min-w-0"
+            >
               {currentTrack ? (
                 <>
                   {currentTrack.thumbnail ? (
-                    <Image src={currentTrack.thumbnail || "/placeholder.svg"} width={48} height={48}
-                      alt={currentTrack.title || "Track"} className={`w-12 h-12 rounded object-cover flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`} />
+                    <div className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-zinc-800 shadow-md">
+                      <Image
+                        src={currentTrack.thumbnail || "/placeholder.svg"}
+                        width={44}
+                        height={44}
+                        alt={currentTrack.title || "Track"}
+                        className={`w-full h-full object-cover ${isPlaying ? "ring-1 ring-primary/40" : ""}`}
+                      />
+                    </div>
                   ) : (
-                    <div className={`w-12 h-12 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`}>
-                      <span className="text-xl text-zinc-500">♪</span>
+                    <div className="w-11 h-11 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0">
+                      <Music2 size={20} className="text-zinc-500" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate leading-tight">
+                        {currentTrack.title}
+                      </p>
+                      {playbackSource === "suno" && (
+                        <span className="text-[9px] bg-violet-500/20 text-violet-300 px-1 py-0.2 rounded font-medium shrink-0">
+                          Joel
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 truncate leading-tight mt-0.5">
+                      {currentTrack.artist}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-11 h-11 rounded-lg bg-zinc-800/80 border border-white/10 flex items-center justify-center shrink-0">
+                    <Music2 size={20} className="text-zinc-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-400 truncate">No track playing</p>
+                    <p className="text-xs text-zinc-600 truncate">Tap to browse music</p>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+
+            {/* ONLY Play/Pause button on mobile right */}
+            <div className="flex items-center shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-10 w-10 text-white hover:text-primary hover:bg-white/10 rounded-full transition-transform active:scale-90"
+                onClick={handlePlayPause}
+                disabled={!currentTrack}
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? (
+                  <Pause fill="currentColor" size={22} />
+                ) : (
+                  <Play fill="currentColor" size={22} className="ml-0.5" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Desktop full bar (>=md) */}
+          <div className="hidden md:flex flex-row items-center justify-between gap-4">
+            {/* Desktop: track info */}
+            <div
+              className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer rounded-lg p-2 hover:bg-primary/15 transition-colors duration-150"
+              onClick={() => setIsExpandedPlayer(true)}
+            >
+              {currentTrack ? (
+                <>
+                  {currentTrack.thumbnail ? (
+                    <Image
+                      src={currentTrack.thumbnail || "/placeholder.svg"}
+                      width={56}
+                      height={56}
+                      alt={currentTrack.title || "Track"}
+                      className={`w-14 h-14 rounded-lg object-cover flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`}
+                    />
+                  ) : (
+                    <div className={`w-14 h-14 bg-zinc-800 rounded-lg flex items-center justify-center flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`}>
+                      <span className="text-2xl text-zinc-500">♪</span>
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1">
                       <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
-                      {playbackSource === "suno" && <span className="text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded ml-1 flex-shrink-0">Joel's Music</span>}
+                      {playbackSource === "suno" && (
+                        <span className="text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded ml-1 flex-shrink-0">
+                          Joel's Music
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-zinc-400 line-clamp-1">{currentTrack.artist}</p>
                   </div>
                 </>
               ) : (
-                <div className="flex-1"><p className="text-sm text-zinc-500">No track playing</p></div>
+                <>
+                  <div className="w-14 h-14 bg-zinc-800 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="text-2xl text-zinc-500">♪</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-zinc-500">No track playing</p>
+                    <p className="text-xs text-zinc-600">Search for music to get started</p>
+                  </div>
+                </>
               )}
             </div>
-            <div className="flex items-center gap-1">
-              <Button size="icon" variant="ghost"
-                onClick={(e) => { e.stopPropagation(); setLyricsOpen(!isLyricsOpen); }}
-                className={`h-10 w-10 transition-colors ${isLyricsOpen ? 'text-primary' : 'text-zinc-400 hover:text-white hover:bg-primary/15'}`}
-                aria-label="Show lyrics" disabled={!currentTrack}>
-                <Type size={20} />
-              </Button>
 
-              <Button size="icon" variant="ghost"
-                onClick={(e) => { e.stopPropagation(); setQueueOpen(!isQueueOpen); }}
-                className={`h-10 w-10 relative transition-colors ${isQueueOpen ? 'text-primary' : 'text-zinc-400 hover:text-white hover:bg-primary/15'}`}
-                aria-label="Open queue">
-                <List size={20} />
-                {queue.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                    {queue.length}
-                  </span>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Playback controls */}
-          <div className="flex-col items-center w-full md:flex-1 md:max-w-2xl">
-            <div className="flex items-center gap-2 w-full mb-3 md:mb-2">
-              <span className="text-xs text-zinc-500 w-10 text-right">{formatTime(currentTime)}</span>
-              <div className="flex-1">
-                  <Slider value={[currentTime]} max={duration > 0 ? duration : 1} step={0.1}
-                    onValueChange={handleSeek}
-                    disabled={!currentTrack || duration === 0}
-                    aria-label="Seek"
-                  />
-              </div>
-              <span className="text-xs text-zinc-500 w-10">{formatTime(duration)}</span>
-            </div>
-
-            <div className="flex items-center justify-center w-full gap-3 md:gap-4 mb-2">
-                {/* Shuffle */}
+            {/* Playback controls */}
+            <div className="flex items-center justify-center flex-1 max-w-md gap-3 md:gap-4" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+              {/* Shuffle */}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" onClick={toggleShuffle} disabled={!currentTrack}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={toggleShuffle}
+                      disabled={!currentTrack}
                       aria-label="Toggle shuffle"
                       className={`h-10 w-10 transition-colors ${
-                        shuffle 
-                          ? "text-primary" 
-                          : "text-zinc-400 hover:text-white hover:bg-primary/15"
-                      }`}>
+                        shuffle ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"
+                      }`}
+                    >
                       <Shuffle size={20} />
                     </Button>
                   </TooltipTrigger>
@@ -990,9 +1195,14 @@ export function PlayerControls() {
                 {/* Previous */}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" onClick={handlePrevious} disabled={!currentTrack}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handlePrevious}
+                      disabled={!currentTrack}
                       aria-label="Previous"
-                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary/15 transition-colors">
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary/15 transition-colors"
+                    >
                       <SkipBack size={20} />
                     </Button>
                   </TooltipTrigger>
@@ -1004,14 +1214,18 @@ export function PlayerControls() {
                 {/* Play/Pause */}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button size="icon"
-                      className="bg-white text-black rounded-full h-14 w-14 hover:scale-105 transform hover:bg-primary hover:text-white transition-all duration-150 shadow-lg shadow-primary/20 ring-2 ring-primary/20 disabled:opacity-50"
-                      onClick={handlePlayPause} disabled={!currentTrack || (!isReady && playbackSource !== "suno")}
-                      aria-label={isPlaying ? "Pause" : "Play"}>
-                      {isPlaying ? 
-                        <Pause fill="currentColor" size={24} /> : 
-                        <Play fill="currentColor" size={24} className="ml-0.5" />
-                      }
+                    <Button
+                      size="icon"
+                      className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 transform hover:bg-primary hover:text-white transition-all duration-150 shadow-lg shadow-primary/20 ring-2 ring-primary/20 disabled:opacity-50"
+                      onClick={handlePlayPause}
+                      disabled={!currentTrack}
+                      aria-label={isPlaying ? "Pause" : "Play"}
+                    >
+                      {isPlaying ? (
+                        <Pause fill="currentColor" size={22} />
+                      ) : (
+                        <Play fill="currentColor" size={22} className="ml-0.5" />
+                      )}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -1022,9 +1236,14 @@ export function PlayerControls() {
                 {/* Next */}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" onClick={handleNext} disabled={!currentTrack}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleNext}
+                      disabled={!currentTrack}
                       aria-label="Next"
-                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary/15 transition-colors">
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary/15 transition-colors"
+                    >
                       <SkipForward size={20} />
                     </Button>
                   </TooltipTrigger>
@@ -1034,17 +1253,21 @@ export function PlayerControls() {
                 </Tooltip>
 
                 {/* Repeat */}
-                <Tooltip>                
+                <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" onClick={toggleRepeat} disabled={!currentTrack}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={toggleRepeat}
+                      disabled={!currentTrack}
                       aria-label={`Repeat: ${repeat}`}
                       className={`h-10 w-10 relative transition-colors ${
                         repeat !== "off"
                           ? "text-primary hover:text-primary hover:bg-primary/10"
                           : "text-zinc-400 hover:text-white hover:bg-primary/15"
-                      }`}>
+                      }`}
+                    >
                       {repeat === "one" ? <Repeat1 size={20} /> : <Repeat size={20} />}
-                      {/* Active dot — same pattern as shuffle */}
                       {repeat !== "off" && (
                         <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
                       )}
@@ -1059,15 +1282,16 @@ export function PlayerControls() {
                 {playbackSource === "youtube" && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost"
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         onClick={() => setBarVideoMode((v) => !v)}
                         disabled={!currentTrack}
                         aria-label={barVideoMode ? "Hide video" : "Show video"}
                         className={`h-10 w-10 transition-colors ${
-                          barVideoMode 
-                            ? "text-primary" 
-                            : "text-zinc-400 hover:text-white hover:bg-primary/15"
-                        }`}>
+                          barVideoMode ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"
+                        }`}
+                      >
                         {barVideoMode ? <Video size={20} /> : <Music size={20} />}
                       </Button>
                     </TooltipTrigger>
@@ -1076,16 +1300,20 @@ export function PlayerControls() {
                     </TooltipContent>
                   </Tooltip>
                 )}
-              </div>
-          </div>
+            </div>
 
-          {/* Desktop: right side controls */}
-          <div className="hidden md:flex items-center gap-2 flex-1 justify-end">
+            {/* Desktop: right side controls */}
+            <div className="flex items-center gap-2 flex-1 justify-end" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={() => setLyricsOpen(!isLyricsOpen)} disabled={!currentTrack}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setLyricsOpen(!isLyricsOpen)}
+                    disabled={!currentTrack}
                     aria-label="Lyrics"
-                    className={`h-10 w-10 transition-colors ${isLyricsOpen ? 'text-primary' : 'text-zinc-400 hover:text-white hover:bg-primary/15'}`}>
+                    className={`h-10 w-10 transition-colors ${isLyricsOpen ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"}`}
+                  >
                     <Type size={20} />
                   </Button>
                 </TooltipTrigger>
@@ -1095,10 +1323,13 @@ export function PlayerControls() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost"
-                    onClick={(e) => { e.stopPropagation(); setQueueOpen(!isQueueOpen); }}
-                    className={`text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors ${isQueueOpen ? 'text-primary' : ''}`}
-                    aria-label="Queue">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setQueueOpen(!isQueueOpen)}
+                    className={`text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors ${isQueueOpen ? "text-primary" : ""}`}
+                    aria-label="Queue"
+                  >
                     <List size={20} />
                     {queue.length > 0 && (
                       <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center rounded-[6px]">
@@ -1112,13 +1343,16 @@ export function PlayerControls() {
                 </TooltipContent>
               </Tooltip>
 
-
-
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={() => setIsMiniPlayer(true)}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setIsMiniPlayer(true)}
                     className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
-                    disabled={!currentTrack} aria-label="Mini player">
+                    disabled={!currentTrack}
+                    aria-label="Mini player"
+                  >
                     <Minimize2 size={20} />
                   </Button>
                 </TooltipTrigger>
@@ -1140,9 +1374,13 @@ export function PlayerControls() {
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="icon" variant="ghost" onClick={toggleMute}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={toggleMute}
                     className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
-                    aria-label={isMuted ? "Unmute" : "Mute"}>
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                  >
                     {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
                   </Button>
                 </TooltipTrigger>
@@ -1151,13 +1389,13 @@ export function PlayerControls() {
                 </TooltipContent>
               </Tooltip>
 
-            <div className="w-24">
-              <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} aria-label="Volume" />
+              <div className="w-24">
+                <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} aria-label="Volume" />
+              </div>
             </div>
           </div>
-        </div>
-      </motion.div>
-    )}
+        </motion.div>
+      )}
 
     {/* ── Gesture-Driven Queue Sheet ─────────────────────────────── */}
     <AnimatePresence>
@@ -1171,9 +1409,9 @@ export function PlayerControls() {
               setQueueOpen(false)
             }
           }}
-          initial={{ y: "100%", opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "100%", opacity: 0 }}
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
           transition={springConfig}
           className="fixed inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
           onClick={(e) => e.stopPropagation()}
@@ -1209,15 +1447,15 @@ export function PlayerControls() {
         <motion.div
           drag="y"
           dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={{ top: 0, bottom: 0.7 }}
+          dragElastic={{ top: 0, bottom: 0.8 }}
           onDragEnd={(_, info) => {
-            if (info.offset.y > 80 || info.velocity.y > 400) {
+            if (info.offset.y > 100 || info.velocity.y > 400) {
               setLyricsOpen(false)
             }
           }}
-          initial={{ y: "100%", opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "100%", opacity: 0 }}
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
           transition={springConfig}
           className="fixed inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
           onClick={(e) => e.stopPropagation()}
@@ -1233,7 +1471,7 @@ export function PlayerControls() {
               <ChevronDown size={24} />
             </Button>
             <div className="w-12 h-1.5 bg-white/30 rounded-full" />
-            <div className="text-xs font-semibold text-white/80">Lyrics</div>
+            <div className="w-10" />
           </div>
 
           <div 
@@ -1241,7 +1479,7 @@ export function PlayerControls() {
             onPointerDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
-            <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} />
+            <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={handleSeek} />
           </div>
         </motion.div>
       )}

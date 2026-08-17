@@ -70,7 +70,7 @@ export function PlaylistView() {
 
   if (!currentPlaylist) {
     return (
-      <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-3 sm:p-8 overflow-y-auto">
+      <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-3 sm:p-8 pb-32 sm:pb-36 overflow-y-auto">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-20">
             <p className="text-xl text-muted-foreground">No playlist selected</p>
@@ -161,7 +161,7 @@ export function PlaylistView() {
   }
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-3 sm:p-8 overflow-y-auto">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-3 sm:p-8 pb-32 sm:pb-36 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-end gap-6 mb-8">
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

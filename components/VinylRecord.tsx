@@ -36,8 +36,9 @@ const VinylRecord = memo(function VinylRecord({ isPlaying, coverImage }: VinylRe
         <div
           className="absolute inset-0 rounded-full overflow-hidden"
           style={{
-            animation: 'spin 3.5s linear infinite',
+            animation: 'vinyl-spin 3.5s linear infinite',
             animationPlayState: isPlaying ? 'running' : 'paused',
+            WebkitAnimationPlayState: isPlaying ? 'running' : 'paused',
             transform: 'translate3d(0, 0, 0)',
             willChange: 'transform',
             backfaceVisibility: 'hidden',

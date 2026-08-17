@@ -8,9 +8,10 @@ interface KaraokeLyricsViewProps {
   isPlaying: boolean
   duration?: number
   activeLyrics: LyricLine[]
+  onSeek?: (value: number[]) => void
 }
 
-export function KaraokeLyricsView({ currentTime, isPlaying, duration, activeLyrics }: KaraokeLyricsViewProps) {
+export function KaraokeLyricsView({ currentTime, isPlaying, duration, activeLyrics, onSeek }: KaraokeLyricsViewProps) {
   const [smoothTime, setSmoothTime] = useState(currentTime);
   const lastUpdateRef = useRef(performance.now());
   const currentTimeRef = useRef(currentTime);
@@ -154,12 +155,26 @@ export function KaraokeLyricsView({ currentTime, isPlaying, duration, activeLyri
     });
   }, [activeText]);
 
+  const isNextClickable = !isUnsynced && typeof nextLine?.time === 'number' && !isNaN(nextLine.time) && nextLine.time >= 0 && Boolean(onSeek);
+
   if (!activeLine) {
     // Blank/empty state, render nothing (or show upcoming next line preview if available)
     if (nextLine) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center px-6 md:px-12 relative z-10 select-none">
-          <div className="text-muted-foreground/30 text-lg md:text-xl font-medium max-w-2xl animate-pulse">
+          <div 
+            onClick={isNextClickable ? () => onSeek?.([nextLine!.time]) : undefined}
+            onKeyDown={isNextClickable ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSeek?.([nextLine!.time]);
+              }
+            } : undefined}
+            role={isNextClickable ? "button" : undefined}
+            tabIndex={isNextClickable ? 0 : undefined}
+            aria-label={isNextClickable ? `Seek to ${Math.floor(nextLine.time / 60)}:${Math.floor(nextLine.time % 60).toString().padStart(2, '0')}` : undefined}
+            className={`text-muted-foreground/30 text-lg md:text-xl font-medium max-w-2xl animate-pulse ${isNextClickable ? 'cursor-pointer hover:text-muted-foreground/60 hover:scale-[1.02] transition-all' : ''}`}
+          >
             {nextLine.text.replace(/\$5[a-fA-F0-9]{1,2}/gi, "")}
           </div>
         </div>
@@ -168,12 +183,24 @@ export function KaraokeLyricsView({ currentTime, isPlaying, duration, activeLyri
     return null
   }
 
+  const isActiveClickable = !isUnsynced && typeof activeLine?.time === 'number' && !isNaN(activeLine.time) && activeLine.time >= 0 && Boolean(onSeek);
+
   return (
     <div className="flex flex-col items-center justify-center h-full text-center px-6 md:px-12 relative z-10 select-none">
       {/* Active Line Container */}
       <div 
         style={{ opacity }} 
-        className="w-full max-w-5xl mx-auto mb-8 text-lg md:text-xl font-bold leading-relaxed break-words whitespace-pre-wrap"
+        onClick={isActiveClickable ? () => onSeek?.([activeLine!.time]) : undefined}
+        onKeyDown={isActiveClickable ? (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSeek?.([activeLine!.time]);
+          }
+        } : undefined}
+        role={isActiveClickable ? "button" : undefined}
+        tabIndex={isActiveClickable ? 0 : undefined}
+        aria-label={isActiveClickable ? `Seek to ${Math.floor(activeLine.time / 60)}:${Math.floor(activeLine.time % 60).toString().padStart(2, '0')}` : undefined}
+        className={`w-full max-w-5xl mx-auto mb-8 text-lg md:text-xl font-bold leading-relaxed break-words whitespace-pre-wrap ${isActiveClickable ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.99] transition-transform' : ''}`}
         id="active-lyric-container"
       >
         {tokensWithProgress.map((t, i) => {
@@ -206,7 +233,17 @@ export function KaraokeLyricsView({ currentTime, isPlaying, duration, activeLyri
       {/* Next Line Preview */}
       {nextText && (
         <div 
-          className="text-muted-foreground/40 text-lg md:text-xl font-medium max-w-xl mx-auto animate-fade-in"
+          onClick={isNextClickable ? () => onSeek?.([nextLine!.time]) : undefined}
+          onKeyDown={isNextClickable ? (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onSeek?.([nextLine!.time]);
+            }
+          } : undefined}
+          role={isNextClickable ? "button" : undefined}
+          tabIndex={isNextClickable ? 0 : undefined}
+          aria-label={isNextClickable && nextLine ? `Seek to ${Math.floor(nextLine.time / 60)}:${Math.floor(nextLine.time % 60).toString().padStart(2, '0')}` : undefined}
+          className={`text-muted-foreground/40 text-lg md:text-xl font-medium max-w-xl mx-auto animate-fade-in ${isNextClickable ? 'cursor-pointer hover:text-muted-foreground/80 hover:scale-[1.02] transition-all' : ''}`}
           id="next-lyric-preview"
         >
           {nextText}

@@ -789,7 +789,7 @@ export function JoelsMusicView() {
   };
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground overflow-y-auto relative">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground pb-32 md:pb-36 overflow-y-auto relative">
       <div className="max-w-7xl mx-auto p-2 md:p-8 space-y-4 md:space-y-8 relative z-10 w-full">
         
         {/* Header */}

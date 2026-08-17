@@ -132,6 +132,18 @@
     animation: gradientMove 10s ease infinite;
   }
 
+  @keyframes vinyl-spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  .animate-vinyl-spin {
+    animation: vinyl-spin 3.5s linear infinite;
+  }
+
   /* ── Hover utilities ──────────────────────────────────────────────────── */
 
   /* Subtle row hover — used in track lists */

@@ -109,7 +109,7 @@ export function LibraryView({ onNavigate }: LibraryViewProps) {
   const totalTracks = playlists.reduce((acc, p) => acc + p.tracks.length, 0)
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 overflow-y-auto">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 pb-32 md:pb-36 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 gap-4">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Your Library</h1>

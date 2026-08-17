@@ -75,7 +75,7 @@ export function LikedSongsView() {
   }
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-3 md:p-8 overflow-y-auto">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-3 md:p-8 pb-32 md:pb-36 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row items-start md:items-end gap-4 md:gap-6 mb-6 md:mb-8">
           <div className="w-full md:w-52 h-52 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center shadow-2xl">

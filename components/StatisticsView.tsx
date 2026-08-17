@@ -137,7 +137,7 @@ export function StatisticsView() {
   const maxPlays = Math.max(...stats.playsByDay.map((d) => d.plays), 1)
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-6 lg:p-8 overflow-y-auto">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-6 lg:p-8 pb-32 md:pb-36 overflow-y-auto">
       <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
