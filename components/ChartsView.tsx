@@ -213,7 +213,7 @@ export function ChartsView({ onNavigate, onOpenSidebar }: ChartsViewProps) {
                       src={video.thumbnail || "/placeholder.svg"}
                       alt={video.title}
                       fill
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="object-cover"
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Play fill="currentColor" size={18} className="text-white ml-0.5" />

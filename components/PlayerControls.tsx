@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { motion, AnimatePresence, useMotionValue, animate, useReducedMotion, type PanInfo } from "framer-motion"
+import { motion, AnimatePresence, useMotionValue, useTransform, animate, useReducedMotion, type PanInfo } from "framer-motion"
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
   Volume2, VolumeX, List, Youtube, Music2, Video, Music,
@@ -57,10 +57,39 @@ export function PlayerControls() {
   const isPanActiveRef = useRef(false)
   const hasMovedRef = useRef(false)
 
+  const [vh, setVh] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 800))
+  const expandY = useMotionValue(vh)
+  const [isPanActive, setIsPanActive] = useState(false)
+  const panStartYRef = useRef(vh)
+
+  const miniBarOpacity = useTransform(expandY, [vh, vh * 0.82], [1, 0])
+  const miniBarPointerEvents = useTransform(expandY, [vh, vh * 0.88], ["auto", "none"])
+
   const shouldReduceMotion = useReducedMotion()
   const springConfig = shouldReduceMotion 
     ? { duration: 0.15 } 
     : { type: "spring", stiffness: 300, damping: 30 }
+
+  useEffect(() => {
+    const handleResize = () => {
+      const newVh = window.innerHeight
+      setVh(newVh)
+      if (!isExpandedPlayer && !isPanActiveRef.current) {
+        expandY.set(newVh)
+      }
+    }
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [isExpandedPlayer, expandY])
+
+  useEffect(() => {
+    if (isPanActiveRef.current) return
+    if (isExpandedPlayer) {
+      animate(expandY, 0, springConfig)
+    } else {
+      animate(expandY, vh, springConfig)
+    }
+  }, [isExpandedPlayer, vh, expandY, springConfig])
 
   // ─── Popstate Handling ───────────────────────────────────────────────────
 
@@ -432,8 +461,10 @@ export function PlayerControls() {
   const handlePanStart = useCallback(() => {
     panAxisRef.current = null
     isPanActiveRef.current = true
+    setIsPanActive(true)
     hasMovedRef.current = false
-  }, [])
+    panStartYRef.current = expandY.get()
+  }, [expandY])
 
   const handlePan = useCallback((_: any, info: PanInfo) => {
     if (!isPanActiveRef.current) return
@@ -456,17 +487,15 @@ export function PlayerControls() {
     if (panAxisRef.current === "x") {
       trackX.set(info.offset.x)
     } else if (panAxisRef.current === "y") {
-      // 1:1 direct manipulation: as you slowly drag up, the bar translates up with your finger
-      if (info.offset.y < 0) {
-        barY.set(info.offset.y)
-      } else {
-        barY.set(info.offset.y * 0.15)
-      }
+      // 1:1 direct smooth manipulation: as you drag up, the player sheet slides up continuously with your mouse/finger
+      const targetY = Math.max(0, Math.min(vh, panStartYRef.current + info.offset.y))
+      expandY.set(targetY)
     }
-  }, [barY, trackX])
+  }, [expandY, trackX, vh])
 
   const handlePanEnd = useCallback((_: any, info: PanInfo) => {
     isPanActiveRef.current = false
+    setIsPanActive(false)
     const axis = panAxisRef.current
     panAxisRef.current = null
 
@@ -499,30 +528,31 @@ export function PlayerControls() {
       } else {
         animate(trackX, 0, springConfig)
       }
-      animate(barY, 0, springConfig)
     } else if (axis === "y") {
-      // Release check: if dragged up enough or flicked, open player smoothly
-      if (info.offset.y < -50 || info.velocity.y < -250) {
+      const currentY = expandY.get()
+      const vy = info.velocity.y
+
+      if (currentY < vh * 0.75 || vy < -200) {
+        animate(expandY, 0, { type: "spring", stiffness: 350, damping: 32, velocity: vy })
         setIsExpandedPlayer(true)
+      } else {
+        animate(expandY, vh, { type: "spring", stiffness: 350, damping: 32, velocity: vy })
+        setIsExpandedPlayer(false)
       }
-      animate(barY, 0, springConfig)
-      animate(trackX, 0, springConfig)
     } else {
-      animate(barY, 0, springConfig)
       animate(trackX, 0, springConfig)
     }
 
     setTimeout(() => {
       hasMovedRef.current = false
     }, 60)
-  }, [barY, trackX, springConfig, shouldReduceMotion, handleNext, handlePrevious])
+  }, [expandY, trackX, springConfig, shouldReduceMotion, handleNext, handlePrevious, vh])
 
   const handleBarClick = useCallback((e: React.MouseEvent) => {
-    if (hasMovedRef.current || Math.abs(barY.get()) > 8 || Math.abs(trackX.get()) > 8) {
-      return
-    }
+    if (hasMovedRef.current) return
     setIsExpandedPlayer(true)
-  }, [barY, trackX])
+    animate(expandY, 0, springConfig)
+  }, [expandY, springConfig])
 
   // ─── YouTube callbacks ───────────────────────────────────────────────────────
 
@@ -966,42 +996,42 @@ export function PlayerControls() {
         isPlaying={isPlaying}
       />
 
-      <AnimatePresence>
-        {isExpandedPlayer && (
-          <ExpandablePlayer
-            isExpanded={isExpandedPlayer}
-            onExpandChange={(expanded) => {
-              if (expanded) setIsExpandedPlayer(true);
-              else closeExpandedPlayer();
-            }}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            duration={duration}
-            volume={volume}
-            shuffle={shuffle}
-            repeat={repeat}
-            onPlayPause={handlePlayPause}
-            onPrevious={handlePrevious}
-            onNext={handleNext}
-            onToggleShuffle={toggleShuffle}
-            onToggleRepeat={toggleRepeat}
-            onSeek={handleSeek}
-            formatTime={formatTime}
-            onVideoActiveChange={handleVideoActiveChange}
-          />
-        )}
-      </AnimatePresence>
+      {currentTrack && (
+        <ExpandablePlayer
+          isExpanded={isExpandedPlayer}
+          expandY={expandY}
+          vh={vh}
+          isPanActive={isPanActive}
+          onExpandChange={(expanded) => {
+            if (expanded) setIsExpandedPlayer(true);
+            else closeExpandedPlayer();
+          }}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          duration={duration}
+          volume={volume}
+          shuffle={shuffle}
+          repeat={repeat}
+          onPlayPause={handlePlayPause}
+          onPrevious={handlePrevious}
+          onNext={handleNext}
+          onToggleShuffle={toggleShuffle}
+          onToggleRepeat={toggleRepeat}
+          onSeek={handleSeek}
+          formatTime={formatTime}
+          onVideoActiveChange={handleVideoActiveChange}
+        />
+      )}
 
       {/* ── Collapsed bar ─────────────────────────────────────────────────── */}
-      {!isExpandedPlayer && (
-        <motion.div
-          style={{ y: barY }}
-          onPanStart={handlePanStart}
-          onPan={handlePan}
-          onPanEnd={handlePanEnd}
-          onClick={handleBarClick}
-          className="bottom-player-bar fixed bottom-[50px] lg:bottom-0 left-0 right-0 z-40 bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-none"
-        >
+      <motion.div
+        style={{ opacity: miniBarOpacity, pointerEvents: miniBarPointerEvents as any, x: trackX }}
+        onPanStart={handlePanStart}
+        onPan={handlePan}
+        onPanEnd={handlePanEnd}
+        onClick={handleBarClick}
+        className="bottom-player-bar fixed bottom-[50px] lg:bottom-0 left-0 right-0 z-40 bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-none"
+      >
           {/* ── Top Interactive Seeker Bar on Mini-Player (with hover timeframe display) ── */}
           <div
             ref={miniProgressRef}
@@ -1395,7 +1425,6 @@ export function PlayerControls() {
             </div>
           </div>
         </motion.div>
-      )}
 
     {/* ── Gesture-Driven Queue Sheet ─────────────────────────────── */}
     <AnimatePresence>

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { motion, useMotionValue, useTransform, type PanInfo, AnimatePresence, animate, useReducedMotion } from "framer-motion"
+import { motion, useMotionValue, useTransform, type PanInfo, type MotionValue, AnimatePresence, animate, useReducedMotion } from "framer-motion"
 import { 
   ChevronDown, ChevronUp, ChevronRight, Music, AudioLinesIcon, Video, VideoOff,
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
@@ -22,6 +22,9 @@ import { extractAmbientColors, type AmbientColors } from "@/lib/ambientColor"
 interface ExpandablePlayerProps {
   isExpanded: boolean
   onExpandChange: (expanded: boolean) => void
+  expandY?: MotionValue<number>
+  vh?: number
+  isPanActive?: boolean
   currentTime: number
   isPlaying: boolean
   duration: number
@@ -47,6 +50,9 @@ function isValidYouTubeId(id: string | undefined | null): boolean {
 export function ExpandablePlayer({
   isExpanded,
   onExpandChange,
+  expandY,
+  vh,
+  isPanActive = false,
   currentTime,
   isPlaying,
   duration,
@@ -70,6 +76,13 @@ export function ExpandablePlayer({
   const [showQueue, setShowQueue] = useState(false)
   const [ambientColors, setAmbientColors] = useState<AmbientColors | null>(null)
 
+  const internalExpandY = useMotionValue(0)
+  const activeExpandY = expandY || internalExpandY
+  const actualVh = vh || (typeof window !== "undefined" ? window.innerHeight : 800)
+
+  const backdropOpacity = useTransform(activeExpandY, [actualVh * 0.85, 0], [0, 1])
+  const sheetScale = useTransform(activeExpandY, [actualVh, 0], [0.96, 1])
+
   // ── Ambient Color Extraction ──────────────────────────────
   useEffect(() => {
     let isSubscribed = true
@@ -91,9 +104,6 @@ export function ExpandablePlayer({
   const initialSyncDoneRef = useRef(false)
 
   const x = useMotionValue(0)
-  const y = useMotionValue(0)
-  const opacity = useTransform(y, [0, 300], [1, 0])
-  const scale = useTransform(y, [0, 300], [1, 0.95])
 
   const shouldReduceMotion = useReducedMotion()
   const tweenConfig = shouldReduceMotion 
@@ -108,14 +118,13 @@ export function ExpandablePlayer({
   useEffect(() => {
     if (!isExpanded) {
       x.set(0)
-      y.set(0)
       setShowVisualizer(false)
       setShowVideo(false)
       setShowLyrics(false)
       setShowQueue(false)
       destroyVideoPlayer()
     }
-  }, [isExpanded, x, y])
+  }, [isExpanded, x])
 
   const destroyVideoPlayer = useCallback(() => {
     try {
@@ -217,21 +226,19 @@ export function ExpandablePlayer({
     showLyricsRef.current = true;
     setShowLyrics(true);
     animate(x, 0, tweenConfig);
-    animate(y, 0, tweenConfig);
-  }, [x, y, tweenConfig]);
+  }, [x, tweenConfig]);
 
   const closeLyrics = useCallback(() => {
     showLyricsRef.current = false;
     setShowLyrics(false);
     animate(x, 0, tweenConfig);
-    animate(y, 0, tweenConfig);
     
     setTimeout(() => {
       if (window.history.state?.type === 'expandableLyrics') {
         window.history.back();
       }
     }, 0);
-  }, [x, y, tweenConfig]);
+  }, [x, tweenConfig]);
 
   const openQueue = useCallback(() => {
     setShowLyrics(false);
@@ -239,21 +246,19 @@ export function ExpandablePlayer({
     showQueueRef.current = true;
     setShowQueue(true);
     animate(x, 0, tweenConfig);
-    animate(y, 0, tweenConfig);
-  }, [x, y, tweenConfig]);
+  }, [x, tweenConfig]);
 
   const closeQueue = useCallback(() => {
     showQueueRef.current = false;
     setShowQueue(false);
     animate(x, 0, tweenConfig);
-    animate(y, 0, tweenConfig);
     
     setTimeout(() => {
       if (window.history.state?.type === 'expandableQueue') {
         window.history.back();
       }
     }, 0);
-  }, [x, y, tweenConfig]);
+  }, [x, tweenConfig]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (wheelTimer.current) {
@@ -331,69 +336,91 @@ export function ExpandablePlayer({
         showLyricsRef.current = false;
         setShowLyrics(false);
         animate(x, 0, tweenConfig);
-        animate(y, 0, tweenConfig);
       }
       if (e.state?.type !== 'expandableQueue' && showQueueRef.current) {
         showQueueRef.current = false;
         setShowQueue(false);
         animate(x, 0, tweenConfig);
-        animate(y, 0, tweenConfig);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [x, y, tweenConfig]);
+  }, [x, tweenConfig]);
 
-  const handleDragEnd = useCallback((_: any, info: PanInfo) => {
-    const absX = Math.abs(info.offset.x);
-    const absY = Math.abs(info.offset.y);
+  const panStartYRef = useRef(0)
 
-    // Horizontal swipe/drag left or right
-    if (absX > absY * 0.7 && (absX > 45 || Math.abs(info.velocity.x) > 250)) {
+  const handlePanStart = useCallback(() => {
+    panStartYRef.current = activeExpandY.get()
+  }, [activeExpandY])
+
+  const handlePan = useCallback((_: any, info: PanInfo) => {
+    if (showLyrics || showQueue) return
+
+    const absX = Math.abs(info.offset.x)
+    const absY = Math.abs(info.offset.y)
+
+    // Horizontal swipe for Queue or Track change
+    if (absX > absY * 1.5) {
+      x.set(info.offset.x)
+      return
+    }
+
+    // Vertical drag:
+    if (info.offset.y > 0) {
+      // Dragging down -> move activeExpandY towards actualVh
+      const targetY = Math.max(0, Math.min(actualVh, panStartYRef.current + info.offset.y))
+      activeExpandY.set(targetY)
+    } else {
+      // Dragging up -> slight elastic resistance
+      activeExpandY.set(Math.max(-25, panStartYRef.current + info.offset.y * 0.15))
+    }
+  }, [showLyrics, showQueue, activeExpandY, actualVh, x])
+
+  const handlePanEnd = useCallback((_: any, info: PanInfo) => {
+    if (showLyrics || showQueue) return
+
+    const absX = Math.abs(info.offset.x)
+    const absY = Math.abs(info.offset.y)
+
+    // Horizontal swipe check
+    if (absX > absY * 1.2 && (absX > 45 || Math.abs(info.velocity.x) > 250)) {
       if (info.offset.x < 0 || info.velocity.x < -250) {
-        // Drag Left -> Open Queue
-        if (!showLyrics && !showQueue) {
-          openQueue();
-          animate(x, 0, tweenConfig);
-          animate(y, 0, tweenConfig);
-          return;
-        }
+        openQueue()
       } else {
-        // Drag Right -> Close Queue or Previous Track
         if (showQueue) {
-          closeQueue();
-          animate(x, 0, tweenConfig);
-          animate(y, 0, tweenConfig);
-          return;
+          closeQueue()
         } else if (!showLyrics) {
-          onPrevious();
-          animate(x, 0, tweenConfig);
-          animate(y, 0, tweenConfig);
-          return;
+          onPrevious()
         }
       }
+      animate(x, 0, tweenConfig)
+      return
     }
+    animate(x, 0, tweenConfig)
 
-    // Vertical swipe/drag up or down
-    if (info.offset.y > 60 || info.velocity.y > 300) {
-      // Dragging down -> close player or close current sheet
-      if (showLyrics) {
-        closeLyrics();
-      } else if (showQueue) {
-        closeQueue();
+    // Vertical drag check
+    const currentY = activeExpandY.get()
+    const vy = info.velocity.y
+
+    if (info.offset.y > 0) {
+      // Dragged down
+      if (currentY > actualVh * 0.25 || vy > 200) {
+        animate(activeExpandY, actualVh, { type: "spring", stiffness: 350, damping: 32, velocity: vy })
+        onExpandChange(false)
       } else {
-        onExpandChange(false);
+        animate(activeExpandY, 0, { type: "spring", stiffness: 350, damping: 32, velocity: vy })
+        onExpandChange(true)
       }
-    } else if (info.offset.y < -40 || info.velocity.y < -200) {
-      // Dragging up -> open lyrics smoothly
+    } else if (info.offset.y < -40 || vy < -200) {
+      // Dragged up when expanded -> open lyrics
+      animate(activeExpandY, 0, { type: "spring", stiffness: 350, damping: 32 })
       if (!showLyrics && !showQueue) {
-        openLyrics();
+        openLyrics()
       }
+    } else {
+      animate(activeExpandY, 0, { type: "spring", stiffness: 350, damping: 32 })
     }
-
-    animate(x, 0, tweenConfig);
-    animate(y, 0, tweenConfig);
-  }, [onExpandChange, showLyrics, showQueue, openLyrics, closeLyrics, closeQueue, openQueue, onPrevious, x, y, tweenConfig])
+  }, [showLyrics, showQueue, openQueue, closeQueue, onPrevious, onExpandChange, openLyrics, activeExpandY, actualVh, x, tweenConfig])
 
   const handleBackdropClick = useCallback(() => {
     if (window.innerWidth >= 1024) onExpandChange(false)
@@ -451,16 +478,18 @@ export function ExpandablePlayer({
 
   return (
     <motion.div
-      initial={{ y: "100%", scale: 0.96 }}
-      animate={{ y: 0, scale: 1 }}
-      exit={{ y: "100%", scale: 0.96 }}
-      transition={tweenConfig}
-      style={{ originY: 1 }}
+      style={{
+        y: activeExpandY,
+        scale: sheetScale,
+        originY: 1,
+        pointerEvents: isExpanded || isPanActive ? "auto" : "none",
+        visibility: isExpanded || isPanActive ? "visible" : "hidden",
+      }}
       className="fixed inset-0 z-[100] overflow-hidden overscroll-none"
       onClick={handleBackdropClick}
     >
       {/* ── Ambient color extraction background with smooth crossfade ────────── */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+      <motion.div style={{ opacity: backdropOpacity }} className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         <AnimatePresence mode="popLayout">
           <motion.div
             key={currentTrack?.id || "default-ambient"}
@@ -474,7 +503,7 @@ export function ExpandablePlayer({
             }}
           />
         </AnimatePresence>
-      </div>
+      </motion.div>
 
       {/* Solid dark base overlay for maximum contrast */}
       <div className="absolute inset-0 z-0 expandable-player-bg bg-black/40 backdrop-blur-3xl" />
@@ -488,12 +517,11 @@ export function ExpandablePlayer({
 
       {/* ── Draggable panel ─────────────────────────────────────────────── */}
       <motion.div
-        drag={!showLyrics && !showQueue}
-        dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
-        dragElastic={0}
-        onDragEnd={handleDragEnd}
+        onPanStart={handlePanStart}
+        onPan={handlePan}
+        onPanEnd={handlePanEnd}
         onWheel={handleWheel}
-        style={{ x, y, opacity, scale, touchAction: "none" }}
+        style={{ x, touchAction: "none" }}
         className="relative h-full w-full flex flex-col z-20 glass-specular touch-none cursor-grab active:cursor-grabbing"
         onClick={(e) => e.stopPropagation()}
       >
@@ -563,8 +591,7 @@ export function ExpandablePlayer({
                           src={currentTrack.thumbnail}
                           alt={currentTrack.title || "Album art"}
                           fill
-                          objectFit="contain"
-                          className="rounded-2xl transition-transform duration-700 hover:scale-105"
+                          className="object-cover rounded-2xl"
                           priority
                           referrerPolicy="no-referrer"
                         />

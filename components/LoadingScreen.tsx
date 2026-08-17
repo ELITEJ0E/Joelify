@@ -141,10 +141,6 @@ export function LoadingScreen() {
             ))}
           </div>
 
-          {/* Import retro synthwave font */}
-          <style jsx global>{`
-            @import url("https://fonts.cdnfonts.com/css/vcr-osd-mono");
-          `}</style>
         </motion.div>
       )}
     </AnimatePresence>

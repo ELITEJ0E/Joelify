@@ -239,7 +239,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                     src={track.thumbnail || "https://cdn2.suno.ai/24c69462-2727-415e-8f27-cdc43e0184db.jpeg?width=360"}
                     alt={track.title}
                     fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    className="object-cover"
                   />
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black shadow-lg">
@@ -273,7 +273,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                   src="https://cdn2.suno.ai/24c69462-2727-415e-8f27-cdc43e0184db.jpeg?width=360"
                   alt="Joel's Playlist"
                   fill
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="object-cover"
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
@@ -316,7 +316,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                       src={playlist.coverImage || playlist.tracks[0].thumbnail || "/placeholder.svg"}
                       alt={playlist.name}
                       fill
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="object-cover"
                     />
                   ) : (
                     <Music2 size={36} className="text-gray-500" />
@@ -422,7 +422,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                       src={video.thumbnail || "/placeholder.svg"}
                       alt={video.title}
                       fill
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="object-cover"
                     />
                     <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black shadow-lg">

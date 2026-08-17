@@ -99,6 +99,7 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
   const [continuation, setContinuation] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -194,6 +195,7 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
     const q = query.trim()
     if (q.length < 2 || q === lastQuery) {
       setSuggestions([])
+      setSelectedIndex(-1)
       return
     }
     suggestTimerRef.current = setTimeout(async () => {
@@ -206,6 +208,7 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
         if (!controller.signal.aborted) {
           setSuggestions(data.suggestions ?? [])
           setShowSuggestions(true)
+          setSelectedIndex(-1)
         }
       } catch {
         // best-effort
@@ -221,11 +224,36 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
     const onClick = (e: MouseEvent) => {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
         setShowSuggestions(false)
+        setSelectedIndex(-1)
       }
     }
     document.addEventListener("mousedown", onClick)
     return () => document.removeEventListener("mousedown", onClick)
   }, [])
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) {
+      return
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1))
+    } else if (e.key === "Enter") {
+      if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+        e.preventDefault()
+        const selected = suggestions[selectedIndex]
+        setQuery(selected)
+        runSearch(selected)
+      }
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false)
+      setSelectedIndex(-1)
+    }
+  }
 
   const runSearch = useCallback(async (rawQuery: string) => {
     const trimmed = rawQuery.trim()
@@ -364,21 +392,33 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
               type="text"
               placeholder="Songs, albums or artists..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value)
+                setSelectedIndex(-1)
+              }}
               onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              onKeyDown={handleInputKeyDown}
               className="pl-10 pr-10 h-11 rounded-xl bg-zinc-900/90 border-white/10 text-white placeholder:text-gray-400 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               autoComplete="off"
             />
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
-                {suggestions.map((s) => (
+                {suggestions.map((s, index) => (
                   <button
                     key={s}
                     type="button"
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-primary/20 hover:text-primary transition-colors"
-                    onClick={() => handleSuggestionClick(s)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
+                      selectedIndex === index
+                        ? "bg-primary/25 text-primary font-semibold"
+                        : "text-gray-200 hover:bg-primary/20 hover:text-primary"
+                    }`}
+                    onClick={() => {
+                      handleSuggestionClick(s)
+                      setSelectedIndex(-1)
+                    }}
+                    onMouseEnter={() => setSelectedIndex(index)}
                   >
-                    <Search size={14} className="text-gray-400 shrink-0" />
+                    <Search size={14} className={`shrink-0 ${selectedIndex === index ? "text-primary" : "text-gray-400"}`} />
                     <span className="line-clamp-1">{s}</span>
                   </button>
                 ))}
@@ -553,7 +593,7 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
                             src={item.thumbnail || "/placeholder.svg"}
                             alt={item.title}
                             fill
-                            className="object-cover transition-transform duration-500 group-hover:scale-105"
+                            className="object-cover"
                           />
                           <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <Button size="icon" className="bg-primary text-black rounded-full h-12 w-12 shadow-lg">
@@ -736,8 +776,8 @@ function SearchResultCard({
 
   return (
     <div className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] backdrop-blur-xl rounded-xl p-4 transition-all duration-300 group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40">
-      <div className="relative mb-4 aspect-video rounded-lg overflow-hidden shadow-lg">
-        <Image src={result.thumbnail || "/placeholder.svg"} alt={result.title} fill className="object-cover transition-transform duration-300 group-hover:scale-105" />
+      <div className="relative mb-4 aspect-square rounded-lg overflow-hidden shadow-lg">
+        <Image src={result.thumbnail || "/placeholder.svg"} alt={result.title} fill className="object-cover" />
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
           <Button
             size="icon"

@@ -278,7 +278,7 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
                         src={item.thumbnail || "/placeholder.svg"}
                         alt={item.title}
                         fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="object-cover"
                       />
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Button size="icon" className="bg-primary text-black rounded-full h-12 w-12 shadow-lg">

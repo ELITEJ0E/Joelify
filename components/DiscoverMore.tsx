@@ -158,7 +158,7 @@ export function DiscoverMore() {
             className="bg-white/[0.03] border border-white/[0.07] backdrop-blur-xl hover:bg-primary/10 rounded-xl p-4 transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10"
           >
             <div className="relative mb-4 aspect-square rounded-lg overflow-hidden bg-secondary shadow-lg">
-              <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
+              <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover" />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
                 <Button
                   size="icon"
