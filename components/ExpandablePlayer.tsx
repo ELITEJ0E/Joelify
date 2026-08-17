@@ -90,6 +90,7 @@ export function ExpandablePlayer({
   const videoReadyRef = useRef(false)
   const initialSyncDoneRef = useRef(false)
 
+  const x = useMotionValue(0)
   const y = useMotionValue(0)
   const opacity = useTransform(y, [0, 300], [1, 0])
   const scale = useTransform(y, [0, 300], [1, 0.95])
@@ -106,6 +107,7 @@ export function ExpandablePlayer({
   // ── Destroy video player and reset state on close ─────────────────────────
   useEffect(() => {
     if (!isExpanded) {
+      x.set(0)
       y.set(0)
       setShowVisualizer(false)
       setShowVideo(false)
@@ -113,7 +115,7 @@ export function ExpandablePlayer({
       setShowQueue(false)
       destroyVideoPlayer()
     }
-  }, [isExpanded, y])
+  }, [isExpanded, x, y])
 
   const destroyVideoPlayer = useCallback(() => {
     try {
@@ -204,37 +206,24 @@ export function ExpandablePlayer({
     }
   }, [showVideo, playbackSource, destroyVideoPlayer])
 
-  // ── Swipe handling for lyrics & queue ─────────────
-  const wheelAccumulator = useRef<number>(0)
-
-  const handleWheel = (e: React.WheelEvent) => {
-    if (showLyrics || showQueue) return;
-    
-    wheelAccumulator.current += e.deltaY;
-    
-    if (wheelAccumulator.current > 40) {
-      openLyrics()
-      wheelAccumulator.current = 0;
-    } else if (wheelAccumulator.current < -40) {
-      wheelAccumulator.current = 0;
-    }
-    
-    setTimeout(() => {
-        wheelAccumulator.current = 0;
-    }, 150);
-  }
+  // ── Swipe & Trackpad gesture handling for lyrics, queue & player ─────────────
+  const wheelAccumulatorX = useRef<number>(0)
+  const wheelAccumulatorY = useRef<number>(0)
+  const wheelTimer = useRef<NodeJS.Timeout | null>(null)
 
   const openLyrics = useCallback(() => {
     setShowQueue(false);
     window.history.pushState({ modal: true, type: 'expandableLyrics' }, "");
     showLyricsRef.current = true;
     setShowLyrics(true);
+    animate(x, 0, tweenConfig);
     animate(y, 0, tweenConfig);
-  }, [y, tweenConfig]);
+  }, [x, y, tweenConfig]);
 
   const closeLyrics = useCallback(() => {
     showLyricsRef.current = false;
     setShowLyrics(false);
+    animate(x, 0, tweenConfig);
     animate(y, 0, tweenConfig);
     
     setTimeout(() => {
@@ -242,19 +231,21 @@ export function ExpandablePlayer({
         window.history.back();
       }
     }, 0);
-  }, [y, tweenConfig]);
+  }, [x, y, tweenConfig]);
 
   const openQueue = useCallback(() => {
     setShowLyrics(false);
     window.history.pushState({ modal: true, type: 'expandableQueue' }, "");
     showQueueRef.current = true;
     setShowQueue(true);
+    animate(x, 0, tweenConfig);
     animate(y, 0, tweenConfig);
-  }, [y, tweenConfig]);
+  }, [x, y, tweenConfig]);
 
   const closeQueue = useCallback(() => {
     showQueueRef.current = false;
     setShowQueue(false);
+    animate(x, 0, tweenConfig);
     animate(y, 0, tweenConfig);
     
     setTimeout(() => {
@@ -262,7 +253,69 @@ export function ExpandablePlayer({
         window.history.back();
       }
     }, 0);
-  }, [y, tweenConfig]);
+  }, [x, y, tweenConfig]);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (wheelTimer.current) {
+      clearTimeout(wheelTimer.current);
+    }
+
+    wheelAccumulatorX.current += e.deltaX;
+    wheelAccumulatorY.current += e.deltaY;
+
+    const absX = Math.abs(wheelAccumulatorX.current);
+    const absY = Math.abs(wheelAccumulatorY.current);
+
+    // Main player (no active sub-sheet)
+    if (!showLyrics && !showQueue) {
+      if (absY >= 35 && absY > absX) {
+        if (wheelAccumulatorY.current > 35) {
+          // Swipe UP on trackpad (wheel down) -> Open Lyrics
+          openLyrics();
+          wheelAccumulatorY.current = 0;
+          wheelAccumulatorX.current = 0;
+        } else if (wheelAccumulatorY.current < -35) {
+          // Swipe DOWN on trackpad (wheel up) -> Minimize player
+          onExpandChange(false);
+          wheelAccumulatorY.current = 0;
+          wheelAccumulatorX.current = 0;
+        }
+      } else if (absX >= 35 && absX > absY) {
+        if (wheelAccumulatorX.current > 35) {
+          // Swipe LEFT on trackpad (wheel right) -> Open Queue
+          openQueue();
+          wheelAccumulatorX.current = 0;
+          wheelAccumulatorY.current = 0;
+        } else if (wheelAccumulatorX.current < -35) {
+          // Swipe RIGHT on trackpad (wheel left) -> Previous track
+          onPrevious();
+          wheelAccumulatorX.current = 0;
+          wheelAccumulatorY.current = 0;
+        }
+      }
+    } 
+    // Inside Lyrics sheet
+    else if (showLyrics) {
+      if (wheelAccumulatorY.current < -40 || wheelAccumulatorX.current < -35) {
+        closeLyrics();
+        wheelAccumulatorY.current = 0;
+        wheelAccumulatorX.current = 0;
+      }
+    } 
+    // Inside Queue sheet
+    else if (showQueue) {
+      if (wheelAccumulatorX.current < -35 || wheelAccumulatorY.current < -40) {
+        closeQueue();
+        wheelAccumulatorX.current = 0;
+        wheelAccumulatorY.current = 0;
+      }
+    }
+
+    wheelTimer.current = setTimeout(() => {
+      wheelAccumulatorX.current = 0;
+      wheelAccumulatorY.current = 0;
+    }, 180);
+  }, [showLyrics, showQueue, openLyrics, closeLyrics, openQueue, closeQueue, onExpandChange, onPrevious]);
 
   const showLyricsRef = useRef(false);
   const showQueueRef = useRef(false);
@@ -277,46 +330,70 @@ export function ExpandablePlayer({
       if (e.state?.type !== 'expandableLyrics' && showLyricsRef.current) {
         showLyricsRef.current = false;
         setShowLyrics(false);
+        animate(x, 0, tweenConfig);
         animate(y, 0, tweenConfig);
       }
       if (e.state?.type !== 'expandableQueue' && showQueueRef.current) {
         showQueueRef.current = false;
         setShowQueue(false);
+        animate(x, 0, tweenConfig);
         animate(y, 0, tweenConfig);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [y, tweenConfig]);
+  }, [x, y, tweenConfig]);
 
   const handleDragEnd = useCallback((_: any, info: PanInfo) => {
-    // Horizontal swipe right-to-left -> open Queue
-    if ((info.offset.x < -40 || info.velocity.x < -300) && Math.abs(info.offset.x) > Math.abs(info.offset.y) * 0.6) {
-      if (!showLyrics && !showQueue) {
-        openQueue()
-        return
+    const absX = Math.abs(info.offset.x);
+    const absY = Math.abs(info.offset.y);
+
+    // Horizontal swipe/drag left or right
+    if (absX > absY * 0.7 && (absX > 45 || Math.abs(info.velocity.x) > 250)) {
+      if (info.offset.x < 0 || info.velocity.x < -250) {
+        // Drag Left -> Open Queue
+        if (!showLyrics && !showQueue) {
+          openQueue();
+          animate(x, 0, tweenConfig);
+          animate(y, 0, tweenConfig);
+          return;
+        }
+      } else {
+        // Drag Right -> Close Queue or Previous Track
+        if (showQueue) {
+          closeQueue();
+          animate(x, 0, tweenConfig);
+          animate(y, 0, tweenConfig);
+          return;
+        } else if (!showLyrics) {
+          onPrevious();
+          animate(x, 0, tweenConfig);
+          animate(y, 0, tweenConfig);
+          return;
+        }
       }
     }
 
-    // Dragging down (close player or close current sheet)
-    if (info.offset.y > 80 || info.velocity.y > 400) {
+    // Vertical swipe/drag up or down
+    if (info.offset.y > 60 || info.velocity.y > 300) {
+      // Dragging down -> close player or close current sheet
       if (showLyrics) {
-        closeLyrics()
+        closeLyrics();
       } else if (showQueue) {
-        closeQueue()
+        closeQueue();
       } else {
-        onExpandChange(false)
+        onExpandChange(false);
       }
-    } 
-    // Dragging up (open lyrics smoothly)
-    else if (info.offset.y < -40 || info.velocity.y < -250) {
+    } else if (info.offset.y < -40 || info.velocity.y < -200) {
+      // Dragging up -> open lyrics smoothly
       if (!showLyrics && !showQueue) {
-        openLyrics()
+        openLyrics();
       }
-    } else {
-      animate(y, 0, tweenConfig)
     }
-  }, [onExpandChange, showLyrics, showQueue, openLyrics, closeLyrics, closeQueue, openQueue, y, tweenConfig])
+
+    animate(x, 0, tweenConfig);
+    animate(y, 0, tweenConfig);
+  }, [onExpandChange, showLyrics, showQueue, openLyrics, closeLyrics, closeQueue, openQueue, onPrevious, x, y, tweenConfig])
 
   const handleBackdropClick = useCallback(() => {
     if (window.innerWidth >= 1024) onExpandChange(false)
@@ -411,14 +488,13 @@ export function ExpandablePlayer({
 
       {/* ── Draggable panel ─────────────────────────────────────────────── */}
       <motion.div
-        drag="y"
-        dragListener={!showLyrics && !showQueue}
-        dragConstraints={{ top: 0, bottom: 0 }}
+        drag={!showLyrics && !showQueue}
+        dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
         dragElastic={0}
         onDragEnd={handleDragEnd}
         onWheel={handleWheel}
-        style={{ y, opacity, scale, touchAction: "none" }}
-        className="relative h-full w-full flex flex-col z-20 glass-specular touch-none"
+        style={{ x, y, opacity, scale, touchAction: "none" }}
+        className="relative h-full w-full flex flex-col z-20 glass-specular touch-none cursor-grab active:cursor-grabbing"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
@@ -792,6 +868,7 @@ export function ExpandablePlayer({
                   closeQueue()
                 }
               }}
+              onWheel={handleWheel}
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
@@ -839,6 +916,7 @@ export function ExpandablePlayer({
                   closeLyrics()
                 }
               }}
+              onWheel={handleWheel}
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
