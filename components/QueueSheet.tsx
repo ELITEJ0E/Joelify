@@ -9,9 +9,31 @@ import { TrackImage as Image } from "./TrackImage"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-export function QueueSheet() {
+interface QueueSheetProps {
+  onClose?: () => void
+}
+
+export function QueueSheet({ onClose }: QueueSheetProps) {
   const { queue, setQueue, removeFromQueue, currentTrack } = useApp()
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const touchStartXRef = useState<{ x: number; y: number } | null>(null)[0]
+  const startPosRef = useState<{ x: number; y: number }>({ x: 0, y: 0 })[0]
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startPosRef.x = e.touches[0].clientX
+    startPosRef.y = e.touches[0].clientY
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - startPosRef.x
+    const dy = e.changedTouches[0].clientY - startPosRef.y
+    // Swiped right or swiped down to close QueueSheet
+    if ((dx > 35 && Math.abs(dx) > Math.abs(dy)) || (dy > 35 && Math.abs(dy) > Math.abs(dx))) {
+      if (onClose) {
+        onClose()
+      }
+    }
+  }
 
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
@@ -35,7 +57,11 @@ export function QueueSheet() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div 
+      className="flex flex-col h-full touch-pan-x touch-pan-y"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-muted-foreground mb-2">Now Playing</h3>
         {currentTrack ? (

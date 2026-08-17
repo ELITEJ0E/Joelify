@@ -1,18 +1,20 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
+import Script from "next/script"
 import { AppProvider } from "@/contexts/AppContext"
 import "./globals.css"
 import { Suspense } from "react"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
-
-import { Toaster } from "sonner"
 import { FirestoreQuotaWarning } from "@/components/FirestoreQuotaWarning"
 import { PWARegister } from "@/components/PWARegister"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
+}
 
 export const metadata: Metadata = {
   title: "Joelify",
@@ -37,15 +39,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
-      <head>
-        <script src="https://www.youtube.com/iframe_api" async></script>
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Joelify" />
-        <meta name="theme-color" content="#000000" />
-      </head>
       <body className={`${inter.className} select-none`} suppressHydrationWarning>
+        <Script src="https://www.youtube.com/iframe_api" strategy="afterInteractive" />
         <Suspense fallback={null}>
           <TooltipProvider>
             <AppProvider>{children}</AppProvider>
