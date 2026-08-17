@@ -15,9 +15,10 @@ interface TrackImageProps {
   referrerPolicy?: React.HTMLAttributeReferrerPolicy
   priority?: boolean
   unoptimized?: boolean
+  objectFit?: "cover" | "contain"
 }
 
-export const TrackImage = memo(function TrackImage({ src, alt = "", width, height, fill, className, referrerPolicy = "no-referrer", priority, unoptimized }: TrackImageProps) {
+export const TrackImage = memo(function TrackImage({ src, alt = "", width, height, fill, className, referrerPolicy = "no-referrer", priority, unoptimized, objectFit = "cover" }: TrackImageProps) {
   const isVideo = src?.toLowerCase().includes(".mp4") || src?.includes("video_upload")
   const url = src || "/placeholder.svg"
   
@@ -37,9 +38,35 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
       style={!fill ? { width: width || 40, height: height || 40, minWidth: width || 40, minHeight: height || 40 } : undefined}
     >
       {!isLoaded && (
-        <Skeleton className="absolute inset-0 w-full h-full bg-secondary/20 rendering-skeleton" />
+        <Skeleton className="absolute inset-0 w-full h-full bg-secondary/20 rendering-skeleton z-20" />
       )}
       
+      {objectFit === "contain" && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+          {isVideo ? (
+            <video
+              src={url}
+              autoPlay
+              loop
+              muted
+              playsInline
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-40"
+            />
+          ) : (
+            <Image
+              src={url}
+              alt=""
+              fill
+              aria-hidden="true"
+              className="object-cover blur-2xl scale-110 opacity-40"
+              unoptimized={unoptimized}
+              referrerPolicy={referrerPolicy}
+            />
+          )}
+        </div>
+      )}
+
       {isVideo ? (
         <video
           key={url}
@@ -60,7 +87,8 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
             willChange: 'transform'
           }}
           className={cn(
-            "absolute inset-0 w-full h-full object-cover transition-opacity duration-500",
+            "absolute inset-0 w-full h-full transition-opacity duration-500 z-10",
+            objectFit === "contain" ? "object-contain" : "object-cover",
             isLoaded ? "opacity-100" : "opacity-0"
           )}
         />
@@ -75,7 +103,8 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
           priority={priority}
           unoptimized={unoptimized}
           className={cn(
-            "object-cover transition-opacity duration-500", 
+            "relative transition-opacity duration-500 z-10", 
+            objectFit === "contain" ? "object-contain" : "object-cover",
             isLoaded ? "opacity-100" : "opacity-0"
           )}
           referrerPolicy={referrerPolicy}

@@ -544,8 +544,8 @@ export function ExpandablePlayer({
               >
                 <div
                   className={[
-                    "relative overflow-hidden rounded-2xl shadow-2xl shadow-black/80 ring-1 ring-white/15 transition-all duration-300",
-                    !showVideo && "w-full max-w-[min(65vw,280px)] sm:max-w-[320px] aspect-square lg:w-96 lg:h-96",
+                    "relative overflow-hidden rounded-2xl shadow-2xl shadow-black/80 transition-all duration-300",
+                    !showVideo && "w-full max-w-[min(88vw,380px)] sm:max-w-[440px] aspect-square lg:w-[440px] lg:h-[440px]",
                     showVideo && "w-full h-[35vh] sm:h-[45vh] lg:max-w-[800px] lg:aspect-video lg:h-auto",
                   ].filter(Boolean).join(" ")}
                 >
@@ -563,7 +563,8 @@ export function ExpandablePlayer({
                           src={currentTrack.thumbnail}
                           alt={currentTrack.title || "Album art"}
                           fill
-                          className="object-cover rounded-2xl transition-transform duration-700 hover:scale-105"
+                          objectFit="contain"
+                          className="rounded-2xl transition-transform duration-700 hover:scale-105"
                           priority
                           referrerPolicy="no-referrer"
                         />
@@ -874,10 +875,10 @@ export function ExpandablePlayer({
               exit={{ x: "100%" }}
               transition={tweenConfig}
               style={{ touchAction: "none" }}
-              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-l border-white/10 touch-none"
+              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 touch-none"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
+              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -922,10 +923,10 @@ export function ExpandablePlayer({
               exit={{ y: "100%" }}
               transition={tweenConfig}
               style={{ touchAction: "none" }}
-              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10 touch-none"
+              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 touch-none"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
+              <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
                 <Button 
                   variant="ghost" 
                   size="icon" 
