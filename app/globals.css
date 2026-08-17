@@ -322,7 +322,7 @@
 
   html[data-surface="liquid-glass"] .sheet-surface,
   .theme-liquid-glass .sheet-surface {
-    background: rgba(12, 12, 16, 0.6) !important;
+    background: rgba(12, 12, 16, 0.35) !important;
     backdrop-filter: blur(32px) saturate(1.8) !important;
     -webkit-backdrop-filter: blur(32px) saturate(1.8) !important;
     border-top: 1px solid rgba(255, 255, 255, 0.14) !important;
@@ -331,7 +331,7 @@
 
   html[data-surface="liquid-glass"] .expandable-player-bg,
   .theme-liquid-glass .expandable-player-bg {
-    background: rgba(10, 10, 15, 0.5) !important;
+    background: rgba(10, 10, 15, 0.3) !important;
     backdrop-filter: blur(36px) saturate(1.8) !important;
     -webkit-backdrop-filter: blur(36px) saturate(1.8) !important;
   }

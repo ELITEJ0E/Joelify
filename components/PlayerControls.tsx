@@ -1432,7 +1432,7 @@ export function PlayerControls() {
         <motion.div
           drag="y"
           dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={{ top: 0, bottom: 0.7 }}
+          dragElastic={{ top: 0, bottom: 1 }}
           onDragEnd={(_, info) => {
             if (info.offset.y > 80 || info.velocity.y > 400) {
               setQueueOpen(false)
@@ -1476,7 +1476,7 @@ export function PlayerControls() {
         <motion.div
           drag="y"
           dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={{ top: 0, bottom: 0.8 }}
+          dragElastic={{ top: 0, bottom: 1 }}
           onDragEnd={(_, info) => {
             if (info.offset.y > 100 || info.velocity.y > 400) {
               setLyricsOpen(false)

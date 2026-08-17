@@ -219,6 +219,8 @@ export function ExpandablePlayer({
   const wheelAccumulatorX = useRef<number>(0)
   const wheelAccumulatorY = useRef<number>(0)
   const wheelTimer = useRef<NodeJS.Timeout | null>(null)
+  const wheelCooldownRef = useRef(false)
+  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const openLyrics = useCallback(() => {
     setShowQueue(false);
@@ -261,6 +263,17 @@ export function ExpandablePlayer({
   }, [x, tweenConfig]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
+    // Extend cooldown while inertia events keep coming in
+    if (wheelCooldownRef.current) {
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = setTimeout(() => {
+        wheelCooldownRef.current = false;
+        wheelAccumulatorX.current = 0;
+        wheelAccumulatorY.current = 0;
+      }, 250);
+      return;
+    }
+
     if (wheelTimer.current) {
       clearTimeout(wheelTimer.current);
     }
@@ -271,6 +284,16 @@ export function ExpandablePlayer({
     const absX = Math.abs(wheelAccumulatorX.current);
     const absY = Math.abs(wheelAccumulatorY.current);
 
+    const setCooldown = () => {
+      wheelCooldownRef.current = true;
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = setTimeout(() => {
+        wheelCooldownRef.current = false;
+        wheelAccumulatorX.current = 0;
+        wheelAccumulatorY.current = 0;
+      }, 500);
+    };
+
     // Main player (no active sub-sheet)
     if (!showLyrics && !showQueue) {
       if (absY >= 35 && absY > absX) {
@@ -279,11 +302,13 @@ export function ExpandablePlayer({
           openLyrics();
           wheelAccumulatorY.current = 0;
           wheelAccumulatorX.current = 0;
+          setCooldown();
         } else if (wheelAccumulatorY.current < -35) {
           // Swipe DOWN on trackpad (wheel up) -> Minimize player
           onExpandChange(false);
           wheelAccumulatorY.current = 0;
           wheelAccumulatorX.current = 0;
+          setCooldown();
         }
       } else if (absX >= 35 && absX > absY) {
         if (wheelAccumulatorX.current > 35) {
@@ -291,11 +316,13 @@ export function ExpandablePlayer({
           openQueue();
           wheelAccumulatorX.current = 0;
           wheelAccumulatorY.current = 0;
+          setCooldown();
         } else if (wheelAccumulatorX.current < -35) {
           // Swipe RIGHT on trackpad (wheel left) -> Previous track
           onPrevious();
           wheelAccumulatorX.current = 0;
           wheelAccumulatorY.current = 0;
+          setCooldown();
         }
       }
     } 
@@ -305,6 +332,7 @@ export function ExpandablePlayer({
         closeLyrics();
         wheelAccumulatorY.current = 0;
         wheelAccumulatorX.current = 0;
+        setCooldown();
       }
     } 
     // Inside Queue sheet
@@ -313,6 +341,7 @@ export function ExpandablePlayer({
         closeQueue();
         wheelAccumulatorX.current = 0;
         wheelAccumulatorY.current = 0;
+        setCooldown();
       }
     }
 
@@ -890,7 +919,7 @@ export function ExpandablePlayer({
             <motion.div
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0}
+              dragElastic={{ left: 0, right: 1 }}
               onDragEnd={(_, info) => {
                 if (info.offset.x > 80 || info.velocity.x > 300) {
                   closeQueue()
@@ -938,7 +967,7 @@ export function ExpandablePlayer({
             <motion.div
               drag="y"
               dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={0}
+              dragElastic={{ top: 0, bottom: 1 }}
               onDragEnd={(_, info) => {
                 if (info.offset.y > 100 || info.velocity.y > 400) {
                   closeLyrics()
