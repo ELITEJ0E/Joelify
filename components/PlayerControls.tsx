@@ -14,7 +14,7 @@ import { QueueSheet } from "./QueueSheet"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { MiniPlayer } from "./MiniPlayer"
 import { SleepTimer } from "./SleepTimer"
-import { ExpandablePlayer, type PlayerViewState } from "./ExpandablePlayer"
+import { ExpandablePlayer } from "./ExpandablePlayer"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
@@ -33,6 +33,8 @@ export function PlayerControls() {
     audioSettings, user, isInitialized,
   } = useApp()
 
+  // We check for isInitialized from context but it's not exported.
+  // Actually, let's use isFirstRender better.
   const [youtubePlayer, setYoutubePlayer] = useState<any>(null)
   const sunoAudioRef = useRef<HTMLAudioElement | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -41,10 +43,9 @@ export function PlayerControls() {
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [isMiniPlayer, setIsMiniPlayer] = useState(false)
-
-  // Single authoritative player view state machine: "none" | "player" | "queue" | "lyrics"
-  const [playerView, setPlayerView] = useState<PlayerViewState>("none")
-
+  const [isExpandedPlayer, setIsExpandedPlayer] = useState(false)
+  const [isLyricsOpen, setIsLyricsOpen] = useState(false)
+  const [isQueueOpen, setIsQueueOpen] = useState(false)
   // Local video toggle for the bar — separate from expanded player's video
   const [barVideoMode, setBarVideoMode] = useState(false)
   const [offlineSunoUrl, setOfflineSunoUrl] = useState<string | null>(null)
@@ -54,118 +55,170 @@ export function PlayerControls() {
   const hasMovedRef = useRef(false)
 
   const [vh, setVh] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 800))
-  const playerY = useMotionValue(typeof window !== "undefined" ? window.innerHeight : 800)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [scrollProgress, setScrollProgress] = useState(0)
+
+  const miniBarOpacity = Math.max(0, 1 - scrollProgress / 0.2)
+  const miniBarPointerEvents = scrollProgress > 0.15 ? ("none" as const) : ("auto" as const)
 
   const shouldReduceMotion = useReducedMotion()
   const springConfig = shouldReduceMotion 
     ? { duration: 0.15 } 
-    : { type: "spring" as const, stiffness: 320, damping: 32 }
+    : { type: "spring", stiffness: 300, damping: 30 }
 
   useEffect(() => {
     const handleResize = () => {
-      const newVh = window.innerHeight
-      setVh(newVh)
+      setVh(window.innerHeight)
     }
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  // Sync playerY whenever playerView changes
+  // ─── Scroll-Snap Container Listener ─────────────────────────────────────
   useEffect(() => {
-    if (playerView === "none") {
-      animate(playerY, vh, springConfig)
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    let rafId: number | null = null
+    const handleScroll = () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        const h = window.innerHeight || 800
+        const scrollTop = container.scrollTop
+        const progress = Math.min(1, Math.max(0, scrollTop / h))
+        setScrollProgress(progress)
+
+        if (scrollTop < h / 2) {
+          setIsExpandedPlayer((prev) => (prev ? false : prev))
+        } else {
+          setIsExpandedPlayer((prev) => (!prev ? true : prev))
+        }
+      })
+    }
+
+    container.addEventListener("scroll", handleScroll, { passive: true })
+    handleScroll()
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      container.removeEventListener("scroll", handleScroll)
+    }
+  }, [isExpandedPlayer])
+
+  // Sync scroll position when isExpandedPlayer changes programmatically
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const h = window.innerHeight || 800
+    const targetTop = isExpandedPlayer ? h : 0
+
+    if (Math.abs(container.scrollTop - targetTop) > 10) {
+      container.scrollTo({ top: targetTop, behavior: "smooth" })
+    }
+  }, [isExpandedPlayer])
+
+  // ─── Popstate / Hardware Back Button Navigation ───────────────────────
+
+  const handlePopState = useCallback((event: PopStateEvent) => {
+    const view = event.state?.view;
+
+    if (view === "queue") {
+      setIsQueueOpen(true);
+      setIsLyricsOpen(false);
+    } else if (view === "lyrics") {
+      setIsLyricsOpen(true);
+      setIsQueueOpen(false);
+    } else if (view === "expandable") {
+      setIsExpandedPlayer(true);
+      setIsLyricsOpen(false);
+      setIsQueueOpen(false);
+      const h = window.innerHeight || 800;
+      scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
     } else {
-      animate(playerY, 0, springConfig)
+      setIsExpandedPlayer(false);
+      setIsMiniPlayer(false);
+      setIsLyricsOpen(false);
+      setIsQueueOpen(false);
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [playerView, vh, playerY, springConfig])
-
-  // ─── Centralized Navigation & Popstate System ────────────────────────────────
-
-  const navigateToView = useCallback((nextView: PlayerViewState) => {
-    setPlayerView((currentView) => {
-      if (currentView === nextView) return currentView
-
-      if (typeof window !== "undefined") {
-        setTimeout(() => {
-          const currentHistoryView = (window.history.state?.playerView as PlayerViewState) || "none"
-          if (nextView === "none") {
-            if (currentHistoryView !== "none") {
-              window.history.back()
-            } else {
-              window.history.replaceState({ playerView: "none" }, "")
-            }
-          } else if (nextView === "player") {
-            if (currentView === "none") {
-              window.history.pushState({ playerView: "player" }, "")
-            } else if (currentHistoryView === "queue" || currentHistoryView === "lyrics") {
-              window.history.back()
-            } else {
-              window.history.pushState({ playerView: "player" }, "")
-            }
-          } else if (nextView === "queue") {
-            if (currentHistoryView !== "queue") {
-              window.history.pushState({ playerView: "queue" }, "")
-            }
-          } else if (nextView === "lyrics") {
-            if (currentHistoryView !== "lyrics") {
-              window.history.pushState({ playerView: "lyrics" }, "")
-            }
-          }
-        }, 0)
-      }
-
-      return nextView
-    })
-  }, [])
+  }, []);
 
   useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      const view = (event.state?.playerView as PlayerViewState) || "none"
-      setPlayerView(view)
-    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [handlePopState]);
 
-    if (typeof window !== "undefined" && !window.history.state?.playerView) {
-      window.history.replaceState({ playerView: "none" }, "")
+  const openExpandedPlayer = useCallback(() => {
+    setIsExpandedPlayer(true);
+    const h = window.innerHeight || 800;
+    scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
+    if (typeof window !== "undefined" && window.history.state?.view !== "expandable") {
+      window.history.pushState({ view: "expandable" }, "");
     }
+  }, []);
 
-    window.addEventListener("popstate", handlePopState)
-    return () => window.removeEventListener("popstate", handlePopState)
-  }, [])
+  const closeExpandedPlayer = useCallback(() => {
+    if (isExpandedPlayer) {
+      setIsExpandedPlayer(false);
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      if (typeof window !== "undefined" && (window.history.state?.view === "expandable" || window.history.state?.view === "lyrics" || window.history.state?.view === "queue")) {
+        window.history.back();
+      }
+    }
+  }, [isExpandedPlayer]);
+
+  const closeMiniPlayer = useCallback(() => {
+    if (isMiniPlayer) {
+      setIsMiniPlayer(false);
+      if (typeof window !== "undefined" && window.history.state?.view) {
+        window.history.back();
+      }
+    }
+  }, [isMiniPlayer]);
+
+  const setLyricsOpen = useCallback((open: boolean) => {
+    if (open) {
+      setIsLyricsOpen(true);
+      if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
+        window.history.pushState({ view: "lyrics" }, "");
+      }
+    } else {
+      setIsLyricsOpen(false);
+      if (typeof window !== "undefined" && window.history.state?.view === "lyrics") {
+        window.history.back();
+      }
+    }
+  }, []);
+
+  const setQueueOpen = useCallback((open: boolean) => {
+    if (open) {
+      setIsQueueOpen(true);
+      if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
+        window.history.pushState({ view: "queue" }, "");
+      }
+    } else {
+      setIsQueueOpen(false);
+      if (typeof window !== "undefined" && window.history.state?.view === "queue") {
+        window.history.back();
+      }
+    }
+  }, []);
 
   // ─── Touch Swipe UP on Mini Player Bar ─────────────────────────────────
-  const miniTouchRef = useRef<{ startY: number; startX: number; startTime: number }>({ startY: 0, startX: 0, startTime: Date.now() })
+  const miniTouchStartYRef = useRef<number | null>(null)
 
   const handleMiniTouchStart = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0]
-    miniTouchRef.current = {
-      startY: touch.clientY,
-      startX: touch.clientX,
-      startTime: Date.now(),
-    }
+    miniTouchStartYRef.current = e.touches[0].clientY
   }, [])
 
-  const handleMiniTouchMove = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0]
-    const dy = miniTouchRef.current.startY - touch.clientY
-    const dx = touch.clientX - miniTouchRef.current.startX
-
-    if (dy > 0 && dy > Math.abs(dx)) {
-      playerY.set(Math.max(0, vh - dy))
-    }
-  }, [vh, playerY])
-
   const handleMiniTouchEnd = useCallback((e: React.TouchEvent) => {
-    const touch = e.changedTouches[0]
-    const dy = miniTouchRef.current.startY - touch.clientY
-    const dt = Math.max(0.01, (Date.now() - miniTouchRef.current.startTime) / 1000)
-    const vy = dy / dt
-
-    if (dy > vh * 0.15 || vy > 300) {
-      navigateToView("player")
-    } else {
-      animate(playerY, vh, springConfig)
+    if (miniTouchStartYRef.current === null) return
+    const dy = miniTouchStartYRef.current - e.changedTouches[0].clientY
+    miniTouchStartYRef.current = null
+    if (dy > 30) {
+      openExpandedPlayer()
     }
-  }, [vh, playerY, springConfig, navigateToView])
+  }, [openExpandedPlayer])
 
   const trackEndHandledRef = useRef(false)
   const isSeekingRef = useRef(false)
@@ -479,9 +532,11 @@ export function PlayerControls() {
       trackX.set(info.offset.x)
     } else if (absY > absX && absY >= 6 && info.offset.y < 0) {
       hasMovedRef.current = true
-      playerY.set(Math.max(0, vh + info.offset.y))
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = Math.min(vh, -info.offset.y)
+      }
     }
-  }, [trackX, playerY, vh])
+  }, [trackX, vh])
 
   const handlePanEnd = useCallback((_: any, info: PanInfo) => {
     const absX = Math.abs(info.offset.x)
@@ -517,25 +572,22 @@ export function PlayerControls() {
         animate(trackX, 0, springConfig)
       }
     } else if (absY > absX && (info.offset.y < -50 || info.velocity.y < -250)) {
-      navigateToView("player")
-    } else if (absY > absX && info.offset.y > 50) {
-      navigateToView("none")
+      openExpandedPlayer()
+    } else if (absY > absX && info.offset.y < 0) {
+      closeExpandedPlayer()
     } else {
       animate(trackX, 0, springConfig)
-      if (playerView === "none") {
-        animate(playerY, vh, springConfig)
-      }
     }
 
     setTimeout(() => {
       hasMovedRef.current = false
     }, 60)
-  }, [trackX, playerY, playerView, vh, springConfig, shouldReduceMotion, handleNext, handlePrevious, navigateToView])
+  }, [trackX, springConfig, shouldReduceMotion, handleNext, handlePrevious, openExpandedPlayer, closeExpandedPlayer])
 
   const handleBarClick = useCallback(() => {
     if (hasMovedRef.current) return
-    navigateToView("player")
-  }, [navigateToView])
+    openExpandedPlayer()
+  }, [openExpandedPlayer])
 
   // ─── YouTube callbacks ───────────────────────────────────────────────────────
 
@@ -908,8 +960,8 @@ export function PlayerControls() {
         case "s": e.preventDefault(); toggleShuffle(); break
         case "r": e.preventDefault(); toggleRepeat(); break
         case "v": e.preventDefault(); setBarVideoMode((v) => !v); break
-        case "l": e.preventDefault(); navigateToView(playerView === "lyrics" ? "player" : "lyrics"); break
-        case "q": e.preventDefault(); navigateToView(playerView === "queue" ? "player" : "queue"); break
+        case "l": e.preventDefault(); setLyricsOpen(!isLyricsOpen); break
+        case "q": e.preventDefault(); setQueueOpen(!isQueueOpen); break
       }
     }
     
@@ -918,7 +970,7 @@ export function PlayerControls() {
         window.removeEventListener("keydown", handleKeyDown)
     }
   }, [handlePlayPause, handleSeekForward, handleSeekBackward, handleNext, handlePrevious,
-    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat, playbackSource, playerView, navigateToView])
+    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat, playbackSource, isLyricsOpen, isQueueOpen])
 
   const handleSleepTimerEnd = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) {
@@ -979,16 +1031,23 @@ export function PlayerControls() {
         isPlaying={isPlaying}
       />
 
-      {/* ── Fixed Bottom Mini Player Bar ────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 pb-[50px] lg:pb-0 pointer-events-auto">
-        <motion.div
-          style={{ x: trackX }}
-          onPanStart={handlePanStart}
-          onPan={handlePan}
-          onPanEnd={handlePanEnd}
-          onClick={() => navigateToView("player")}
-          className="bottom-player-bar pointer-events-auto bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-pan-y"
-        >
+      {/* ── Scroll-Snap Container ────────────────────────────────────────── */}
+      <div
+        ref={scrollContainerRef}
+        className={`fixed inset-0 z-40 overflow-y-scroll snap-y snap-mandatory h-screen overscroll-behavior-y-contain ${
+          isExpandedPlayer || scrollProgress > 0 ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+      >
+        {/* Section 1: Collapsed mini-bar snap section */}
+        <div className="snap-start min-h-screen w-full flex flex-col justify-end pb-[50px] lg:pb-0 pointer-events-none">
+          <motion.div
+            style={{ opacity: miniBarOpacity, pointerEvents: miniBarPointerEvents as any, x: trackX }}
+            onPanStart={handlePanStart}
+            onPan={handlePan}
+            onPanEnd={handlePanEnd}
+            onClick={handleBarClick}
+            className="bottom-player-bar pointer-events-auto bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-pan-y"
+          >
           {/* ── Top Interactive Seeker Bar on Mini-Player (with hover timeframe display) ── */}
           <div
             ref={miniProgressRef}
@@ -1042,7 +1101,6 @@ export function PlayerControls() {
           <div 
             className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full"
             onTouchStart={handleMiniTouchStart}
-            onTouchMove={handleMiniTouchMove}
             onTouchEnd={handleMiniTouchEnd}
           >
             <motion.div
@@ -1119,7 +1177,7 @@ export function PlayerControls() {
             {/* Desktop: track info */}
             <div
               className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer rounded-lg p-2 hover:bg-primary/15 transition-colors duration-150"
-              onClick={() => navigateToView("player")}
+              onClick={() => setIsExpandedPlayer(true)}
             >
               {currentTrack ? (
                 <>
@@ -1301,10 +1359,10 @@ export function PlayerControls() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => navigateToView(playerView === "lyrics" ? "player" : "lyrics")}
+                    onClick={() => setLyricsOpen(!isLyricsOpen)}
                     disabled={!currentTrack}
                     aria-label="Lyrics"
-                    className={`h-10 w-10 transition-colors ${playerView === "lyrics" ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"}`}
+                    className={`h-10 w-10 transition-colors ${isLyricsOpen ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"}`}
                   >
                     <Type size={20} />
                   </Button>
@@ -1318,8 +1376,8 @@ export function PlayerControls() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => navigateToView(playerView === "queue" ? "player" : "queue")}
-                    className={`text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors ${playerView === "queue" ? "text-primary" : ""}`}
+                    onClick={() => setQueueOpen(!isQueueOpen)}
+                    className={`text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors ${isQueueOpen ? "text-primary" : ""}`}
                     aria-label="Queue"
                   >
                     <List size={20} />
@@ -1389,38 +1447,131 @@ export function PlayerControls() {
         </motion.div>
       </div>
 
-      {/* ── Overlay Expandable Player ────────────────────────────────────────── */}
-      {currentTrack && (
-        <ExpandablePlayer
-          playerView={playerView}
-          onNavigateView={navigateToView}
-          playerY={playerY}
-          vh={vh}
-          currentTime={currentTime}
-          isPlaying={isPlaying}
-          duration={duration}
-          volume={volume}
-          shuffle={shuffle}
-          repeat={repeat}
-          onPlayPause={handlePlayPause}
-          onPrevious={handlePrevious}
-          onNext={handleNext}
-          onToggleShuffle={toggleShuffle}
-          onToggleRepeat={toggleRepeat}
-          onSeek={handleSeek}
-          formatTime={formatTime}
-          onVideoActiveChange={handleVideoActiveChange}
-        />
-      )}
+      {/* Section 2: Expandable Player snap section */}
+      <div className="snap-start h-screen w-full flex-shrink-0 relative pointer-events-auto">
+        {currentTrack && (
+          <ExpandablePlayer
+            isExpanded={isExpandedPlayer}
+            scrollProgress={scrollProgress}
+            vh={vh}
+            scrollContainerRef={scrollContainerRef}
+            onExpandChange={(expanded) => {
+              if (expanded) openExpandedPlayer();
+              else closeExpandedPlayer();
+            }}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            duration={duration}
+            volume={volume}
+            shuffle={shuffle}
+            repeat={repeat}
+            onPlayPause={handlePlayPause}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onToggleShuffle={toggleShuffle}
+            onToggleRepeat={toggleRepeat}
+            onSeek={handleSeek}
+            formatTime={formatTime}
+            onVideoActiveChange={handleVideoActiveChange}
+          />
+        )}
+      </div>
+    </div>
 
-      {(playbackSource === "suno" || playbackSource === "local") && (
-        <audio
-          ref={sunoAudioRef}
-          src={playbackSource === "local" ? (localFileUrl || undefined) : (offlineSunoUrl ? offlineSunoUrl : (currentTrack ? `https://cdn1.suno.ai/${currentTrack.id}.mp3` : undefined))}
-          preload="auto"
-          className="hidden"
-        />
+    {/* ── Gesture-Driven Queue Sheet ─────────────────────────────── */}
+    <AnimatePresence>
+      {isQueueOpen && !isExpandedPlayer && (
+        <motion.div
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 1 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 80 || info.velocity.y > 400) {
+              setQueueOpen(false)
+            }
+          }}
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={springConfig}
+          className="fixed inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setQueueOpen(false)}
+              className="text-white/70 hover:text-white rounded-full"
+              aria-label="Close Queue"
+            >
+              <ChevronDown size={24} />
+            </Button>
+            <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+            <div className="text-xs font-semibold text-white/80">Up Next</div>
+          </div>
+
+          <div 
+            className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <QueueSheet onClose={() => setQueueOpen(false)} />
+          </div>
+        </motion.div>
       )}
+    </AnimatePresence>
+
+    {/* ── Gesture-Driven Lyrics Sheet ─────────────────────────────── */}
+    <AnimatePresence>
+      {isLyricsOpen && !isExpandedPlayer && (
+        <motion.div
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 1 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 100 || info.velocity.y > 400) {
+              setLyricsOpen(false)
+            }
+          }}
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={springConfig}
+          className="fixed inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setLyricsOpen(false)}
+              className="text-white/70 hover:text-white rounded-full"
+              aria-label="Close Lyrics"
+            >
+              <ChevronDown size={24} />
+            </Button>
+            <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+            <div className="w-10" />
+          </div>
+
+          <div 
+            className="flex-1 w-full max-w-5xl mx-auto overflow-hidden p-6 cursor-auto"
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={handleSeek} />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    {(playbackSource === "suno" || playbackSource === "local") && (
+      <audio
+        ref={sunoAudioRef}
+        src={playbackSource === "local" ? (localFileUrl || undefined) : (offlineSunoUrl ? offlineSunoUrl : (currentTrack ? `https://cdn1.suno.ai/${currentTrack.id}.mp3` : undefined))}
+        preload="auto"
+        className="hidden"
+      />
+    )}
     </>
   )
 }
