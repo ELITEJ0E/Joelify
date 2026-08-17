@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useApp } from "@/contexts/AppContext"
-import { Menu, Play, MoreVertical, Plus, Music2, Sparkles } from "lucide-react"
+import { Play, MoreVertical, Plus, Music2, Sparkles, TrendingUp, Zap } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,6 +16,17 @@ interface HomeViewProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore") => void
   onOpenSidebar?: () => void
 }
+
+interface ChartVideo {
+  id: string
+  title: string
+  artist: string
+  thumbnail: string
+  viewCount?: string
+}
+
+const CHARTS_CACHE_KEY = "charts:US"
+const CHARTS_CACHE_TTL = 6 * 60 * 60 * 1000 // 6 hours
 
 export function HomeView({ onNavigate }: HomeViewProps) {
   const {
@@ -31,6 +42,69 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     addTrackToPlaylist,
     setPlaybackSource,
   } = useApp()
+
+  const [chartVideos, setChartVideos] = useState<ChartVideo[]>([])
+  const [chartsLoading, setChartsLoading] = useState(true)
+
+  // Fetch Top Charts with 6-hour sessionStorage caching & silent fallback on error
+  useEffect(() => {
+    let isMounted = true
+
+    const loadCharts = async () => {
+      try {
+        if (typeof window !== "undefined" && window.sessionStorage) {
+          const cachedRaw = sessionStorage.getItem(CHARTS_CACHE_KEY)
+          if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw)
+            if (
+              cached &&
+              Date.now() - cached.timestamp < CHARTS_CACHE_TTL &&
+              Array.isArray(cached.videos) &&
+              cached.videos.length > 0
+            ) {
+              if (isMounted) {
+                setChartVideos(cached.videos)
+                setChartsLoading(false)
+              }
+              return
+            }
+          }
+        }
+
+        const res = await fetch("/api/charts?regionCode=US")
+        if (!res.ok) {
+          if (isMounted) setChartsLoading(false)
+          return
+        }
+        const data = await res.json()
+        if (data && Array.isArray(data.videos) && data.videos.length > 0) {
+          if (isMounted) {
+            setChartVideos(data.videos)
+            setChartsLoading(false)
+          }
+          if (typeof window !== "undefined" && window.sessionStorage) {
+            sessionStorage.setItem(
+              CHARTS_CACHE_KEY,
+              JSON.stringify({
+                videos: data.videos,
+                timestamp: Date.now(),
+              })
+            )
+          }
+        } else {
+          if (isMounted) setChartsLoading(false)
+        }
+      } catch {
+        // Fail silently - do not show error banner on Home
+        if (isMounted) setChartsLoading(false)
+      }
+    }
+
+    loadCharts()
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const getTimeGreeting = () => {
     const hour = new Date().getHours()
@@ -75,6 +149,53 @@ export function HomeView({ onNavigate }: HomeViewProps) {
       return null
     })
     .filter((t): t is NonNullable<typeof t> => t !== null)
+
+  // PART A: Quick Picks - mix of recentTracks, likedSongs, and joelsSongs, deduped by id, capped at 8
+  const quickPicks = (() => {
+    const combined = [...recentTracks, ...likedSongs, ...joelsSongs]
+    const seen = new Set<string>()
+    const deduped: typeof recentTracks = []
+    for (const track of combined) {
+      if (track && track.id && !seen.has(track.id)) {
+        seen.add(track.id)
+        deduped.push(track)
+        if (deduped.length >= 8) break
+      }
+    }
+    return deduped
+  })()
+
+  const handlePlayQuickPick = (track: any) => {
+    if (track.audioUrl || joelsSongs.some((j) => j.id === track.id)) {
+      setPlaybackSource("suno")
+    } else {
+      setPlaybackSource("youtube")
+    }
+    setCurrentTrack(track)
+    setQueue([])
+    addRecentlyPlayed({ type: "track", id: track.id })
+  }
+
+  const handlePlayChartTrack = (track: ChartVideo, index: number) => {
+    setPlaybackSource("youtube")
+    const formattedTrack = {
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      thumbnail: track.thumbnail,
+      duration: 0,
+    }
+    const remainingQueue = chartVideos.slice(index + 1).map((t) => ({
+      id: t.id,
+      title: t.title,
+      artist: t.artist,
+      thumbnail: t.thumbnail,
+      duration: 0,
+    }))
+    setCurrentTrack(formattedTrack)
+    setQueue(remainingQueue)
+    addRecentlyPlayed({ type: "track", id: track.id })
+  }
 
   return (
     <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 overflow-y-auto pb-28">
@@ -212,7 +333,116 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           </div>
         </section>
 
-        {/* LAST SESSION SECTION */}
+        {/* PART A: QUICK PICKS SECTION (Responsive speed-dial grid) */}
+        {quickPicks.length > 0 && (
+          <section className="space-y-3 pt-2">
+            <div className="flex items-center gap-2">
+              <Zap size={20} className="text-amber-400" />
+              <h2 className="text-xl font-bold text-primary tracking-tight">Quick Picks</h2>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3">
+              {quickPicks.map((track) => (
+                <div
+                  key={track.id}
+                  onClick={() => handlePlayQuickPick(track)}
+                  className="group flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 backdrop-blur-xl transition-all duration-300 cursor-pointer shadow-lg overflow-hidden"
+                >
+                  <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg overflow-hidden shrink-0 bg-zinc-800 shadow aspect-square">
+                    <Image
+                      src={track.thumbnail || "/placeholder.svg"}
+                      alt={track.title}
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Play fill="currentColor" size={16} className="text-white ml-0.5" />
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1 pr-1">
+                    <h3 className="font-semibold text-xs sm:text-sm text-white group-hover:text-primary transition-colors truncate">
+                      {track.title}
+                    </h3>
+                    <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                      {track.artist || "Unknown Artist"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* PART B: TOP CHARTS ROW (Horizontally scrollable with loading skeleton and 6-hr cache) */}
+        {chartsLoading ? (
+          <section className="space-y-3 pt-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={20} className="text-primary animate-pulse" />
+              <h2 className="text-xl font-bold text-primary tracking-tight">Top Charts</h2>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <div
+                  key={n}
+                  className="flex-shrink-0 w-36 md:w-44 bg-white/[0.04] border border-white/10 backdrop-blur-xl rounded-2xl p-3 animate-pulse"
+                >
+                  <div className="aspect-square rounded-xl bg-white/10 mb-2.5" />
+                  <div className="h-4 bg-white/10 rounded w-3/4 mb-1.5" />
+                  <div className="h-3 bg-white/10 rounded w-1/2" />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : chartVideos.length > 0 ? (
+          <section className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TrendingUp size={20} className="text-primary" />
+                <h2 className="text-xl font-bold text-primary tracking-tight">Top Charts</h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onNavigate("charts")}
+                className="text-xs text-gray-400 hover:text-white"
+              >
+                View All ({chartVideos.length})
+              </Button>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+              {chartVideos.map((video, idx) => (
+                <div
+                  key={video.id || idx}
+                  onClick={() => handlePlayChartTrack(video, idx)}
+                  className="flex-shrink-0 w-36 md:w-44 bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 backdrop-blur-xl rounded-2xl p-3 cursor-pointer group hover:scale-[1.02] transition-all duration-300 shadow-xl"
+                >
+                  <div className="relative aspect-square rounded-xl bg-zinc-800 flex items-center justify-center mb-2.5 overflow-hidden shadow-lg border border-white/10">
+                    <Image
+                      src={video.thumbnail || "/placeholder.svg"}
+                      alt={video.title}
+                      fill
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black shadow-lg">
+                        <Play fill="currentColor" size={20} className="ml-0.5" />
+                      </div>
+                    </div>
+                  </div>
+                  <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-primary transition-colors">
+                    {video.title}
+                  </h3>
+                  <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">
+                    {video.artist}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* LAST SESSION SECTION (Unchanged) */}
         <section className="space-y-3 pt-2">
           <h2 className="text-xl font-bold text-primary tracking-tight">Last Session</h2>
 
@@ -306,3 +536,4 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     </div>
   )
 }
+

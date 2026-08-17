@@ -95,9 +95,9 @@ export function ExpandablePlayer({
   const scale = useTransform(y, [0, 300], [1, 0.95])
 
   const shouldReduceMotion = useReducedMotion()
-  const springConfig = shouldReduceMotion 
+  const tweenConfig = shouldReduceMotion 
     ? { duration: 0.15 } 
-    : { type: "spring", stiffness: 300, damping: 30 }
+    : { type: "tween" as const, duration: 0.22, ease: [0.32, 0.72, 0, 1] as const }
 
   const getRepeatLabel = () => {
     return repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"
@@ -229,40 +229,40 @@ export function ExpandablePlayer({
     window.history.pushState({ modal: true, type: 'expandableLyrics' }, "");
     showLyricsRef.current = true;
     setShowLyrics(true);
-    animate(y, 0, springConfig);
-  }, [y, springConfig]);
+    animate(y, 0, tweenConfig);
+  }, [y, tweenConfig]);
 
   const closeLyrics = useCallback(() => {
     showLyricsRef.current = false;
     setShowLyrics(false);
-    animate(y, 0, springConfig);
+    animate(y, 0, tweenConfig);
     
     setTimeout(() => {
       if (window.history.state?.type === 'expandableLyrics') {
         window.history.back();
       }
     }, 0);
-  }, [y, springConfig]);
+  }, [y, tweenConfig]);
 
   const openQueue = useCallback(() => {
     setShowLyrics(false);
     window.history.pushState({ modal: true, type: 'expandableQueue' }, "");
     showQueueRef.current = true;
     setShowQueue(true);
-    animate(y, 0, springConfig);
-  }, [y, springConfig]);
+    animate(y, 0, tweenConfig);
+  }, [y, tweenConfig]);
 
   const closeQueue = useCallback(() => {
     showQueueRef.current = false;
     setShowQueue(false);
-    animate(y, 0, springConfig);
+    animate(y, 0, tweenConfig);
     
     setTimeout(() => {
       if (window.history.state?.type === 'expandableQueue') {
         window.history.back();
       }
     }, 0);
-  }, [y, springConfig]);
+  }, [y, tweenConfig]);
 
   const showLyricsRef = useRef(false);
   const showQueueRef = useRef(false);
@@ -277,17 +277,17 @@ export function ExpandablePlayer({
       if (e.state?.type !== 'expandableLyrics' && showLyricsRef.current) {
         showLyricsRef.current = false;
         setShowLyrics(false);
-        animate(y, 0, springConfig);
+        animate(y, 0, tweenConfig);
       }
       if (e.state?.type !== 'expandableQueue' && showQueueRef.current) {
         showQueueRef.current = false;
         setShowQueue(false);
-        animate(y, 0, springConfig);
+        animate(y, 0, tweenConfig);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [y, springConfig]);
+  }, [y, tweenConfig]);
 
   const handleDragEnd = useCallback((_: any, info: PanInfo) => {
     // Horizontal swipe right-to-left -> open Queue
@@ -313,8 +313,10 @@ export function ExpandablePlayer({
       if (!showLyrics && !showQueue) {
         openLyrics()
       }
+    } else {
+      animate(y, 0, tweenConfig)
     }
-  }, [onExpandChange, showLyrics, showQueue, openLyrics, closeLyrics, closeQueue, openQueue])
+  }, [onExpandChange, showLyrics, showQueue, openLyrics, closeLyrics, closeQueue, openQueue, y, tweenConfig])
 
   const handleBackdropClick = useCallback(() => {
     if (window.innerWidth >= 1024) onExpandChange(false)
@@ -375,7 +377,7 @@ export function ExpandablePlayer({
       initial={{ y: "100%", scale: 0.96 }}
       animate={{ y: 0, scale: 1 }}
       exit={{ y: "100%", scale: 0.96 }}
-      transition={springConfig}
+      transition={tweenConfig}
       style={{ originY: 1 }}
       className="fixed inset-0 z-[100] overflow-hidden overscroll-none"
       onClick={handleBackdropClick}
@@ -412,11 +414,11 @@ export function ExpandablePlayer({
         drag="y"
         dragListener={!showLyrics && !showQueue}
         dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0.05, bottom: 0.5 }}
+        dragElastic={0}
         onDragEnd={handleDragEnd}
         onWheel={handleWheel}
-        style={{ y, opacity, scale }}
-        className="relative h-full w-full flex flex-col z-20 glass-specular"
+        style={{ y, opacity, scale, touchAction: "none" }}
+        className="relative h-full w-full flex flex-col z-20 glass-specular touch-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
@@ -461,7 +463,7 @@ export function ExpandablePlayer({
                 initial={{ scale: 0.75, opacity: 0.6, y: 30 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.75, opacity: 0.6, y: 30 }}
-                transition={springConfig}
+                transition={tweenConfig}
                 className="w-full flex justify-center"
               >
                 <div
@@ -784,7 +786,7 @@ export function ExpandablePlayer({
             <motion.div
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={{ left: 0, right: 0.8 }}
+              dragElastic={0}
               onDragEnd={(_, info) => {
                 if (info.offset.x > 80 || info.velocity.x > 300) {
                   closeQueue()
@@ -793,8 +795,9 @@ export function ExpandablePlayer({
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={springConfig}
-              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-l border-white/10"
+              transition={tweenConfig}
+              style={{ touchAction: "none" }}
+              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-l border-white/10 touch-none"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
@@ -830,7 +833,7 @@ export function ExpandablePlayer({
             <motion.div
               drag="y"
               dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0, bottom: 0.8 }}
+              dragElastic={0}
               onDragEnd={(_, info) => {
                 if (info.offset.y > 100 || info.velocity.y > 400) {
                   closeLyrics()
@@ -839,8 +842,9 @@ export function ExpandablePlayer({
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={springConfig}
-              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10"
+              transition={tweenConfig}
+              style={{ touchAction: "none" }}
+              className="absolute inset-0 z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 border-t border-white/10 touch-none"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10 cursor-grab active:cursor-grabbing">
