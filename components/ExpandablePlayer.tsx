@@ -22,9 +22,9 @@ import { extractAmbientColors, type AmbientColors } from "@/lib/ambientColor"
 interface ExpandablePlayerProps {
   isExpanded: boolean
   onExpandChange: (expanded: boolean) => void
-  expandY?: MotionValue<number>
+  scrollProgress?: number
   vh?: number
-  isPanActive?: boolean
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>
   currentTime: number
   isPlaying: boolean
   duration: number
@@ -47,12 +47,14 @@ function isValidYouTubeId(id: string | undefined | null): boolean {
   return /^[a-zA-Z0-9_-]{11}$/.test(id)
 }
 
+const tweenConfig = { type: "tween" as const, duration: 0.22, ease: [0.32, 0.72, 0, 1] as const }
+
 export function ExpandablePlayer({
   isExpanded,
   onExpandChange,
-  expandY,
+  scrollProgress = 0,
   vh,
-  isPanActive = false,
+  scrollContainerRef,
   currentTime,
   isPlaying,
   duration,
@@ -76,12 +78,15 @@ export function ExpandablePlayer({
   const [showQueue, setShowQueue] = useState(false)
   const [ambientColors, setAmbientColors] = useState<AmbientColors | null>(null)
 
-  const internalExpandY = useMotionValue(0)
-  const activeExpandY = expandY || internalExpandY
   const actualVh = vh || (typeof window !== "undefined" ? window.innerHeight : 800)
 
-  const backdropOpacity = useTransform(activeExpandY, [actualVh * 0.85, 0], [0, 1])
-  const sheetScale = useTransform(activeExpandY, [actualVh, 0], [0.96, 1])
+  const progressMV = useMotionValue(scrollProgress)
+  useEffect(() => {
+    progressMV.set(scrollProgress)
+  }, [scrollProgress, progressMV])
+
+  const backdropOpacity = useTransform(progressMV, [0.1, 1], [0, 1])
+  const sheetScale = useTransform(progressMV, [0, 1], [0.96, 1])
 
   // ── Ambient Color Extraction ──────────────────────────────
   useEffect(() => {
@@ -103,30 +108,9 @@ export function ExpandablePlayer({
   const videoReadyRef = useRef(false)
   const initialSyncDoneRef = useRef(false)
 
-  const x = useMotionValue(0)
-  const lyricsY = useMotionValue(0)
-
-  const shouldReduceMotion = useReducedMotion()
-  const tweenConfig = shouldReduceMotion 
-    ? { duration: 0.15 } 
-    : { type: "tween" as const, duration: 0.22, ease: [0.32, 0.72, 0, 1] as const }
-
   const getRepeatLabel = () => {
     return repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"
   }
-
-  // ── Destroy video player and reset state on close ─────────────────────────
-  useEffect(() => {
-    if (!isExpanded) {
-      x.set(0)
-      lyricsY.set(0)
-      setShowVisualizer(false)
-      setShowVideo(false)
-      setShowLyrics(false)
-      setShowQueue(false)
-      destroyVideoPlayer()
-    }
-  }, [isExpanded, x, lyricsY])
 
   const destroyVideoPlayer = useCallback(() => {
     try {
@@ -139,8 +123,21 @@ export function ExpandablePlayer({
     videoPlayerRef.current = null
     videoReadyRef.current = false
     initialSyncDoneRef.current = false
-    onVideoActiveChange?.(false)
+    queueMicrotask(() => {
+      onVideoActiveChange?.(false)
+    })
   }, [onVideoActiveChange])
+
+  // ── Destroy video player and reset state on close ─────────────────────────
+  useEffect(() => {
+    if (!isExpanded) {
+      setShowVisualizer(false)
+      setShowVideo(false)
+      setShowLyrics(false)
+      setShowQueue(false)
+      destroyVideoPlayer()
+    }
+  }, [isExpanded, destroyVideoPlayer])
 
   // ── Init video player when showVideo becomes true ──────────────────────────
   useEffect(() => {
@@ -212,272 +209,132 @@ export function ExpandablePlayer({
   // ── Destroy video player when toggled off or source changes ───────────────
   useEffect(() => {
     if (!showVideo || playbackSource !== "youtube") {
-      setShowVideo(false)
       destroyVideoPlayer()
     }
   }, [showVideo, playbackSource, destroyVideoPlayer])
 
   // ── Swipe & Trackpad gesture handling for lyrics, queue & player ─────────────
   const wheelAccumulatorX = useRef<number>(0)
-  const wheelAccumulatorY = useRef<number>(0)
-  const wheelTimer = useRef<NodeJS.Timeout | null>(null)
-  const wheelCooldownRef = useRef(false)
-  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const verticalScrollRef = useRef<HTMLDivElement>(null)
+  const horizontalScrollRef = useRef<HTMLDivElement>(null)
 
   const openLyrics = useCallback(() => {
-    setShowQueue(false);
-    window.history.pushState({ modal: true, type: 'expandableLyrics' }, "");
-    showLyricsRef.current = true;
-    setShowLyrics(true);
-    animate(lyricsY, -actualVh, tweenConfig);
-  }, [lyricsY, actualVh, tweenConfig]);
+    if (verticalScrollRef.current) {
+      verticalScrollRef.current.scrollTo({ top: actualVh, behavior: "smooth" })
+    }
+  }, [actualVh])
 
   const closeLyrics = useCallback(() => {
-    showLyricsRef.current = false;
-    animate(lyricsY, 0, tweenConfig).then(() => setShowLyrics(false));
-    
-    setTimeout(() => {
-      if (window.history.state?.type === 'expandableLyrics') {
-        window.history.back();
-      }
-    }, 0);
-  }, [lyricsY, tweenConfig]);
+    if (verticalScrollRef.current) {
+      verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
+    }
+  }, [])
 
   const openQueue = useCallback(() => {
-    setShowLyrics(false);
-    window.history.pushState({ modal: true, type: 'expandableQueue' }, "");
-    showQueueRef.current = true;
-    setShowQueue(true);
-    animate(x, -window.innerWidth, tweenConfig);
-  }, [x, tweenConfig]);
+    if (horizontalScrollRef.current) {
+      horizontalScrollRef.current.scrollTo({ left: window.innerWidth, behavior: "smooth" })
+    }
+  }, [])
 
   const closeQueue = useCallback(() => {
-    showQueueRef.current = false;
-    animate(x, 0, tweenConfig).then(() => setShowQueue(false));
-    
-    setTimeout(() => {
-      if (window.history.state?.type === 'expandableQueue') {
-        window.history.back();
-      }
-    }, 0);
-  }, [x, tweenConfig]);
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    // Extend cooldown while inertia events keep coming in
-    if (wheelCooldownRef.current) {
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
-      cooldownTimerRef.current = setTimeout(() => {
-        wheelCooldownRef.current = false;
-        wheelAccumulatorX.current = 0;
-        wheelAccumulatorY.current = 0;
-      }, 250);
-      return;
+    if (horizontalScrollRef.current) {
+      horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
     }
+  }, [])
 
-    if (wheelTimer.current) {
-      clearTimeout(wheelTimer.current);
-    }
+  const handleVerticalScroll = useCallback(() => {
+    const el = verticalScrollRef.current
+    if (!el) return
+    const isShowing = el.scrollTop > el.clientHeight / 2
+    setShowLyrics((prev) => (prev !== isShowing ? isShowing : prev))
+  }, [])
 
-    wheelAccumulatorX.current += e.deltaX;
-    wheelAccumulatorY.current += e.deltaY;
+  const handleHorizontalScroll = useCallback(() => {
+    const el = horizontalScrollRef.current
+    if (!el) return
+    const isShowing = el.scrollLeft > el.clientWidth / 2
+    setShowQueue((prev) => (prev !== isShowing ? isShowing : prev))
+  }, [])
 
-    const absX = Math.abs(wheelAccumulatorX.current);
-    const absY = Math.abs(wheelAccumulatorY.current);
+  const showLyricsRef = useRef(false)
+  const showQueueRef = useRef(false)
 
-    const setCooldown = () => {
-      wheelCooldownRef.current = true;
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
-      cooldownTimerRef.current = setTimeout(() => {
-        wheelCooldownRef.current = false;
-        wheelAccumulatorX.current = 0;
-        wheelAccumulatorY.current = 0;
-      }, 500);
-    };
-
-    // Main player (no active sub-sheet)
-    if (!showLyrics && !showQueue) {
-      if (absY >= 35 && absY > absX) {
-        if (wheelAccumulatorY.current > 35) {
-          // Swipe UP on trackpad (wheel down) -> Open Lyrics
-          openLyrics();
-          wheelAccumulatorY.current = 0;
-          wheelAccumulatorX.current = 0;
-          setCooldown();
-        } else if (wheelAccumulatorY.current < -35) {
-          // Swipe DOWN on trackpad (wheel up) -> Minimize player
-          onExpandChange(false);
-          wheelAccumulatorY.current = 0;
-          wheelAccumulatorX.current = 0;
-          setCooldown();
-        }
-      } else if (absX >= 35 && absX > absY) {
-        if (wheelAccumulatorX.current > 35) {
-          // Swipe LEFT on trackpad (wheel right) -> Open Queue
-          openQueue();
-          wheelAccumulatorX.current = 0;
-          wheelAccumulatorY.current = 0;
-          setCooldown();
-        } else if (wheelAccumulatorX.current < -35) {
-          // Swipe RIGHT on trackpad (wheel left) -> Previous track
-          onPrevious();
-          wheelAccumulatorX.current = 0;
-          wheelAccumulatorY.current = 0;
-          setCooldown();
-        }
-      }
-    } 
-    // Inside Lyrics sheet
-    else if (showLyrics) {
-      if (wheelAccumulatorY.current < -40 || wheelAccumulatorX.current < -35) {
-        closeLyrics();
-        wheelAccumulatorY.current = 0;
-        wheelAccumulatorX.current = 0;
-        setCooldown();
-      }
-    } 
-    // Inside Queue sheet
-    else if (showQueue) {
-      if (wheelAccumulatorX.current < -35 || wheelAccumulatorY.current < -40) {
-        closeQueue();
-        wheelAccumulatorX.current = 0;
-        wheelAccumulatorY.current = 0;
-        setCooldown();
-      }
-    }
-
-    wheelTimer.current = setTimeout(() => {
-      wheelAccumulatorX.current = 0;
-      wheelAccumulatorY.current = 0;
-    }, 180);
-  }, [showLyrics, showQueue, openLyrics, closeLyrics, openQueue, closeQueue, onExpandChange, onPrevious]);
-
-  const showLyricsRef = useRef(false);
-  const showQueueRef = useRef(false);
-  
   useEffect(() => {
     showLyricsRef.current = showLyrics;
     showQueueRef.current = showQueue;
   }, [showLyrics, showQueue]);
 
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      if (e.state?.type !== 'expandableLyrics' && showLyricsRef.current) {
-        showLyricsRef.current = false;
-        setShowLyrics(false);
-        animate(x, 0, tweenConfig);
-      }
-      if (e.state?.type !== 'expandableQueue' && showQueueRef.current) {
-        showQueueRef.current = false;
-        setShowQueue(false);
-        animate(x, 0, tweenConfig);
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [x, tweenConfig]);
+  // ── Desktop Mouse Wheel Swipe & Player Closing Handler ─────────────
+  const wheelCooldownRef = useRef(false)
+  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const panStartYRef = useRef(0)
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    // Ignore wheel events originating from sliders or inputs to preserve exact control behavior
+    const target = e.target as HTMLElement
+    if (target.closest('input, [role="slider"], .overflow-y-auto')) {
+      return
+    }
 
-  const handlePanStart = useCallback(() => {
-    panStartYRef.current = activeExpandY.get()
-  }, [activeExpandY])
+    if (wheelCooldownRef.current) return
 
-  const handlePan = useCallback((_: any, info: PanInfo) => {
-    const absX = Math.abs(info.offset.x)
-    const absY = Math.abs(info.offset.y)
+    const absX = Math.abs(e.deltaX)
+    const absY = Math.abs(e.deltaY)
 
-    // Horizontal swipe for Queue or Track change
-    if (absX > absY * 1.5) {
-      if (showQueue) {
-        x.set(-window.innerWidth + info.offset.x)
-      } else if (showLyrics) {
-        // do nothing
-      } else {
-        x.set(info.offset.x)
+    const setCooldown = () => {
+      wheelCooldownRef.current = true
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
+      cooldownTimerRef.current = setTimeout(() => {
+        wheelCooldownRef.current = false
+      }, 250)
+    }
+
+    const vEl = verticalScrollRef.current
+    const hEl = horizontalScrollRef.current
+    if (!vEl || !hEl) return
+
+    const isAtTop = vEl.scrollTop < 10
+    const isAtMainHorizontal = hEl.scrollLeft < 10
+    const isAtLyrics = vEl.scrollTop > vEl.clientHeight / 2
+    const isAtQueue = hEl.scrollLeft > hEl.clientWidth / 2
+
+    // Horizontal wheel swipe (Shift + Wheel or Horizontal Trackpad)
+    if (absX > absY && absX > 20) {
+      if (e.deltaX > 20 && isAtMainHorizontal && !isAtLyrics) {
+        openQueue()
+        setCooldown()
+      } else if (e.deltaX < -20 && isAtQueue) {
+        closeQueue()
+        setCooldown()
       }
       return
     }
 
-    // Vertical drag:
-    if (showLyrics) {
-      lyricsY.set(-actualVh + info.offset.y)
-    } else if (showQueue) {
-      // do nothing
-    } else {
-      if (info.offset.y > 0) {
-        // Dragging down -> move activeExpandY towards actualVh
-        const targetY = Math.max(0, Math.min(actualVh, panStartYRef.current + info.offset.y))
-        activeExpandY.set(targetY)
-      } else {
-        // Dragging up -> open lyrics!
-        lyricsY.set(Math.max(-actualVh, info.offset.y))
-      }
-    }
-  }, [showLyrics, showQueue, activeExpandY, actualVh, x, lyricsY])
-
-  const handlePanEnd = useCallback((_: any, info: PanInfo) => {
-    const absX = Math.abs(info.offset.x)
-    const absY = Math.abs(info.offset.y)
-
-    // Horizontal swipe check
-    if (absX > absY * 1.2 && (absX > 45 || Math.abs(info.velocity.x) > 250)) {
-      if (showQueue) {
-        if (info.offset.x > 0 || info.velocity.x > 250) {
-          closeQueue()
-        } else {
-          openQueue() // snap back
+    // Vertical wheel swipe (Mouse Wheel or Vertical Trackpad)
+    if (absY > absX && absY > 20) {
+      if (isAtMainHorizontal && isAtTop) {
+        if (e.deltaY < -20) {
+          // Wheeling UP at top of main player -> Minimize / Close ExpandablePlayer!
+          onExpandChange(false)
+          setCooldown()
+        } else if (e.deltaY > 20 && !isAtLyrics) {
+          // Wheeling DOWN at top of main player -> Open Lyrics!
+          openLyrics()
+          setCooldown()
         }
-      } else if (!showLyrics) {
-        if (info.offset.x < 0 || info.velocity.x < -250) {
-          openQueue()
-        } else {
-          onPrevious()
-          animate(x, 0, tweenConfig)
-        }
-      }
-      return
-    }
-
-    if (showQueue) {
-      openQueue()
-      return
-    } else if (!showLyrics) {
-      animate(x, 0, tweenConfig)
-    }
-
-    // Vertical drag check
-    const currentY = activeExpandY.get()
-    const vy = info.velocity.y
-
-    if (showLyrics) {
-      if (info.offset.y > 100 || vy > 300) {
+      } else if (isAtLyrics && e.deltaY < -20 && vEl.scrollTop <= 10) {
+        // Wheeling UP in Lyrics -> Close Lyrics!
         closeLyrics()
-      } else {
-        openLyrics()
+        setCooldown()
+      } else if (isAtQueue && e.deltaY < -20) {
+        // Wheeling UP in Queue -> Close Queue!
+        closeQueue()
+        setCooldown()
       }
-      return
     }
-
-    if (info.offset.y > 0) {
-      // Dragged down
-      if (currentY > actualVh * 0.25 || vy > 200) {
-        animate(activeExpandY, actualVh, { type: "spring", stiffness: 350, damping: 32, velocity: vy })
-        onExpandChange(false)
-      } else {
-        animate(activeExpandY, 0, { type: "spring", stiffness: 350, damping: 32, velocity: vy })
-        onExpandChange(true)
-      }
-    } else if (info.offset.y < -40 || vy < -200) {
-      // Dragged up when expanded -> open lyrics
-      openLyrics()
-    } else {
-      animate(lyricsY, 0, tweenConfig)
-      animate(activeExpandY, 0, { type: "spring", stiffness: 350, damping: 32 })
-    }
-  }, [showLyrics, showQueue, openQueue, closeQueue, onPrevious, onExpandChange, openLyrics, activeExpandY, actualVh, x, lyricsY, tweenConfig])
+  }, [openQueue, closeQueue, openLyrics, closeLyrics, onExpandChange])
 
   const handleBackdropClick = useCallback(() => {
-    if (window.innerWidth >= 1024) onExpandChange(false)
+    onExpandChange(false)
   }, [onExpandChange])
 
   useEffect(() => {
@@ -533,13 +390,10 @@ export function ExpandablePlayer({
   return (
     <motion.div
       style={{
-        y: activeExpandY,
         scale: sheetScale,
         originY: 1,
-        pointerEvents: isExpanded || isPanActive ? "auto" : "none",
-        visibility: isExpanded || isPanActive ? "visible" : "hidden",
       }}
-      className="fixed inset-0 z-[100] overflow-hidden overscroll-none"
+      className="h-full w-full relative overflow-hidden overscroll-none"
       onClick={handleBackdropClick}
     >
       {/* ── Ambient color extraction background with smooth crossfade ────────── */}
@@ -569,17 +423,27 @@ export function ExpandablePlayer({
         </div>
       )}
 
-      {/* ── Draggable panel ─────────────────────────────────────────────── */}
-      <motion.div
-        onPanStart={handlePanStart}
-        onPan={handlePan}
-        onPanEnd={handlePanEnd}
+      {/* ── Scroll Snap Container (Horizontal: Main + Queue) ─────────────────────────────── */}
+      <div 
+        ref={horizontalScrollRef}
+        onScroll={handleHorizontalScroll}
         onWheel={handleWheel}
-        style={{ x, touchAction: "none" }}
-        className="relative h-full w-full flex flex-col z-20 glass-specular touch-none cursor-grab active:cursor-grabbing"
-        onClick={(e) => e.stopPropagation()}
+        className="absolute inset-0 z-20 overflow-x-scroll snap-x snap-mandatory flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-behavior-x-contain pointer-events-auto"
       >
-        {/* ── Header ────────────────────────────────────────────────────── */}
+        {/* SNAP PAGE 1: Main Player + Lyrics (Vertical Scroll) */}
+        <div className="w-full h-full flex-shrink-0 relative snap-start">
+          
+          <div 
+            ref={verticalScrollRef}
+            onScroll={handleVerticalScroll}
+            className="absolute inset-0 overflow-y-scroll snap-y snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {/* SNAP PAGE 1.1: Main Player UI */}
+            <div 
+              className="w-full h-full flex-shrink-0 relative snap-start flex flex-col z-20 glass-specular"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* ── Header ────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
           {/* Collapse button */}
           <Tooltip>
@@ -933,71 +797,66 @@ export function ExpandablePlayer({
                 </div>
               </div>
             </motion.div>
-
-            <div className="h-8 lg:h-0" />
           </div>
         </div>
+      </div>
 
-        {/* ── Sliding Queue sheet (Right to Left) ─────────────────────────────── */}
-        <div 
-          className="absolute inset-y-0 left-full w-full z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 touch-none"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={closeQueue}
-              className="text-white/70 hover:text-white rounded-full"
-              aria-label="Close Queue"
-            >
-              <ChevronRight size={24} />
-            </Button>
-            <div className="flex items-center gap-2">
-              <div className="w-12 h-1.5 bg-white/30 rounded-full" />
-            </div>
-            <div className="w-10" />
-          </div>
-
-          <div 
-            className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
-            onPointerDown={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
+      {/* SNAP PAGE 1.2: Lyrics UI */}
+      <div 
+        className="w-full h-full flex-shrink-0 relative snap-start sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={closeLyrics}
+            className="text-white/70 hover:text-white rounded-full"
+            aria-label="Close Lyrics"
           >
-            <QueueSheet />
-          </div>
+            <ChevronDown size={24} />
+          </Button>
+          <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+          <div className="w-10" />
         </div>
+        <div className="flex-1 w-full max-w-5xl mx-auto overflow-hidden relative">
+          <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
+        </div>
+      </div>
+    </div>
+  </div>
 
-        {/* ── Sliding up Lyrics sheet ─────────────────────────────── */}
-        <motion.div
-          style={{ y: lyricsY }}
-          className="absolute top-full left-0 w-full h-full z-[60] sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4 touch-none"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={closeLyrics}
-              className="text-white/70 hover:text-white rounded-full"
-              aria-label="Close Lyrics"
-            >
-              <ChevronDown size={24} />
-            </Button>
-            <div className="w-12 h-1.5 bg-white/30 rounded-full" />
-            <div className="w-10" />
-          </div>
+  {/* SNAP PAGE 2: Queue */}
+  <div 
+    className="w-full h-full flex-shrink-0 relative snap-start sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
+    onClick={(e) => e.stopPropagation()}
+  >
+    <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={closeQueue}
+        className="text-white/70 hover:text-white rounded-full"
+        aria-label="Close Queue"
+      >
+        <ChevronRight size={24} />
+      </Button>
+      <div className="flex items-center gap-2">
+        <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+      </div>
+      <div className="w-10" />
+    </div>
 
-          <div 
-            className="flex-1 w-full max-w-5xl mx-auto overflow-hidden relative cursor-auto"
-            onPointerDown={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-          >
-            <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
-          </div>
-        </motion.div>
-      </motion.div>
-    </motion.div>
+    <div 
+      className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+    >
+      <QueueSheet />
+    </div>
+  </div>
+</div>
+</motion.div>
   )
 }
 

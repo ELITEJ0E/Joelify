@@ -51,19 +51,15 @@ export function PlayerControls() {
   const [offlineSunoUrl, setOfflineSunoUrl] = useState<string | null>(null)
   const [localFileUrl, setLocalFileUrl] = useState<string | null>(null)
 
-  const barY = useMotionValue(0)
   const trackX = useMotionValue(0)
-  const panAxisRef = useRef<"x" | "y" | null>(null)
-  const isPanActiveRef = useRef(false)
   const hasMovedRef = useRef(false)
 
   const [vh, setVh] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 800))
-  const expandY = useMotionValue(vh)
-  const [isPanActive, setIsPanActive] = useState(false)
-  const panStartYRef = useRef(vh)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [scrollProgress, setScrollProgress] = useState(0)
 
-  const miniBarOpacity = useTransform(expandY, [vh, vh * 0.82], [1, 0])
-  const miniBarPointerEvents = useTransform(expandY, [vh, vh * 0.88], ["auto", "none"])
+  const miniBarOpacity = Math.max(0, 1 - scrollProgress / 0.2)
+  const miniBarPointerEvents = scrollProgress > 0.15 ? ("none" as const) : ("auto" as const)
 
   const shouldReduceMotion = useReducedMotion()
   const springConfig = shouldReduceMotion 
@@ -72,24 +68,54 @@ export function PlayerControls() {
 
   useEffect(() => {
     const handleResize = () => {
-      const newVh = window.innerHeight
-      setVh(newVh)
-      if (!isExpandedPlayer && !isPanActiveRef.current) {
-        expandY.set(newVh)
-      }
+      setVh(window.innerHeight)
     }
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
-  }, [isExpandedPlayer, expandY])
+  }, [])
 
+  // ─── Scroll-Snap Container Listener ─────────────────────────────────────
   useEffect(() => {
-    if (isPanActiveRef.current) return
-    if (isExpandedPlayer) {
-      animate(expandY, 0, springConfig)
-    } else {
-      animate(expandY, vh, springConfig)
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    let rafId: number | null = null
+    const handleScroll = () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        const h = window.innerHeight || 800
+        const scrollTop = container.scrollTop
+        const progress = Math.min(1, Math.max(0, scrollTop / h))
+        setScrollProgress(progress)
+
+        if (scrollTop < h / 2) {
+          setIsExpandedPlayer((prev) => (prev ? false : prev))
+        } else {
+          setIsExpandedPlayer((prev) => (!prev ? true : prev))
+        }
+      })
     }
-  }, [isExpandedPlayer, vh])
+
+    container.addEventListener("scroll", handleScroll, { passive: true })
+    handleScroll()
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      container.removeEventListener("scroll", handleScroll)
+    }
+  }, [isExpandedPlayer])
+
+  // Sync scroll position when isExpandedPlayer changes programmatically
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const h = window.innerHeight || 800
+    const targetTop = isExpandedPlayer ? h : 0
+
+    if (Math.abs(container.scrollTop - targetTop) > 10) {
+      container.scrollTo({ top: targetTop, behavior: "smooth" })
+    }
+  }, [isExpandedPlayer])
 
   // ─── Popstate Handling ───────────────────────────────────────────────────
 
@@ -105,18 +131,13 @@ export function PlayerControls() {
       setIsMiniPlayer(false);
       setIsLyricsOpen(false);
       setIsQueueOpen(false);
-    } else {
-      // If there IS a modal state, it implies we navigated back from a DEEPER modal.
-      // So we should NOT force close everything! The UI should remain open.
-      // E.g. we popped from {modal: true, type: 'lyrics'} back to {modal: true}
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, []);
 
   // Track the previous combined state so we don't push multiple times for the same logical modal layer
   useEffect(() => {
     const hasModal = isExpandedPlayer || isMiniPlayer || isLyricsOpen || isQueueOpen;
-    // We only want to push state when going from NO modal to SOME modal.
-    // If we transition between modals, we shouldn't push a new history entry, or handling gets too complex.
     if (hasModal && !window.history.state?.modal) {
       window.history.pushState({ modal: true }, "");
     }
@@ -129,12 +150,19 @@ export function PlayerControls() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [isExpandedPlayer, isMiniPlayer, isLyricsOpen, isQueueOpen, handlePopState]);
 
-  const closeExpandedPlayer = () => {
+  const openExpandedPlayer = useCallback(() => {
+    setIsExpandedPlayer(true);
+    const h = window.innerHeight || 800;
+    scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
+  }, []);
+
+  const closeExpandedPlayer = useCallback(() => {
     if (isExpandedPlayer) {
       setIsExpandedPlayer(false);
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       if (window.history.state?.modal) window.history.back();
     }
-  };
+  }, [isExpandedPlayer]);
 
   const closeMiniPlayer = () => {
     if (isMiniPlayer) {
@@ -459,47 +487,29 @@ export function PlayerControls() {
   // ─── Swipe & Pan Gesture Handlers ──────────────────────────────────────────
 
   const handlePanStart = useCallback(() => {
-    panAxisRef.current = null
-    isPanActiveRef.current = true
-    setIsPanActive(true)
     hasMovedRef.current = false
-    panStartYRef.current = expandY.get()
-  }, [expandY])
+  }, [])
 
   const handlePan = useCallback((_: any, info: PanInfo) => {
-    if (!isPanActiveRef.current) return
-
     const absX = Math.abs(info.offset.x)
     const absY = Math.abs(info.offset.y)
 
-    // Disambiguate axis once movement passes initial threshold
-    if (panAxisRef.current === null) {
-      if (absX >= 6 || absY >= 6) {
-        hasMovedRef.current = true
-        if (absX > absY) {
-          panAxisRef.current = "x"
-        } else {
-          panAxisRef.current = "y"
-        }
+    if (absX > absY && absX >= 6) {
+      hasMovedRef.current = true
+      trackX.set(info.offset.x)
+    } else if (absY > absX && absY >= 6 && info.offset.y < 0) {
+      hasMovedRef.current = true
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = Math.min(vh, -info.offset.y)
       }
     }
-
-    if (panAxisRef.current === "x") {
-      trackX.set(info.offset.x)
-    } else if (panAxisRef.current === "y") {
-      // 1:1 direct smooth manipulation: as you drag up, the player sheet slides up continuously with your mouse/finger
-      const targetY = Math.max(0, Math.min(vh, panStartYRef.current + info.offset.y))
-      expandY.set(targetY)
-    }
-  }, [expandY, trackX, vh])
+  }, [trackX, vh])
 
   const handlePanEnd = useCallback((_: any, info: PanInfo) => {
-    isPanActiveRef.current = false
-    setIsPanActive(false)
-    const axis = panAxisRef.current
-    panAxisRef.current = null
+    const absX = Math.abs(info.offset.x)
+    const absY = Math.abs(info.offset.y)
 
-    if (axis === "x") {
+    if (absX > absY && (absX > 50 || Math.abs(info.velocity.x) > 300)) {
       const isSwipeLeft = info.offset.x < -50 || info.velocity.x < -300
       const isSwipeRight = info.offset.x > 50 || info.velocity.x > 300
 
@@ -528,17 +538,10 @@ export function PlayerControls() {
       } else {
         animate(trackX, 0, springConfig)
       }
-    } else if (axis === "y") {
-      const currentY = expandY.get()
-      const vy = info.velocity.y
-
-      if (currentY < vh * 0.75 || vy < -200) {
-        animate(expandY, 0, { type: "spring", stiffness: 350, damping: 32, velocity: vy })
-        setIsExpandedPlayer(true)
-      } else {
-        animate(expandY, vh, { type: "spring", stiffness: 350, damping: 32, velocity: vy })
-        setIsExpandedPlayer(false)
-      }
+    } else if (absY > absX && (info.offset.y < -50 || info.velocity.y < -250)) {
+      openExpandedPlayer()
+    } else if (absY > absX && info.offset.y < 0) {
+      closeExpandedPlayer()
     } else {
       animate(trackX, 0, springConfig)
     }
@@ -546,13 +549,12 @@ export function PlayerControls() {
     setTimeout(() => {
       hasMovedRef.current = false
     }, 60)
-  }, [expandY, trackX, springConfig, shouldReduceMotion, handleNext, handlePrevious, vh])
+  }, [trackX, springConfig, shouldReduceMotion, handleNext, handlePrevious, openExpandedPlayer, closeExpandedPlayer])
 
-  const handleBarClick = useCallback((e: React.MouseEvent) => {
+  const handleBarClick = useCallback(() => {
     if (hasMovedRef.current) return
-    setIsExpandedPlayer(true)
-    animate(expandY, 0, springConfig)
-  }, [expandY, springConfig])
+    openExpandedPlayer()
+  }, [openExpandedPlayer])
 
   // ─── YouTube callbacks ───────────────────────────────────────────────────────
 
@@ -996,42 +998,23 @@ export function PlayerControls() {
         isPlaying={isPlaying}
       />
 
-      {currentTrack && (
-        <ExpandablePlayer
-          isExpanded={isExpandedPlayer}
-          expandY={expandY}
-          vh={vh}
-          isPanActive={isPanActive}
-          onExpandChange={(expanded) => {
-            if (expanded) setIsExpandedPlayer(true);
-            else closeExpandedPlayer();
-          }}
-          currentTime={currentTime}
-          isPlaying={isPlaying}
-          duration={duration}
-          volume={volume}
-          shuffle={shuffle}
-          repeat={repeat}
-          onPlayPause={handlePlayPause}
-          onPrevious={handlePrevious}
-          onNext={handleNext}
-          onToggleShuffle={toggleShuffle}
-          onToggleRepeat={toggleRepeat}
-          onSeek={handleSeek}
-          formatTime={formatTime}
-          onVideoActiveChange={handleVideoActiveChange}
-        />
-      )}
-
-      {/* ── Collapsed bar ─────────────────────────────────────────────────── */}
-      <motion.div
-        style={{ opacity: miniBarOpacity, pointerEvents: miniBarPointerEvents as any, x: trackX }}
-        onPanStart={handlePanStart}
-        onPan={handlePan}
-        onPanEnd={handlePanEnd}
-        onClick={handleBarClick}
-        className="bottom-player-bar fixed bottom-[50px] lg:bottom-0 left-0 right-0 z-40 bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-none"
+      {/* ── Scroll-Snap Container ────────────────────────────────────────── */}
+      <div
+        ref={scrollContainerRef}
+        className={`fixed inset-0 z-40 overflow-y-scroll snap-y snap-mandatory h-screen overscroll-behavior-y-contain ${
+          isExpandedPlayer || scrollProgress > 0 ? "pointer-events-auto" : "pointer-events-none"
+        }`}
       >
+        {/* Section 1: Collapsed mini-bar snap section */}
+        <div className="snap-start min-h-screen w-full flex flex-col justify-end pb-[50px] lg:pb-0 pointer-events-none">
+          <motion.div
+            style={{ opacity: miniBarOpacity, pointerEvents: miniBarPointerEvents as any, x: trackX }}
+            onPanStart={handlePanStart}
+            onPan={handlePan}
+            onPanEnd={handlePanEnd}
+            onClick={handleBarClick}
+            className="bottom-player-bar pointer-events-auto bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-pan-y"
+          >
           {/* ── Top Interactive Seeker Bar on Mini-Player (with hover timeframe display) ── */}
           <div
             ref={miniProgressRef}
@@ -1425,6 +1408,38 @@ export function PlayerControls() {
             </div>
           </div>
         </motion.div>
+      </div>
+
+      {/* Section 2: Expandable Player snap section */}
+      <div className="snap-start h-screen w-full flex-shrink-0 relative pointer-events-auto">
+        {currentTrack && (
+          <ExpandablePlayer
+            isExpanded={isExpandedPlayer}
+            scrollProgress={scrollProgress}
+            vh={vh}
+            scrollContainerRef={scrollContainerRef}
+            onExpandChange={(expanded) => {
+              if (expanded) openExpandedPlayer();
+              else closeExpandedPlayer();
+            }}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            duration={duration}
+            volume={volume}
+            shuffle={shuffle}
+            repeat={repeat}
+            onPlayPause={handlePlayPause}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onToggleShuffle={toggleShuffle}
+            onToggleRepeat={toggleRepeat}
+            onSeek={handleSeek}
+            formatTime={formatTime}
+            onVideoActiveChange={handleVideoActiveChange}
+          />
+        )}
+      </div>
+    </div>
 
     {/* ── Gesture-Driven Queue Sheet ─────────────────────────────── */}
     <AnimatePresence>
