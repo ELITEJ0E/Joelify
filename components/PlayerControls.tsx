@@ -32,10 +32,17 @@ export function PlayerControls() {
   } = useApp()
 
   // ── Unified Sheet Navigation Controller ────────────────────────────────────
-  const sheetNav = useSheetNavigation()
+  const handleNextRef = useRef<() => void>(() => {})
+  const handlePreviousRef = useRef<() => void>(() => {})
+
+  const sheetNav = useSheetNavigation({
+    onNext: () => handleNextRef.current?.(),
+    onPrevious: () => handlePreviousRef.current?.(),
+  })
   const {
     sheetState,
     playerY,
+    trackX,
     openPlayer,
     closePlayer,
     openLyrics,
@@ -60,9 +67,6 @@ export function PlayerControls() {
   const [barVideoMode, setBarVideoMode] = useState(false)
   const [offlineSunoUrl, setOfflineSunoUrl] = useState<string | null>(null)
   const [localFileUrl, setLocalFileUrl] = useState<string | null>(null)
-
-  const trackX = useMotionValue(0)
-  const hasMovedRef = useRef(false)
 
   const [vh, setVh] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 800))
 
@@ -90,22 +94,6 @@ export function PlayerControls() {
       }
     }
   }, [isMiniPlayer])
-
-  // ─── Touch Swipe UP on Mini Player Bar ─────────────────────────────────
-  const miniTouchStartYRef = useRef<number | null>(null)
-
-  const handleMiniTouchStart = useCallback((e: React.TouchEvent) => {
-    miniTouchStartYRef.current = e.touches[0].clientY
-  }, [])
-
-  const handleMiniTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (miniTouchStartYRef.current === null) return
-    const dy = miniTouchStartYRef.current - e.changedTouches[0].clientY
-    miniTouchStartYRef.current = null
-    if (dy > 30) {
-      openPlayer()
-    }
-  }, [openPlayer])
 
   const trackEndHandledRef = useRef(false)
   const isSeekingRef = useRef(false)
@@ -276,6 +264,11 @@ export function PlayerControls() {
     currentTime, playbackSource, getContextTracks, currentTrack
   ])
 
+  useEffect(() => {
+    handleNextRef.current = handleNext
+    handlePreviousRef.current = handlePrevious
+  }, [handleNext, handlePrevious])
+
   // ─── play / pause ───────────────────────────────────────────────────────────
 
   const handlePlayPause = useCallback(() => {
@@ -404,80 +397,6 @@ export function PlayerControls() {
     const newTime = (offsetX / rect.width) * duration
     handleSeek([newTime])
   }, [duration, handleSeek])
-
-  // ─── Swipe & Pan Gesture Handlers on Mini Bar ──────────────────────────────
-
-  const handlePanStart = useCallback(() => {
-    hasMovedRef.current = false
-  }, [])
-
-  const handlePan = useCallback((_: any, info: PanInfo) => {
-    const absX = Math.abs(info.offset.x)
-    const absY = Math.abs(info.offset.y)
-
-    if (absX > absY && absX >= 6) {
-      hasMovedRef.current = true
-      trackX.set(info.offset.x)
-    } else if (absY > absX && absY >= 6 && info.offset.y < 0) {
-      hasMovedRef.current = true
-      playerY.set(Math.min(1, Math.max(0, -info.offset.y / vh)))
-    }
-  }, [trackX, playerY, vh])
-
-  const handlePanEnd = useCallback((_: any, info: PanInfo) => {
-    const absX = Math.abs(info.offset.x)
-    const absY = Math.abs(info.offset.y)
-
-    if (absX > absY && (absX > 50 || Math.abs(info.velocity.x) > 300)) {
-      const isSwipeLeft = info.offset.x < -50 || info.velocity.x < -300
-      const isSwipeRight = info.offset.x > 50 || info.velocity.x > 300
-
-      if (isSwipeLeft) {
-        if (shouldReduceMotion) {
-          handleNext()
-          trackX.set(0)
-        } else {
-          animate(trackX, -150, { duration: 0.12, ease: "easeOut" }).then(() => {
-            handleNext()
-            trackX.set(120)
-            animate(trackX, 0, springConfig)
-          })
-        }
-      } else if (isSwipeRight) {
-        if (shouldReduceMotion) {
-          handlePrevious()
-          trackX.set(0)
-        } else {
-          animate(trackX, 150, { duration: 0.12, ease: "easeOut" }).then(() => {
-            handlePrevious()
-            trackX.set(-120)
-            animate(trackX, 0, springConfig)
-          })
-        }
-      } else {
-        animate(trackX, 0, springConfig)
-      }
-    } else if (absY > absX && (info.offset.y < -50 || info.velocity.y < -250)) {
-      openPlayer()
-    } else if (absY > absX && info.offset.y < 0) {
-      if (playerY.get() > 0.25) {
-        openPlayer()
-      } else {
-        closePlayer()
-      }
-    } else {
-      animate(trackX, 0, springConfig)
-    }
-
-    setTimeout(() => {
-      hasMovedRef.current = false
-    }, 60)
-  }, [trackX, playerY, springConfig, shouldReduceMotion, handleNext, handlePrevious, openPlayer, closePlayer])
-
-  const handleBarClick = useCallback(() => {
-    if (hasMovedRef.current) return
-    openPlayer()
-  }, [openPlayer])
 
   // ─── YouTube callbacks ───────────────────────────────────────────────────────
 
@@ -942,12 +861,14 @@ export function PlayerControls() {
 
       {/* ── Collapsed Bottom Player Bar (Mini Player) ────────────────────────── */}
       <motion.div
-        style={{ opacity: miniBarOpacity, pointerEvents: miniBarPointerEvents as any, x: trackX }}
-        onPanStart={handlePanStart}
-        onPan={handlePan}
-        onPanEnd={handlePanEnd}
-        onClick={handleBarClick}
-        className="fixed bottom-0 left-0 right-0 z-30 pointer-events-auto bottom-player-bar bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-pan-y mb-[50px] lg:mb-0"
+        style={{
+          opacity: miniBarOpacity,
+          pointerEvents: miniBarPointerEvents as any,
+          x: trackX,
+          touchAction: "none",
+        }}
+        {...sheetNav.miniBarPointerHandlers}
+        className="fixed bottom-0 left-0 right-0 z-30 pointer-events-auto bottom-player-bar bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-none mb-[50px] lg:mb-0"
       >
         {/* ── Top Interactive Seeker Bar on Mini-Player ── */}
         <div
@@ -999,11 +920,7 @@ export function PlayerControls() {
         </div>
 
         {/* Mobile minimal mini player (<md) */}
-        <div 
-          className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full"
-          onTouchStart={handleMiniTouchStart}
-          onTouchEnd={handleMiniTouchEnd}
-        >
+        <div className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full">
           <motion.div
             style={{ x: trackX }}
             className="flex items-center gap-3 flex-1 min-w-0"

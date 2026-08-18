@@ -5,8 +5,10 @@ import { useMotionValue, animate, type MotionValue, type AnimationPlaybackContro
 
 export type SheetState = "none" | "player" | "lyrics" | "queue"
 
-interface UseSheetNavigationOptions {
+export interface UseSheetNavigationOptions {
   onStateChange?: (state: SheetState) => void
+  onNext?: () => void
+  onPrevious?: () => void
 }
 
 export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
@@ -14,11 +16,16 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
   const [sheetState, setSheetStateInternal] = useState<SheetState>("none")
   const sheetStateRef = useRef<SheetState>("none")
 
+  const optionsRef = useRef(options)
+  useEffect(() => {
+    optionsRef.current = options
+  }, [options])
+
   // Synchronize ref
   useEffect(() => {
     sheetStateRef.current = sheetState
-    options.onStateChange?.(sheetState)
-  }, [sheetState, options])
+    optionsRef.current.onStateChange?.(sheetState)
+  }, [sheetState])
 
   const shouldReduceMotion = useReducedMotion()
 
@@ -29,11 +36,14 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
   const lyricsY = useMotionValue<number>(0)
   // queueX: 0 (closed/on player) -> 1 (fully open queue)
   const queueX = useMotionValue<number>(0)
+  // trackX: horizontal offset for mini-bar song swipe
+  const trackX = useMotionValue<number>(0)
 
   // Active animation controls to allow instant interruption
   const playerAnimRef = useRef<AnimationPlaybackControls | null>(null)
   const lyricsAnimRef = useRef<AnimationPlaybackControls | null>(null)
   const queueAnimRef = useRef<AnimationPlaybackControls | null>(null)
+  const trackAnimRef = useRef<AnimationPlaybackControls | null>(null)
 
   const stopAllAnimations = useCallback(() => {
     if (playerAnimRef.current) {
@@ -47,6 +57,10 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
     if (queueAnimRef.current) {
       queueAnimRef.current.stop()
       queueAnimRef.current = null
+    }
+    if (trackAnimRef.current) {
+      trackAnimRef.current.stop()
+      trackAnimRef.current = null
     }
   }, [])
 
@@ -86,7 +100,7 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
     (target: SheetState, userInitiated = true, velocity = 0) => {
       const current = sheetStateRef.current
       if (current === target && !isSettlingRef.current) {
-        // Ensure motion values align
+        // Ensure motion values align exactly with target
         if (target === "none") {
           playerY.set(0)
           lyricsY.set(0)
@@ -152,7 +166,6 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
       }
 
       if (target === "none") {
-        // Close everything down to none
         const needsLyrics = lyricsY.get() > 0.01
         const needsQueue = queueX.get() > 0.01
         const total = 1 + (needsLyrics ? 1 : 0) + (needsQueue ? 1 : 0)
@@ -244,11 +257,18 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
   const closeQueue = useCallback(() => transitionTo("player", true), [transitionTo])
   const setSheetState = useCallback((state: SheetState) => transitionTo(state, true), [transitionTo])
 
-  // ── Unified Gesture Controller ─────────────────────────────────────────────
-  // Tracks active pointer / touch / wheel dragging
-  const gestureStateRef = useRef<{
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const getDimensions = useCallback(() => {
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800
+    const vw = typeof window !== "undefined" ? window.innerWidth : 800
+    return { vh, vw }
+  }, [])
+
+  // ── UNIFIED POINTER GESTURE STATE ──────────────────────────────────────────
+  const gestureRef = useRef<{
     active: boolean
-    type: "mini-up" | "player-down" | "player-lyrics-up" | "player-queue-left" | "lyrics-down" | "queue-right" | null
+    pointerId: number | null
+    target: "mini" | "player" | "lyrics" | "queue" | null
     startX: number
     startY: number
     lastX: number
@@ -256,13 +276,17 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
     lastTime: number
     velocityX: number
     velocityY: number
-    initialPlayerY: number
-    initialLyricsY: number
-    initialQueueX: number
-    locked: boolean
+    initPlayerY: number
+    initLyricsY: number
+    initQueueX: number
+    initTrackX: number
+    mode: "vertical" | "horizontal" | "player-down" | "lyrics-up" | "queue-left" | "lyrics-down" | "queue-right" | null
+    hasMoved: boolean
+    isHeaderDrag?: boolean
   }>({
     active: false,
-    type: null,
+    pointerId: null,
+    target: null,
     startX: 0,
     startY: 0,
     lastX: 0,
@@ -270,30 +294,476 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
     lastTime: 0,
     velocityX: 0,
     velocityY: 0,
-    initialPlayerY: 0,
-    initialLyricsY: 0,
-    initialQueueX: 0,
-    locked: false,
+    initPlayerY: 0,
+    initLyricsY: 0,
+    initQueueX: 0,
+    initTrackX: 0,
+    mode: null,
+    hasMoved: false,
   })
 
-  // Wheel accumulator
+  // ── 1. MINI PLAYER BAR GESTURES ───────────────────────────────────────────
+  const handleMiniPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return
+    const target = e.target as HTMLElement
+    if (target.closest('button, input, [role="slider"], .slider-thumb, a, [data-no-drag="true"]')) {
+      return
+    }
+
+    stopAllAnimations()
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch (err) {}
+
+    const now = performance.now()
+    gestureRef.current = {
+      active: true,
+      pointerId: e.pointerId,
+      target: "mini",
+      startX: e.clientX,
+      startY: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      lastTime: now,
+      velocityX: 0,
+      velocityY: 0,
+      initPlayerY: playerY.get(),
+      initLyricsY: lyricsY.get(),
+      initQueueX: queueX.get(),
+      initTrackX: trackX.get(),
+      mode: null,
+      hasMoved: false,
+    }
+  }, [playerY, lyricsY, queueX, trackX, stopAllAnimations])
+
+  const handleMiniPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const g = gestureRef.current
+    if (!g.active || g.pointerId !== e.pointerId || g.target !== "mini") return
+
+    const now = performance.now()
+    const dt = Math.max(1, now - g.lastTime)
+    const vx = ((e.clientX - g.lastX) / dt) * 1000
+    const vy = ((e.clientY - g.lastY) / dt) * 1000
+    g.velocityX = vx
+    g.velocityY = vy
+    g.lastX = e.clientX
+    g.lastY = e.clientY
+    g.lastTime = now
+
+    const dx = e.clientX - g.startX
+    const dy = e.clientY - g.startY
+    const absX = Math.abs(dx)
+    const absY = Math.abs(dy)
+
+    if (g.mode === null) {
+      if (absY >= 6 || absX >= 6) {
+        g.hasMoved = true
+        if (absY >= absX) {
+          g.mode = "vertical"
+        } else {
+          g.mode = "horizontal"
+        }
+      }
+    }
+
+    const { vh } = getDimensions()
+
+    if (g.mode === "vertical") {
+      // dy < 0 pulls upward to open Player -> playerY moves 0 to 1
+      const nextY = Math.max(0, Math.min(1, g.initPlayerY + (-dy) / vh))
+      playerY.set(nextY)
+    } else if (g.mode === "horizontal") {
+      trackX.set(g.initTrackX + dx)
+    }
+  }, [playerY, trackX, getDimensions])
+
+  const handleMiniPointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const g = gestureRef.current
+    if (!g.active || g.pointerId !== e.pointerId || g.target !== "mini") return
+    g.active = false
+
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+    } catch (err) {}
+
+    const dx = e.clientX - g.startX
+    const { vh } = getDimensions()
+
+    if (!g.hasMoved) {
+      openPlayer()
+      return
+    }
+
+    if (g.mode === "vertical") {
+      const currentY = playerY.get()
+      if (currentY > 0.25 || g.velocityY < -300) {
+        transitionTo("player", true, -g.velocityY / vh)
+      } else {
+        transitionTo("none", true, -g.velocityY / vh)
+      }
+    } else if (g.mode === "horizontal") {
+      const springConfig = shouldReduceMotion ? { duration: 0.15 } : { type: "spring" as const, stiffness: 350, damping: 30 }
+      if (dx < -50 || g.velocityX < -300) {
+        // Next track
+        animate(trackX, -150, { duration: 0.12, ease: "easeOut" }).then(() => {
+          optionsRef.current.onNext?.()
+          trackX.set(120)
+          animate(trackX, 0, springConfig)
+        })
+      } else if (dx > 50 || g.velocityX > 300) {
+        // Prev track
+        animate(trackX, 150, { duration: 0.12, ease: "easeOut" }).then(() => {
+          optionsRef.current.onPrevious?.()
+          trackX.set(-120)
+          animate(trackX, 0, springConfig)
+        })
+      } else {
+        animate(trackX, 0, springConfig)
+      }
+    }
+  }, [playerY, trackX, openPlayer, transitionTo, getDimensions, shouldReduceMotion])
+
+  // ── 2. MAIN PLAYER GESTURES ───────────────────────────────────────────────
+  const handlePlayerPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return
+    const target = e.target as HTMLElement
+    if (target.closest('button, input, [role="slider"], .slider-thumb, a, [data-no-drag="true"]')) {
+      return
+    }
+    if (sheetStateRef.current !== "player") return
+
+    stopAllAnimations()
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch (err) {}
+
+    const now = performance.now()
+    gestureRef.current = {
+      active: true,
+      pointerId: e.pointerId,
+      target: "player",
+      startX: e.clientX,
+      startY: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      lastTime: now,
+      velocityX: 0,
+      velocityY: 0,
+      initPlayerY: playerY.get(),
+      initLyricsY: lyricsY.get(),
+      initQueueX: queueX.get(),
+      initTrackX: 0,
+      mode: null,
+      hasMoved: false,
+    }
+  }, [playerY, lyricsY, queueX, stopAllAnimations])
+
+  const handlePlayerPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const g = gestureRef.current
+    if (!g.active || g.pointerId !== e.pointerId || g.target !== "player") return
+
+    const now = performance.now()
+    const dt = Math.max(1, now - g.lastTime)
+    const vx = ((e.clientX - g.lastX) / dt) * 1000
+    const vy = ((e.clientY - g.lastY) / dt) * 1000
+    g.velocityX = vx
+    g.velocityY = vy
+    g.lastX = e.clientX
+    g.lastY = e.clientY
+    g.lastTime = now
+
+    const dx = e.clientX - g.startX
+    const dy = e.clientY - g.startY
+    const absX = Math.abs(dx)
+    const absY = Math.abs(dy)
+
+    if (g.mode === null) {
+      if (absY >= 6 || absX >= 6) {
+        g.hasMoved = true
+        if (absY >= absX) {
+          if (dy > 0) {
+            g.mode = "player-down"
+          } else {
+            g.mode = "lyrics-up"
+          }
+        } else {
+          if (dx < 0) {
+            g.mode = "queue-left"
+          }
+        }
+      }
+    }
+
+    const { vh, vw } = getDimensions()
+
+    if (g.mode === "player-down") {
+      const nextY = Math.max(0, Math.min(1, g.initPlayerY - dy / vh))
+      playerY.set(nextY)
+    } else if (g.mode === "lyrics-up") {
+      const nextL = Math.max(0, Math.min(1, g.initLyricsY + (-dy) / vh))
+      lyricsY.set(nextL)
+    } else if (g.mode === "queue-left") {
+      const nextQ = Math.max(0, Math.min(1, g.initQueueX + (-dx) / vw))
+      queueX.set(nextQ)
+    }
+  }, [playerY, lyricsY, queueX, getDimensions])
+
+  const handlePlayerPointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const g = gestureRef.current
+    if (!g.active || g.pointerId !== e.pointerId || g.target !== "player") return
+    g.active = false
+
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+    } catch (err) {}
+
+    if (!g.hasMoved || g.mode === null) return
+
+    const { vh, vw } = getDimensions()
+
+    if (g.mode === "player-down") {
+      const currentY = playerY.get()
+      if (currentY < 0.75 || g.velocityY > 350) {
+        transitionTo("none", true, g.velocityY / vh)
+      } else {
+        transitionTo("player", true, -g.velocityY / vh)
+      }
+    } else if (g.mode === "lyrics-up") {
+      const currentL = lyricsY.get()
+      if (currentL > 0.25 || g.velocityY < -350) {
+        transitionTo("lyrics", true, -g.velocityY / vh)
+      } else {
+        transitionTo("player", true, g.velocityY / vh)
+      }
+    } else if (g.mode === "queue-left") {
+      const currentQ = queueX.get()
+      if (currentQ > 0.25 || g.velocityX < -350) {
+        transitionTo("queue", true, -g.velocityX / vw)
+      } else {
+        transitionTo("player", true, g.velocityX / vw)
+      }
+    }
+  }, [playerY, lyricsY, queueX, transitionTo, getDimensions])
+
+  // ── 3. LYRICS SHEET GESTURES ──────────────────────────────────────────────
+  const handleLyricsPointerDown = useCallback((e: React.PointerEvent<HTMLElement>, isHeader = false) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return
+    const target = e.target as HTMLElement
+    if (target.closest('button, input, [role="slider"], a, [data-no-drag="true"]')) {
+      return
+    }
+    if (sheetStateRef.current !== "lyrics") return
+
+    // If not dragging from header, check if lyrics list is scrolled down
+    if (!isHeader) {
+      const scrollContainer = target.closest(".overflow-y-auto, [data-radix-scroll-area-viewport]")
+      if (scrollContainer && scrollContainer.scrollTop > 3) {
+        return
+      }
+    }
+
+    stopAllAnimations()
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch (err) {}
+
+    const now = performance.now()
+    gestureRef.current = {
+      active: true,
+      pointerId: e.pointerId,
+      target: "lyrics",
+      startX: e.clientX,
+      startY: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      lastTime: now,
+      velocityX: 0,
+      velocityY: 0,
+      initPlayerY: playerY.get(),
+      initLyricsY: lyricsY.get(),
+      initQueueX: queueX.get(),
+      initTrackX: 0,
+      mode: isHeader ? "lyrics-down" : null,
+      hasMoved: false,
+      isHeaderDrag: isHeader,
+    }
+  }, [playerY, lyricsY, queueX, stopAllAnimations])
+
+  const handleLyricsPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const g = gestureRef.current
+    if (!g.active || g.pointerId !== e.pointerId || g.target !== "lyrics") return
+
+    const now = performance.now()
+    const dt = Math.max(1, now - g.lastTime)
+    const vy = ((e.clientY - g.lastY) / dt) * 1000
+    g.velocityY = vy
+    g.lastX = e.clientX
+    g.lastY = e.clientY
+    g.lastTime = now
+
+    const dy = e.clientY - g.startY
+    const dx = e.clientX - g.startX
+
+    if (g.mode === null) {
+      if (Math.abs(dy) >= 6 && Math.abs(dy) >= Math.abs(dx)) {
+        if (dy > 0) {
+          g.mode = "lyrics-down"
+          g.hasMoved = true
+        }
+      }
+    }
+
+    const { vh } = getDimensions()
+
+    if (g.mode === "lyrics-down" && dy > 0) {
+      g.hasMoved = true
+      const nextL = Math.max(0, Math.min(1, g.initLyricsY - dy / vh))
+      lyricsY.set(nextL)
+    }
+  }, [lyricsY, getDimensions])
+
+  const handleLyricsPointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const g = gestureRef.current
+    if (!g.active || g.pointerId !== e.pointerId || g.target !== "lyrics") return
+    g.active = false
+
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+    } catch (err) {}
+
+    if (!g.hasMoved || g.mode !== "lyrics-down") return
+
+    const { vh } = getDimensions()
+    const currentL = lyricsY.get()
+
+    if (currentL < 0.75 || g.velocityY > 350) {
+      transitionTo("player", true, g.velocityY / vh)
+    } else {
+      transitionTo("lyrics", true, -g.velocityY / vh)
+    }
+  }, [lyricsY, transitionTo, getDimensions])
+
+  // ── 4. QUEUE SHEET GESTURES ───────────────────────────────────────────────
+  const handleQueuePointerDown = useCallback((e: React.PointerEvent<HTMLElement>, isHeader = false) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return
+    const target = e.target as HTMLElement
+    if (target.closest('button, input, a, [draggable="true"], [data-no-drag="true"]')) {
+      return
+    }
+    if (sheetStateRef.current !== "queue") return
+
+    stopAllAnimations()
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch (err) {}
+
+    const now = performance.now()
+    gestureRef.current = {
+      active: true,
+      pointerId: e.pointerId,
+      target: "queue",
+      startX: e.clientX,
+      startY: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      lastTime: now,
+      velocityX: 0,
+      velocityY: 0,
+      initPlayerY: playerY.get(),
+      initLyricsY: lyricsY.get(),
+      initQueueX: queueX.get(),
+      initTrackX: 0,
+      mode: isHeader ? "queue-right" : null,
+      hasMoved: false,
+      isHeaderDrag: isHeader,
+    }
+  }, [playerY, lyricsY, queueX, stopAllAnimations])
+
+  const handleQueuePointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const g = gestureRef.current
+    if (!g.active || g.pointerId !== e.pointerId || g.target !== "queue") return
+
+    const now = performance.now()
+    const dt = Math.max(1, now - g.lastTime)
+    const vx = ((e.clientX - g.lastX) / dt) * 1000
+    g.velocityX = vx
+    g.lastX = e.clientX
+    g.lastY = e.clientY
+    g.lastTime = now
+
+    const dx = e.clientX - g.startX
+    const dy = e.clientY - g.startY
+
+    if (g.mode === null) {
+      if (Math.abs(dx) >= 6 && Math.abs(dx) >= Math.abs(dy)) {
+        if (dx > 0) {
+          g.mode = "queue-right"
+          g.hasMoved = true
+        }
+      } else if (Math.abs(dy) >= 8) {
+        // Vertical scrolling inside queue list
+        g.active = false
+        return
+      }
+    }
+
+    const { vw } = getDimensions()
+
+    if (g.mode === "queue-right" && dx > 0) {
+      g.hasMoved = true
+      const nextQ = Math.max(0, Math.min(1, g.initQueueX - dx / vw))
+      queueX.set(nextQ)
+    }
+  }, [queueX, getDimensions])
+
+  const handleQueuePointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const g = gestureRef.current
+    if (!g.active || g.pointerId !== e.pointerId || g.target !== "queue") return
+    g.active = false
+
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+    } catch (err) {}
+
+    if (!g.hasMoved || g.mode !== "queue-right") return
+
+    const { vw } = getDimensions()
+    const currentQ = queueX.get()
+
+    if (currentQ < 0.75 || g.velocityX > 350) {
+      transitionTo("player", true, g.velocityX / vw)
+    } else {
+      transitionTo("queue", true, -g.velocityX / vw)
+    }
+  }, [queueX, transitionTo, getDimensions])
+
+  // ── Wheel Accumulator (Desktop / Trackpad continuous scroll gestures) ─────
   const wheelTimerRef = useRef<NodeJS.Timeout | null>(null)
   const wheelActiveTypeRef = useRef<"playerY" | "lyricsY" | "queueX" | null>(null)
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
-      // Ignore wheel events originating inside interactive controls
       const target = e.target as HTMLElement
-      if (target.closest('input, [role="slider"], .slider-thumb, a')) {
+      if (target.closest('input, [role="slider"], .slider-thumb, a, [data-no-drag="true"]')) {
         return
       }
 
       const currentState = sheetStateRef.current
       if (currentState === "none") return
 
-      const vh = typeof window !== "undefined" ? window.innerHeight : 800
-      const vw = typeof window !== "undefined" ? window.innerWidth : 800
-
+      const { vh, vw } = getDimensions()
       const absX = Math.abs(e.deltaX)
       const absY = Math.abs(e.deltaY)
 
@@ -302,13 +772,13 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
       if (currentState === "player") {
         if (absY > absX && absY > 4) {
           if (e.deltaY < 0) {
-            // Wheel UP / Trackpad swipe DOWN -> dragging Player toward none
+            // Trackpad swipe down -> drag player toward closed
             wheelActiveTypeRef.current = "playerY"
             const current = playerY.get()
             const next = Math.max(0, Math.min(1, current - (-e.deltaY) / (vh * 0.75)))
             playerY.set(next)
           } else {
-            // Wheel DOWN / Trackpad swipe UP -> dragging Lyrics into view
+            // Trackpad swipe up -> drag lyrics into view
             wheelActiveTypeRef.current = "lyricsY"
             const current = lyricsY.get()
             const next = Math.max(0, Math.min(1, current + e.deltaY / (vh * 0.75)))
@@ -316,7 +786,7 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
           }
         } else if (absX > absY && absX > 4) {
           if (e.deltaX > 0) {
-            // Wheel RIGHT / Trackpad swipe LEFT -> dragging Queue into view
+            // Trackpad swipe left -> drag queue into view
             wheelActiveTypeRef.current = "queueX"
             const current = queueX.get()
             const next = Math.max(0, Math.min(1, current + e.deltaX / (vw * 0.75)))
@@ -324,7 +794,6 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
           }
         }
       } else if (currentState === "lyrics") {
-        // If scrolling upward at top of lyrics -> drag lyrics down toward player
         const scrollEl = target.closest(".overflow-y-auto, [data-radix-scroll-area-viewport]")
         const isAtTop = !scrollEl || scrollEl.scrollTop <= 5
         if (isAtTop && e.deltaY < -4) {
@@ -334,7 +803,6 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
           lyricsY.set(next)
         }
       } else if (currentState === "queue") {
-        // If scrolling leftward in queue -> drag queue right toward player
         if (e.deltaX < -4) {
           wheelActiveTypeRef.current = "queueX"
           const current = queueX.get()
@@ -343,7 +811,6 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
         }
       }
 
-      // Debounce settling after trackpad / wheel release
       if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current)
       wheelTimerRef.current = setTimeout(() => {
         const activeType = wheelActiveTypeRef.current
@@ -374,7 +841,7 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
         }
       }, 120)
     },
-    [playerY, lyricsY, queueX, stopAllAnimations, transitionTo]
+    [playerY, lyricsY, queueX, stopAllAnimations, transitionTo, getDimensions]
   )
 
   return {
@@ -383,6 +850,7 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
     playerY,
     lyricsY,
     queueX,
+    trackX,
     openPlayer,
     closePlayer,
     openLyrics,
@@ -392,7 +860,43 @@ export function useSheetNavigation(options: UseSheetNavigationOptions = {}) {
     transitionTo,
     stopAllAnimations,
     handleWheel,
-    gestureStateRef,
+    gestureRef,
     isSettlingRef,
+    miniBarPointerHandlers: {
+      onPointerDown: handleMiniPointerDown,
+      onPointerMove: handleMiniPointerMove,
+      onPointerUp: handleMiniPointerUp,
+      onPointerCancel: handleMiniPointerUp,
+    },
+    playerPointerHandlers: {
+      onPointerDown: handlePlayerPointerDown,
+      onPointerMove: handlePlayerPointerMove,
+      onPointerUp: handlePlayerPointerUp,
+      onPointerCancel: handlePlayerPointerUp,
+    },
+    lyricsPointerHandlers: {
+      onPointerDown: (e: React.PointerEvent<HTMLElement>) => handleLyricsPointerDown(e, false),
+      onPointerMove: handleLyricsPointerMove,
+      onPointerUp: handleLyricsPointerUp,
+      onPointerCancel: handleLyricsPointerUp,
+    },
+    lyricsHeaderPointerHandlers: {
+      onPointerDown: (e: React.PointerEvent<HTMLElement>) => handleLyricsPointerDown(e, true),
+      onPointerMove: handleLyricsPointerMove,
+      onPointerUp: handleLyricsPointerUp,
+      onPointerCancel: handleLyricsPointerUp,
+    },
+    queuePointerHandlers: {
+      onPointerDown: (e: React.PointerEvent<HTMLElement>) => handleQueuePointerDown(e, false),
+      onPointerMove: handleQueuePointerMove,
+      onPointerUp: handleQueuePointerUp,
+      onPointerCancel: handleQueuePointerUp,
+    },
+    queueHeaderPointerHandlers: {
+      onPointerDown: (e: React.PointerEvent<HTMLElement>) => handleQueuePointerDown(e, true),
+      onPointerMove: handleQueuePointerMove,
+      onPointerUp: handleQueuePointerUp,
+      onPointerCancel: handleQueuePointerUp,
+    },
   }
 }
