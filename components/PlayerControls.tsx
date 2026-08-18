@@ -1,25 +1,27 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { motion, useMotionValue, useTransform, animate, useReducedMotion, type PanInfo } from "framer-motion"
+import { motion, AnimatePresence, useMotionValue, useTransform, animate, useReducedMotion, type PanInfo } from "framer-motion"
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
-  Volume2, VolumeX, List, Music2, Video, Music,
-  Type, Minimize2,
+  Volume2, VolumeX, List, Youtube, Music2, Video, Music,
+  Type, Minimize2, Maximize2, Mic, ChevronDown,
 } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import { useApp } from "@/contexts/AppContext"
 import { YouTubePlayer } from "./YouTubePlayer"
+import { QueueSheet } from "./QueueSheet"
+import { LyricsDisplay } from "./LyricsDisplay"
 import { MiniPlayer } from "./MiniPlayer"
 import { SleepTimer } from "./SleepTimer"
-import { ExpandablePlayer } from "./ExpandablePlayer"
+import { ExpandablePlayer, type PlayerViewState } from "./ExpandablePlayer"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { LIKED_SONGS_PLAYLIST_ID } from "./LikedSongsView"
 import { getOfflineAudioBlobUrl } from "@/lib/sunoOffline"
 import { getLocalFileBlob } from "@/lib/localFiles"
-import { useSheetNavigation } from "@/hooks/useSheetNavigation"
 
 export function PlayerControls() {
   const {
@@ -28,25 +30,8 @@ export function PlayerControls() {
     likedSongs, joelsSongs,
     setCurrentTrack, setQueue, setVolume, toggleShuffle,
     toggleRepeat, setPlaybackPosition, setPlaybackSource,
-    audioSettings, isInitialized,
+    audioSettings, user, isInitialized,
   } = useApp()
-
-  // ── Unified Sheet Navigation Controller ────────────────────────────────────
-  const sheetNav = useSheetNavigation()
-  const {
-    sheetState,
-    playerY,
-    openPlayer,
-    closePlayer,
-    openLyrics,
-    closeLyrics,
-    openQueue,
-    closeQueue,
-  } = sheetNav
-
-  const isExpandedPlayer = sheetState !== "none"
-  const isLyricsOpen = sheetState === "lyrics"
-  const isQueueOpen = sheetState === "queue"
 
   const [youtubePlayer, setYoutubePlayer] = useState<any>(null)
   const sunoAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -56,6 +41,10 @@ export function PlayerControls() {
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [isMiniPlayer, setIsMiniPlayer] = useState(false)
+
+  // Single authoritative player view state machine: "none" | "player" | "queue" | "lyrics"
+  const [playerView, setPlayerView] = useState<PlayerViewState>("none")
+
   // Local video toggle for the bar — separate from expanded player's video
   const [barVideoMode, setBarVideoMode] = useState(false)
   const [offlineSunoUrl, setOfflineSunoUrl] = useState<string | null>(null)
@@ -65,47 +54,118 @@ export function PlayerControls() {
   const hasMovedRef = useRef(false)
 
   const [vh, setVh] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 800))
-
-  const miniBarOpacity = useTransform(playerY, [0, 0.25], [1, 0])
-  const miniBarPointerEvents = useTransform(playerY, (y) => (y > 0.1 ? ("none" as const) : ("auto" as const)))
+  const playerY = useMotionValue(typeof window !== "undefined" ? window.innerHeight : 800)
 
   const shouldReduceMotion = useReducedMotion()
   const springConfig = shouldReduceMotion 
     ? { duration: 0.15 } 
-    : { type: "spring", stiffness: 300, damping: 30 }
+    : { type: "spring" as const, stiffness: 320, damping: 32 }
 
   useEffect(() => {
     const handleResize = () => {
-      setVh(window.innerHeight)
+      const newVh = window.innerHeight
+      setVh(newVh)
     }
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  const closeMiniPlayer = useCallback(() => {
-    if (isMiniPlayer) {
-      setIsMiniPlayer(false)
-      if (typeof window !== "undefined" && window.history.state?.view) {
-        window.history.back()
-      }
+  // Sync playerY whenever playerView changes
+  useEffect(() => {
+    if (playerView === "none") {
+      animate(playerY, vh, springConfig)
+    } else {
+      animate(playerY, 0, springConfig)
     }
-  }, [isMiniPlayer])
+  }, [playerView, vh, playerY, springConfig])
 
-  // ─── Touch Swipe UP on Mini Player Bar ─────────────────────────────────
-  const miniTouchStartYRef = useRef<number | null>(null)
+  // ─── Centralized Navigation & Popstate System ────────────────────────────────
 
-  const handleMiniTouchStart = useCallback((e: React.TouchEvent) => {
-    miniTouchStartYRef.current = e.touches[0].clientY
+  const navigateToView = useCallback((nextView: PlayerViewState) => {
+    setPlayerView((currentView) => {
+      if (currentView === nextView) return currentView
+
+      if (typeof window !== "undefined") {
+        setTimeout(() => {
+          const currentHistoryView = (window.history.state?.playerView as PlayerViewState) || "none"
+          if (nextView === "none") {
+            if (currentHistoryView !== "none") {
+              window.history.back()
+            } else {
+              window.history.replaceState({ playerView: "none" }, "")
+            }
+          } else if (nextView === "player") {
+            if (currentView === "none") {
+              window.history.pushState({ playerView: "player" }, "")
+            } else if (currentHistoryView === "queue" || currentHistoryView === "lyrics") {
+              window.history.back()
+            } else {
+              window.history.pushState({ playerView: "player" }, "")
+            }
+          } else if (nextView === "queue") {
+            if (currentHistoryView !== "queue") {
+              window.history.pushState({ playerView: "queue" }, "")
+            }
+          } else if (nextView === "lyrics") {
+            if (currentHistoryView !== "lyrics") {
+              window.history.pushState({ playerView: "lyrics" }, "")
+            }
+          }
+        }, 0)
+      }
+
+      return nextView
+    })
   }, [])
 
-  const handleMiniTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (miniTouchStartYRef.current === null) return
-    const dy = miniTouchStartYRef.current - e.changedTouches[0].clientY
-    miniTouchStartYRef.current = null
-    if (dy > 30) {
-      openPlayer()
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const view = (event.state?.playerView as PlayerViewState) || "none"
+      setPlayerView(view)
     }
-  }, [openPlayer])
+
+    if (typeof window !== "undefined" && !window.history.state?.playerView) {
+      window.history.replaceState({ playerView: "none" }, "")
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
+
+  // ─── Touch Swipe UP on Mini Player Bar ─────────────────────────────────
+  const miniTouchRef = useRef<{ startY: number; startX: number; startTime: number }>({ startY: 0, startX: 0, startTime: Date.now() })
+
+  const handleMiniTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    miniTouchRef.current = {
+      startY: touch.clientY,
+      startX: touch.clientX,
+      startTime: Date.now(),
+    }
+  }, [])
+
+  const handleMiniTouchMove = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    const dy = miniTouchRef.current.startY - touch.clientY
+    const dx = touch.clientX - miniTouchRef.current.startX
+
+    if (dy > 0 && dy > Math.abs(dx)) {
+      playerY.set(Math.max(0, vh - dy))
+    }
+  }, [vh, playerY])
+
+  const handleMiniTouchEnd = useCallback((e: React.TouchEvent) => {
+    const touch = e.changedTouches[0]
+    const dy = miniTouchRef.current.startY - touch.clientY
+    const dt = Math.max(0.01, (Date.now() - miniTouchRef.current.startTime) / 1000)
+    const vy = dy / dt
+
+    if (dy > vh * 0.15 || vy > 300) {
+      navigateToView("player")
+    } else {
+      animate(playerY, vh, springConfig)
+    }
+  }, [vh, playerY, springConfig, navigateToView])
 
   const trackEndHandledRef = useRef(false)
   const isSeekingRef = useRef(false)
@@ -150,10 +210,10 @@ export function PlayerControls() {
       setTimeout(() => { trackEndHandledRef.current = false }, 1500)
     } else if (playbackSource === "suno" && sunoAudioRef.current) {
       try {
-        sunoAudioRef.current.currentTime = 0
-        const playPromise = sunoAudioRef.current.play()
-        if (playPromise !== undefined) playPromise.catch(e => console.warn("Suno loop play rejected:", e))
-        setIsPlaying(true)
+        sunoAudioRef.current.currentTime = 0;
+        const playPromise = sunoAudioRef.current.play();
+        if (playPromise !== undefined) playPromise.catch(e => console.warn("Suno loop play rejected:", e));
+        setIsPlaying(true);
       } catch (e) { console.warn("Suno loop error", e) }
       setTimeout(() => { trackEndHandledRef.current = false }, 1500)
     }
@@ -245,8 +305,8 @@ export function PlayerControls() {
       const contextTracks = getContextTracks()
       const prevTrack = contextTracks.find((t: any) => t.id === prevId)
       if (prevTrack) {
-        setCurrentTrack(prevTrack)
-        setCurrentTime(0); setPlaybackPosition(0)
+        setCurrentTrack(prevTrack);
+        setCurrentTime(0); setPlaybackPosition(0);
         setIsPlaying(true)
         return
       }
@@ -257,8 +317,8 @@ export function PlayerControls() {
     if (contextTracks.length > 0) {
       const idx = contextTracks.findIndex((t: any) => t.id === currentTrack?.id)
       if (idx > 0) {
-        setCurrentTrack(contextTracks[idx - 1])
-        setCurrentTime(0); setPlaybackPosition(0)
+        setCurrentTrack(contextTracks[idx - 1]);
+        setCurrentTime(0); setPlaybackPosition(0);
         setIsPlaying(true)
         return
       }
@@ -365,17 +425,17 @@ export function PlayerControls() {
     if (playbackSource === "youtube" && youtubePlayer) {
       try {
         if (isMuted) { 
-          if (typeof youtubePlayer.unMute === 'function') youtubePlayer.unMute()
-          if (typeof youtubePlayer.setVolume === 'function') youtubePlayer.setVolume(volume)
-          setIsMuted(false)
+          if (typeof youtubePlayer.unMute === 'function') youtubePlayer.unMute(); 
+          if (typeof youtubePlayer.setVolume === 'function') youtubePlayer.setVolume(volume); 
+          setIsMuted(false);
         } else { 
-          if (typeof youtubePlayer.mute === 'function') youtubePlayer.mute()
-          setIsMuted(true)
+          if (typeof youtubePlayer.mute === 'function') youtubePlayer.mute(); 
+          setIsMuted(true);
         }
       } catch (e) { console.warn("YT mute toggle failed", e) }
     } else if (playbackSource === "suno" && sunoAudioRef.current) {
-      if (isMuted) { sunoAudioRef.current.volume = volume / 100; setIsMuted(false) }
-      else { sunoAudioRef.current.volume = 0; setIsMuted(true) }
+      if (isMuted) { sunoAudioRef.current.volume = volume / 100; setIsMuted(false); }
+      else { sunoAudioRef.current.volume = 0; setIsMuted(true); }
     }
   }, [youtubePlayer, isMuted, volume, playbackSource])
 
@@ -404,7 +464,7 @@ export function PlayerControls() {
     handleSeek([newTime])
   }, [duration, handleSeek])
 
-  // ─── Swipe & Pan Gesture Handlers on Mini Bar ──────────────────────────────
+  // ─── Swipe & Pan Gesture Handlers ──────────────────────────────────────────
 
   const handlePanStart = useCallback(() => {
     hasMovedRef.current = false
@@ -419,7 +479,7 @@ export function PlayerControls() {
       trackX.set(info.offset.x)
     } else if (absY > absX && absY >= 6 && info.offset.y < 0) {
       hasMovedRef.current = true
-      playerY.set(Math.min(1, Math.max(0, -info.offset.y / vh)))
+      playerY.set(Math.max(0, vh + info.offset.y))
     }
   }, [trackX, playerY, vh])
 
@@ -457,26 +517,25 @@ export function PlayerControls() {
         animate(trackX, 0, springConfig)
       }
     } else if (absY > absX && (info.offset.y < -50 || info.velocity.y < -250)) {
-      openPlayer()
-    } else if (absY > absX && info.offset.y < 0) {
-      if (playerY.get() > 0.25) {
-        openPlayer()
-      } else {
-        closePlayer()
-      }
+      navigateToView("player")
+    } else if (absY > absX && info.offset.y > 50) {
+      navigateToView("none")
     } else {
       animate(trackX, 0, springConfig)
+      if (playerView === "none") {
+        animate(playerY, vh, springConfig)
+      }
     }
 
     setTimeout(() => {
       hasMovedRef.current = false
     }, 60)
-  }, [trackX, playerY, springConfig, shouldReduceMotion, handleNext, handlePrevious, openPlayer, closePlayer])
+  }, [trackX, playerY, playerView, vh, springConfig, shouldReduceMotion, handleNext, handlePrevious, navigateToView])
 
   const handleBarClick = useCallback(() => {
     if (hasMovedRef.current) return
-    openPlayer()
-  }, [openPlayer])
+    navigateToView("player")
+  }, [navigateToView])
 
   // ─── YouTube callbacks ───────────────────────────────────────────────────────
 
@@ -506,6 +565,7 @@ export function PlayerControls() {
         break
       case -1:
         // Unstarted state occurs when a new track is loaded.
+        // Doing setIsPlaying(false) here will cancel auto-play for newly selected tracks!
         break
     }
   }, [youtubePlayer, setPlaybackPosition, playbackSource, handleNext, audioSettings, repeat, handleRepeatOne])
@@ -533,23 +593,27 @@ export function PlayerControls() {
 
   const handleYouTubeDurationReady = useCallback((d: number) => setDuration(d), [])
 
+  // Called by ExpandablePlayer when its video player activates or deactivates.
+  // When expanded video is ON  → mute the bar's audio player + hide bar video (avoid two sources)
+  // When expanded video is OFF → unmute bar player (restore previous mute state)
   const handleVideoActiveChange = useCallback((videoActive: boolean) => {
     if (!youtubePlayer || typeof youtubePlayer.getIframe !== 'function') return
     try {
+      // Check if iframe exists in DOM
       const iframe = youtubePlayer.getIframe()
       if (!iframe || !iframe.parentNode) {
-        setYoutubePlayer(null)
-        return
+          setYoutubePlayer(null)
+          return
       }
 
       if (videoActive) {
-        setBarVideoMode(false)
+        setBarVideoMode(false)   // hide bar iframe while expanded video is showing
         if (typeof youtubePlayer.mute === 'function') youtubePlayer.mute()
       } else {
         if (!isMuted && typeof youtubePlayer.unMute === 'function') youtubePlayer.unMute()
       }
     } catch (error) {
-      console.warn("Error toggling YouTube player mute state:", error)
+      console.warn("Error toggling YouTube player mute state (likely player partially destroyed):", error)
     }
   }, [youtubePlayer, isMuted])
 
@@ -563,64 +627,69 @@ export function PlayerControls() {
 
   // ─── effects ─────────────────────────────────────────────────────────────────
 
-  const playbackSourceRef = useRef(playbackSource)
+  const playbackSourceRef = useRef(playbackSource);
   useEffect(() => {
-    playbackSourceRef.current = playbackSource
+    playbackSourceRef.current = playbackSource;
     if (playbackSource === "youtube" && sunoAudioRef.current) {
-      sunoAudioRef.current.pause()
+      sunoAudioRef.current.pause();
     } else if (playbackSource === "suno" && youtubePlayer && typeof youtubePlayer.pauseVideo === 'function') {
       try {
-        youtubePlayer.pauseVideo()
+        youtubePlayer.pauseVideo();
       } catch (e) {
-        console.warn("YT pauseVideo error during source switch", e)
+        console.warn("YT pauseVideo error during source switch", e);
       }
     }
-  }, [playbackSource, youtubePlayer])
+  }, [playbackSource, youtubePlayer]);
 
   useEffect(() => {
-    if (!isInitialized) return
+    // Do not process track changes until context is fully initialized
+    if (!isInitialized) return;
 
     if (currentTrack) {
-      const currentSource = playbackSourceRef.current
+      const currentSource = playbackSourceRef.current;
       if (currentSource === "suno" && !currentTrack.thumbnail?.includes("suno.ai") && !currentTrack.thumbnail?.includes("suno.com")) {
-        setPlaybackSource("youtube")
+         setPlaybackSource("youtube");
       } else if (currentSource === "youtube" && currentTrack.thumbnail?.includes("suno.ai")) {
-        setPlaybackSource("suno")
+         setPlaybackSource("suno");
       }
       
       // Check offline url
       if (currentTrack.id.startsWith("local-")) {
         getLocalFileBlob(currentTrack.id).then((blob) => {
           if (blob) {
-            setLocalFileUrl(URL.createObjectURL(blob))
+            setLocalFileUrl(URL.createObjectURL(blob));
           } else {
-            setLocalFileUrl(null)
+            setLocalFileUrl(null);
           }
-        })
-        setOfflineSunoUrl(null)
+        });
+        setOfflineSunoUrl(null);
       } else if (currentTrack.thumbnail?.includes("suno.ai") || currentTrack.thumbnail?.includes("suno.com") || currentSource === "suno") {
         getOfflineAudioBlobUrl(currentTrack.id).then((url) => {
-          setOfflineSunoUrl(url)
-        })
-        setLocalFileUrl(null)
+          setOfflineSunoUrl(url);
+        });
+        setLocalFileUrl(null);
       } else {
-        setOfflineSunoUrl(null)
-        setLocalFileUrl(null)
+        setOfflineSunoUrl(null);
+        setLocalFileUrl(null);
       }
       
       setCurrentTime(0); setPlaybackPosition(0); setDuration(0)
       hasRestoredPositionRef.current = false
       trackEndHandledRef.current = false
       
+      // Auto-play ONLY if it's not the very first load of a track 
+      // after initialization
       if (initialLoadHandledRef.current) {
         setIsPlaying(true)
       } else {
+        // Mark the first load as handled so subsequent track changes auto-play
         initialLoadHandledRef.current = true
-        setIsPlaying(false)
+        setIsPlaying(false) // ensure initial track is paused
       }
     } else {
       setDuration(0); setCurrentTime(0); setPlaybackPosition(0)
       setIsPlaying(false)
+      // We also mark handled if the initial state resolves to no-track
       initialLoadHandledRef.current = true
     }
   }, [currentTrack?.id, isInitialized, setPlaybackSource, setPlaybackPosition]) 
@@ -630,8 +699,8 @@ export function PlayerControls() {
   }, [playbackSource, setPlaybackSource])
 
   useEffect(() => {
-    if (!('mediaSession' in navigator)) return
-    if (!currentTrack) return
+    if (!('mediaSession' in navigator)) return;
+    if (!currentTrack) return;
 
     const artwork = currentTrack.thumbnail
       ? [
@@ -645,58 +714,58 @@ export function PlayerControls() {
       : [
           { src: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
-        ]
+        ];
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: currentTrack.title || "Unknown Title",
       artist: currentTrack.artist || "Unknown Artist",
       album: currentTrack.album || "Joelify",
       artwork,
-    })
+    });
 
     const safePlay = () => {
-      if (!isPlaying) handlePlayPause()
-    }
+      if (!isPlaying) handlePlayPause();
+    };
 
     const safePause = () => {
-      if (isPlaying) handlePlayPause()
-    }
+      if (isPlaying) handlePlayPause();
+    };
 
     try {
-      navigator.mediaSession.setActionHandler('play', safePlay)
-      navigator.mediaSession.setActionHandler('pause', safePause)
-      navigator.mediaSession.setActionHandler('previoustrack', handlePrevious)
-      navigator.mediaSession.setActionHandler('nexttrack', handleNext)
+      navigator.mediaSession.setActionHandler('play', safePlay);
+      navigator.mediaSession.setActionHandler('pause', safePause);
+      navigator.mediaSession.setActionHandler('previoustrack', handlePrevious);
+      navigator.mediaSession.setActionHandler('nexttrack', handleNext);
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime !== undefined && details.seekTime !== null) {
-          handleSeek([details.seekTime])
+          handleSeek([details.seekTime]);
         }
-      })
+      });
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-        const offset = details.seekOffset || 10
-        handleSeek([Math.max(0, currentTime - offset)])
-      })
+        const offset = details.seekOffset || 10;
+        handleSeek([Math.max(0, currentTime - offset)]);
+      });
       navigator.mediaSession.setActionHandler('seekforward', (details) => {
-        const offset = details.seekOffset || 10
-        handleSeek([Math.min(duration || 0, currentTime + offset)])
-      })
-      navigator.mediaSession.setActionHandler('stop', safePause)
+        const offset = details.seekOffset || 10;
+        handleSeek([Math.min(duration || 0, currentTime + offset)]);
+      });
+      navigator.mediaSession.setActionHandler('stop', safePause);
     } catch (e) {
-      console.warn("MediaSession setActionHandler error:", e)
+      console.warn("MediaSession setActionHandler error:", e);
     }
 
     return () => {
       try {
-        navigator.mediaSession.setActionHandler('play', null)
-        navigator.mediaSession.setActionHandler('pause', null)
-        navigator.mediaSession.setActionHandler('previoustrack', null)
-        navigator.mediaSession.setActionHandler('nexttrack', null)
-        navigator.mediaSession.setActionHandler('seekto', null)
-        navigator.mediaSession.setActionHandler('seekbackward', null)
-        navigator.mediaSession.setActionHandler('seekforward', null)
-        navigator.mediaSession.setActionHandler('stop', null)
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+        navigator.mediaSession.setActionHandler('seekto', null);
+        navigator.mediaSession.setActionHandler('seekbackward', null);
+        navigator.mediaSession.setActionHandler('seekforward', null);
+        navigator.mediaSession.setActionHandler('stop', null);
       } catch (e) {}
-    }
+    };
   }, [
     currentTrack,
     isPlaying,
@@ -706,123 +775,123 @@ export function PlayerControls() {
     handlePrevious,
     handleNext,
     handleSeek,
-  ])
+  ]);
 
   useEffect(() => {
-    if (!('mediaSession' in navigator)) return
-    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused"
-  }, [isPlaying])
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
 
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !('setPositionState' in navigator.mediaSession)) return
+    if (!('mediaSession' in navigator) || !('setPositionState' in navigator.mediaSession)) return;
     if (duration > 0 && Number.isFinite(duration) && Number.isFinite(currentTime)) {
       try {
         navigator.mediaSession.setPositionState({
           duration: Math.max(0, duration),
           playbackRate: 1,
           position: Math.min(Math.max(0, currentTime), duration),
-        })
+        });
       } catch (e) {}
     }
-  }, [currentTime, duration])
+  }, [currentTime, duration]);
 
   const saveToListeningHistory = useCallback((track: typeof currentTrack) => {
     if (!track) return
 
-    const now = new Date()
-    const fifteenDaysAgo = now.getTime() - 15 * 24 * 60 * 60 * 1000
+    // 1. Maintain 15-day raw history for charts & recent
+    const now = new Date();
+    const fifteenDaysAgo = now.getTime() - 15 * 24 * 60 * 60 * 1000;
     
-    let history = []
+    let history = [];
     try {
-      history = JSON.parse(localStorage.getItem("listening_history") || "[]")
+      history = JSON.parse(localStorage.getItem("listening_history") || "[]");
     } catch(e) {}
     
-    history = history.filter((h: any) => new Date(h.playedAt).getTime() > fifteenDaysAgo)
+    // Filter old entries
+    history = history.filter((h: any) => new Date(h.playedAt).getTime() > fifteenDaysAgo);
     
+    // Add current
     history.push({
       id: track.id, title: track.title, artist: track.artist,
       thumbnail: track.thumbnail, duration: duration || 0,
       playedAt: now.toISOString(), source: playbackSource,
     })
     
-    if (history.length > 2000) history = history.slice(-2000)
+    if (history.length > 2000) history = history.slice(-2000); // safety cap
     localStorage.setItem("listening_history", JSON.stringify(history))
 
-    let allTimeStats = { totalPlays: 0, totalTime: 0, trackPlays: {} as any, artistPlays: {} as any }
+    // 2. Aggregate all-time stats memory
+    let allTimeStats = { totalPlays: 0, totalTime: 0, trackPlays: {} as any, artistPlays: {} as any };
     try {
-      const storedStats = localStorage.getItem("listening_stats_all_time")
-      if (storedStats) allTimeStats = JSON.parse(storedStats)
+      const storedStats = localStorage.getItem("listening_stats_all_time");
+      if (storedStats) allTimeStats = JSON.parse(storedStats);
     } catch (e) {}
 
-    allTimeStats.totalPlays += 1
-    allTimeStats.totalTime += (duration || 0)
+    allTimeStats.totalPlays += 1;
+    allTimeStats.totalTime += (duration || 0);
 
-    const trackKey = `${track.id}-${track.title}`
+    const trackKey = `${track.id}-${track.title}`;
     if (!allTimeStats.trackPlays[trackKey]) {
       allTimeStats.trackPlays[trackKey] = { 
         track: { id: track.id, title: track.title, artist: track.artist }, 
         count: 0 
-      }
+      };
     }
-    allTimeStats.trackPlays[trackKey].count += 1
+    allTimeStats.trackPlays[trackKey].count += 1;
 
-    const artistKey = track.artist || "Unknown Artist"
-    if (!allTimeStats.artistPlays[artistKey]) {
-      allTimeStats.artistPlays[artistKey] = { artist: artistKey, count: 0 }
-    }
-    allTimeStats.artistPlays[artistKey].count += 1
+    allTimeStats.artistPlays[track.artist] = (allTimeStats.artistPlays[track.artist] || 0) + 1;
 
-    localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats))
+    localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats));
+
   }, [duration, playbackSource])
 
   useEffect(() => {
     if (currentTrack && isPlaying && currentTime > 5) saveToListeningHistory(currentTrack)
   }, [currentTrack, isPlaying, currentTime, saveToListeningHistory])
 
-  // Suno audio listeners
+  // Keyboard shortcuts
   useEffect(() => {
     if (playbackSource === "suno" && sunoAudioRef.current) {
-      const audio = sunoAudioRef.current
+      const audio = sunoAudioRef.current;
       const onTimeUpdate = () => {
         if (!isSeekingRef.current) {
-          setCurrentTime(audio.currentTime)
-          setPlaybackPosition(audio.currentTime)
+          setCurrentTime(audio.currentTime);
+          setPlaybackPosition(audio.currentTime);
         }
-      }
+      };
       const onLoadedMetadata = () => {
-        setDuration(audio.duration)
-        setIsReady(true)
+        setDuration(audio.duration);
+        setIsReady(true);
         if (initialLoadHandledRef.current && isPlaying) {
-          const playPromise = audio.play()
-          if (playPromise !== undefined) playPromise.catch(e => console.warn("Initial Suno play rejected:", e))
+            const playPromise = audio.play();
+            if (playPromise !== undefined) playPromise.catch(e => console.warn("Initial Suno play rejected:", e));
         }
-      }
-      const onPlay = () => setIsPlaying(true)
-      const onPause = () => setIsPlaying(false)
+      };
+      const onPlay = () => setIsPlaying(true);
+      const onPause = () => setIsPlaying(false);
       const onEnded = () => {
         if (!trackEndHandledRef.current) {
-          trackEndHandledRef.current = true
-          handleNext()
+          trackEndHandledRef.current = true;
+          handleNext();
         }
-      }
+      };
       
-      audio.addEventListener("timeupdate", onTimeUpdate)
-      audio.addEventListener("loadedmetadata", onLoadedMetadata)
-      audio.addEventListener("ended", onEnded)
-      audio.addEventListener("play", onPlay)
-      audio.addEventListener("pause", onPause)
+      audio.addEventListener("timeupdate", onTimeUpdate);
+      audio.addEventListener("loadedmetadata", onLoadedMetadata);
+      audio.addEventListener("ended", onEnded);
+      audio.addEventListener("play", onPlay);
+      audio.addEventListener("pause", onPause);
 
       return () => {
-        audio.removeEventListener("timeupdate", onTimeUpdate)
-        audio.removeEventListener("loadedmetadata", onLoadedMetadata)
-        audio.removeEventListener("ended", onEnded)
-        audio.removeEventListener("play", onPlay)
-        audio.removeEventListener("pause", onPause)
-      }
+        audio.removeEventListener("timeupdate", onTimeUpdate);
+        audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+        audio.removeEventListener("ended", onEnded);
+        audio.removeEventListener("play", onPlay);
+        audio.removeEventListener("pause", onPause);
+      };
     }
-  }, [playbackSource, currentTrack, isPlaying, handleNext, setCurrentTime, setPlaybackPosition, setDuration, setIsReady])
+  }, [playbackSource, currentTrack, isPlaying, handleNext, setCurrentTime, setPlaybackPosition, setDuration, setIsReady]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
@@ -839,17 +908,17 @@ export function PlayerControls() {
         case "s": e.preventDefault(); toggleShuffle(); break
         case "r": e.preventDefault(); toggleRepeat(); break
         case "v": e.preventDefault(); setBarVideoMode((v) => !v); break
-        case "l": e.preventDefault(); isLyricsOpen ? closeLyrics() : openLyrics(); break
-        case "q": e.preventDefault(); isQueueOpen ? closeQueue() : openQueue(); break
+        case "l": e.preventDefault(); navigateToView(playerView === "lyrics" ? "player" : "lyrics"); break
+        case "q": e.preventDefault(); navigateToView(playerView === "queue" ? "player" : "queue"); break
       }
     }
     
     window.addEventListener("keydown", handleKeyDown)
     return () => {
-      window.removeEventListener("keydown", handleKeyDown)
+        window.removeEventListener("keydown", handleKeyDown)
     }
   }, [handlePlayPause, handleSeekForward, handleSeekBackward, handleNext, handlePrevious,
-    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat, isLyricsOpen, isQueueOpen, openLyrics, closeLyrics, openQueue, closeQueue])
+    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat, playbackSource, playerView, navigateToView])
 
   const handleSleepTimerEnd = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) {
@@ -870,7 +939,8 @@ export function PlayerControls() {
   const getRepeatLabel = () =>
     repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"
 
-  // ─── Floating Mini Player Window ─────────────────────────────────────────────
+  // ─── mini player ─────────────────────────────────────────────────────────────
+
   if (isMiniPlayer) {
     return (
       <>
@@ -895,7 +965,8 @@ export function PlayerControls() {
     )
   }
 
-  // ─── Main Render ─────────────────────────────────────────────────────────────
+  // ─── render ──────────────────────────────────────────────────────────────────
+
   return (
     <>
       <YouTubePlayer
@@ -908,417 +979,422 @@ export function PlayerControls() {
         isPlaying={isPlaying}
       />
 
-      {/* ── Collapsed Bottom Player Bar (Mini Player) ────────────────────────── */}
-      <motion.div
-        style={{ opacity: miniBarOpacity, pointerEvents: miniBarPointerEvents as any, x: trackX }}
-        onPanStart={handlePanStart}
-        onPan={handlePan}
-        onPanEnd={handlePanEnd}
-        onClick={handleBarClick}
-        className="fixed bottom-0 left-0 right-0 z-30 pointer-events-auto bottom-player-bar bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-pan-y mb-[50px] lg:mb-0"
-      >
-        {/* ── Top Interactive Seeker Bar on Mini-Player ── */}
-        <div
-          ref={miniProgressRef}
-          className="group/seeker absolute -top-2.5 left-0 right-0 h-5 cursor-pointer z-50 flex items-center px-0"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleMiniProgressClick(e)
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onMouseMove={handleMiniProgressHover}
-          onMouseLeave={() => {
-            setHoverTime(null)
-            setHoverPercent(null)
-            setHoverPos(null)
-          }}
+      {/* ── Fixed Bottom Mini Player Bar ────────────────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 pb-[50px] lg:pb-0 pointer-events-auto">
+        <motion.div
+          style={{ x: trackX }}
+          onPanStart={handlePanStart}
+          onPan={handlePan}
+          onPanEnd={handlePanEnd}
+          onClick={() => navigateToView("player")}
+          className="bottom-player-bar pointer-events-auto bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-pan-y"
         >
-          {/* Base track */}
-          <div className="w-full h-[2.5px] group-hover/seeker:h-[6px] bg-white/15 overflow-hidden transition-all duration-150 relative">
-            {/* Progress fill */}
-            <div
-              className="h-full bg-primary relative transition-[width] duration-75 ease-linear"
-              style={{
-                width: duration > 0 ? `${Math.min(100, Math.max(0, (currentTime / duration) * 100))}%` : "0%",
-              }}
-            >
-              {/* Glow Thumb on hover */}
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md opacity-0 group-hover/seeker:opacity-100 transition-opacity" />
-            </div>
-
-            {/* Hover preview marker */}
-            {hoverPercent !== null && (
-              <div
-                className="absolute top-0 bottom-0 bg-white/20 pointer-events-none"
-                style={{ left: 0, width: `${hoverPercent}%` }}
-              />
-            )}
-          </div>
-
-          {/* Hover Timestamp Tooltip */}
-          {hoverTime !== null && hoverPos !== null && (
-            <div
-              className="absolute -top-7 px-2 py-0.5 rounded-md bg-zinc-950/95 border border-white/20 text-white text-[11px] font-mono shadow-2xl pointer-events-none -translate-x-1/2 z-50 whitespace-nowrap backdrop-blur-md"
-              style={{ left: `${Math.max(28, Math.min(hoverPos, (typeof window !== 'undefined' ? window.innerWidth : 800) - 28))}px` }}
-            >
-              {formatTime(hoverTime)}
-            </div>
-          )}
-        </div>
-
-        {/* Mobile minimal mini player (<md) */}
-        <div 
-          className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full"
-          onTouchStart={handleMiniTouchStart}
-          onTouchEnd={handleMiniTouchEnd}
-        >
-          <motion.div
-            style={{ x: trackX }}
-            className="flex items-center gap-3 flex-1 min-w-0"
+          {/* ── Top Interactive Seeker Bar on Mini-Player (with hover timeframe display) ── */}
+          <div
+            ref={miniProgressRef}
+            className="group/seeker absolute -top-2.5 left-0 right-0 h-5 cursor-pointer z-50 flex items-center px-0"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleMiniProgressClick(e)
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseMove={handleMiniProgressHover}
+            onMouseLeave={() => {
+              setHoverTime(null)
+              setHoverPercent(null)
+              setHoverPos(null)
+            }}
           >
-            {currentTrack ? (
-              <>
-                {currentTrack.thumbnail ? (
-                  <div className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-zinc-800 shadow-md">
-                    <Image
-                      src={currentTrack.thumbnail || "/placeholder.svg"}
-                      width={44}
-                      height={44}
-                      alt={currentTrack.title || "Track"}
-                      className={`w-full h-full object-cover ${isPlaying ? "ring-1 ring-primary/40" : ""}`}
-                    />
-                  </div>
-                ) : (
-                  <div className="w-11 h-11 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0">
-                    <Music2 size={20} className="text-zinc-500" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate leading-tight">
-                      {currentTrack.title}
-                    </p>
-                    {playbackSource === "suno" && (
-                      <span className="text-[9px] bg-violet-500/20 text-violet-300 px-1 py-0.2 rounded font-medium shrink-0">
-                        Joel
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-zinc-400 truncate leading-tight mt-0.5">
-                    {currentTrack.artist}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-11 h-11 rounded-lg bg-zinc-800/80 border border-white/10 flex items-center justify-center shrink-0">
-                  <Music2 size={20} className="text-zinc-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-400 truncate">No track playing</p>
-                  <p className="text-xs text-zinc-600 truncate">Tap to browse music</p>
-                </div>
+            {/* Base track */}
+            <div className="w-full h-[2.5px] group-hover/seeker:h-[6px] bg-white/15 overflow-hidden transition-all duration-150 relative">
+              {/* Progress fill */}
+              <div
+                className="h-full bg-primary relative transition-[width] duration-75 ease-linear"
+                style={{
+                  width: duration > 0 ? `${Math.min(100, Math.max(0, (currentTime / duration) * 100))}%` : "0%",
+                }}
+              >
+                {/* Glow Thumb on hover */}
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md opacity-0 group-hover/seeker:opacity-100 transition-opacity" />
+              </div>
+
+              {/* Hover preview marker */}
+              {hoverPercent !== null && (
+                <div
+                  className="absolute top-0 bottom-0 bg-white/20 pointer-events-none"
+                  style={{ left: 0, width: `${hoverPercent}%` }}
+                />
+              )}
+            </div>
+
+            {/* Hover Timestamp Tooltip */}
+            {hoverTime !== null && hoverPos !== null && (
+              <div
+                className="absolute -top-7 px-2 py-0.5 rounded-md bg-zinc-950/95 border border-white/20 text-white text-[11px] font-mono shadow-2xl pointer-events-none -translate-x-1/2 z-50 whitespace-nowrap backdrop-blur-md"
+                style={{ left: `${Math.max(28, Math.min(hoverPos, (typeof window !== 'undefined' ? window.innerWidth : 800) - 28))}px` }}
+              >
+                {formatTime(hoverTime)}
               </div>
             )}
-          </motion.div>
-
-          {/* ONLY Play/Pause button on mobile right */}
-          <div className="flex items-center shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-10 w-10 text-white hover:text-primary hover:bg-white/10 rounded-full transition-transform active:scale-90"
-              onClick={handlePlayPause}
-              disabled={!currentTrack}
-              aria-label={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? (
-                <Pause fill="currentColor" size={22} />
-              ) : (
-                <Play fill="currentColor" size={22} className="ml-0.5" />
-              )}
-            </Button>
           </div>
-        </div>
 
-        {/* Desktop full bar (>=md) */}
-        <div className="hidden md:flex flex-row items-center justify-between gap-4">
-          {/* Desktop: track info */}
-          <div
-            className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer rounded-lg p-2 hover:bg-primary/15 transition-colors duration-150"
-            onClick={openPlayer}
+          {/* Mobile minimal mini player (<md) */}
+          <div 
+            className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full"
+            onTouchStart={handleMiniTouchStart}
+            onTouchMove={handleMiniTouchMove}
+            onTouchEnd={handleMiniTouchEnd}
           >
-            {currentTrack ? (
-              <>
-                {currentTrack.thumbnail ? (
-                  <Image
-                    src={currentTrack.thumbnail || "/placeholder.svg"}
-                    width={56}
-                    height={56}
-                    alt={currentTrack.title || "Track"}
-                    className={`w-14 h-14 rounded-lg object-cover flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`}
-                  />
+            <motion.div
+              style={{ x: trackX }}
+              className="flex items-center gap-3 flex-1 min-w-0"
+            >
+              {currentTrack ? (
+                <>
+                  {currentTrack.thumbnail ? (
+                    <div className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-zinc-800 shadow-md">
+                      <Image
+                        src={currentTrack.thumbnail || "/placeholder.svg"}
+                        width={44}
+                        height={44}
+                        alt={currentTrack.title || "Track"}
+                        className={`w-full h-full object-cover ${isPlaying ? "ring-1 ring-primary/40" : ""}`}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-11 h-11 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0">
+                      <Music2 size={20} className="text-zinc-500" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate leading-tight">
+                        {currentTrack.title}
+                      </p>
+                      {playbackSource === "suno" && (
+                        <span className="text-[9px] bg-violet-500/20 text-violet-300 px-1 py-0.2 rounded font-medium shrink-0">
+                          Joel
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 truncate leading-tight mt-0.5">
+                      {currentTrack.artist}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-11 h-11 rounded-lg bg-zinc-800/80 border border-white/10 flex items-center justify-center shrink-0">
+                    <Music2 size={20} className="text-zinc-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-400 truncate">No track playing</p>
+                    <p className="text-xs text-zinc-600 truncate">Tap to browse music</p>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+
+            {/* ONLY Play/Pause button on mobile right */}
+            <div className="flex items-center shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-10 w-10 text-white hover:text-primary hover:bg-white/10 rounded-full transition-transform active:scale-90"
+                onClick={handlePlayPause}
+                disabled={!currentTrack}
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? (
+                  <Pause fill="currentColor" size={22} />
                 ) : (
-                  <div className={`w-14 h-14 bg-zinc-800 rounded-lg flex items-center justify-center flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`}>
+                  <Play fill="currentColor" size={22} className="ml-0.5" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Desktop full bar (>=md) */}
+          <div className="hidden md:flex flex-row items-center justify-between gap-4">
+            {/* Desktop: track info */}
+            <div
+              className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer rounded-lg p-2 hover:bg-primary/15 transition-colors duration-150"
+              onClick={() => navigateToView("player")}
+            >
+              {currentTrack ? (
+                <>
+                  {currentTrack.thumbnail ? (
+                    <Image
+                      src={currentTrack.thumbnail || "/placeholder.svg"}
+                      width={56}
+                      height={56}
+                      alt={currentTrack.title || "Track"}
+                      className={`w-14 h-14 rounded-lg object-cover flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`}
+                    />
+                  ) : (
+                    <div className={`w-14 h-14 bg-zinc-800 rounded-lg flex items-center justify-center flex-shrink-0 ${isPlaying ? "ring-1 ring-primary/40 animate-pulse" : ""}`}>
+                      <span className="text-2xl text-zinc-500">♪</span>
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1">
+                      <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
+                      {playbackSource === "suno" && (
+                        <span className="text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded ml-1 flex-shrink-0">
+                          Joel's Music
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 line-clamp-1">{currentTrack.artist}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 bg-zinc-800 rounded-lg flex items-center justify-center flex-shrink-0">
                     <span className="text-2xl text-zinc-500">♪</span>
                   </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
-                    <p className="font-semibold text-sm line-clamp-1">{currentTrack.title}</p>
-                    {playbackSource === "suno" && (
-                      <span className="text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded ml-1 flex-shrink-0">
-                        Joel's Music
-                      </span>
-                    )}
+                  <div>
+                    <p className="font-semibold text-sm text-zinc-500">No track playing</p>
+                    <p className="text-xs text-zinc-600">Search for music to get started</p>
                   </div>
-                  <p className="text-xs text-zinc-400 line-clamp-1">{currentTrack.artist}</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="w-14 h-14 bg-zinc-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl text-zinc-500">♪</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-zinc-500">No track playing</p>
-                  <p className="text-xs text-zinc-600">Search for music to get started</p>
-                </div>
-              </>
-            )}
-          </div>
+                </>
+              )}
+            </div>
 
-          {/* Playback controls */}
-          <div className="flex items-center justify-center flex-1 max-w-md gap-3 md:gap-4" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            {/* Shuffle */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={toggleShuffle}
-                  disabled={!currentTrack}
-                  aria-label="Toggle shuffle"
-                  className={`h-10 w-10 transition-colors ${
-                    shuffle ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"
-                  }`}
-                >
-                  <Shuffle size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
-              </TooltipContent>
-            </Tooltip>
+            {/* Playback controls */}
+            <div className="flex items-center justify-center flex-1 max-w-md gap-3 md:gap-4" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+              {/* Shuffle */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={toggleShuffle}
+                      disabled={!currentTrack}
+                      aria-label="Toggle shuffle"
+                      className={`h-10 w-10 transition-colors ${
+                        shuffle ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"
+                      }`}
+                    >
+                      <Shuffle size={20} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
+                  </TooltipContent>
+                </Tooltip>
 
-            {/* Previous */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handlePrevious}
-                  disabled={!currentTrack}
-                  aria-label="Previous"
-                  className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary/15 transition-colors"
-                >
-                  <SkipBack size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Previous</p>
-              </TooltipContent>
-            </Tooltip>
+                {/* Previous */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handlePrevious}
+                      disabled={!currentTrack}
+                      aria-label="Previous"
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary/15 transition-colors"
+                    >
+                      <SkipBack size={20} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Previous</p>
+                  </TooltipContent>
+                </Tooltip>
 
-            {/* Play/Pause */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 transform hover:bg-primary hover:text-white transition-all duration-150 shadow-lg shadow-primary/20 ring-2 ring-primary/20 disabled:opacity-50"
-                  onClick={handlePlayPause}
-                  disabled={!currentTrack}
-                  aria-label={isPlaying ? "Pause" : "Play"}
-                >
-                  {isPlaying ? (
-                    <Pause fill="currentColor" size={22} />
-                  ) : (
-                    <Play fill="currentColor" size={22} className="ml-0.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isPlaying ? "Pause" : "Play"}</p>
-              </TooltipContent>
-            </Tooltip>
+                {/* Play/Pause */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      className="bg-white text-black rounded-full h-12 w-12 hover:scale-105 transform hover:bg-primary hover:text-white transition-all duration-150 shadow-lg shadow-primary/20 ring-2 ring-primary/20 disabled:opacity-50"
+                      onClick={handlePlayPause}
+                      disabled={!currentTrack}
+                      aria-label={isPlaying ? "Pause" : "Play"}
+                    >
+                      {isPlaying ? (
+                        <Pause fill="currentColor" size={22} />
+                      ) : (
+                        <Play fill="currentColor" size={22} className="ml-0.5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isPlaying ? "Pause" : "Play"}</p>
+                  </TooltipContent>
+                </Tooltip>
 
-            {/* Next */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleNext}
-                  disabled={!currentTrack}
-                  aria-label="Next"
-                  className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary/15 transition-colors"
-                >
-                  <SkipForward size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Next</p>
-              </TooltipContent>
-            </Tooltip>
+                {/* Next */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleNext}
+                      disabled={!currentTrack}
+                      aria-label="Next"
+                      className="h-10 w-10 text-zinc-400 hover:text-white hover:bg-primary/15 transition-colors"
+                    >
+                      <SkipForward size={20} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Next</p>
+                  </TooltipContent>
+                </Tooltip>
 
-            {/* Repeat */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={toggleRepeat}
-                  disabled={!currentTrack}
-                  aria-label={`Repeat: ${repeat}`}
-                  className={`h-10 w-10 relative transition-colors ${
-                    repeat !== "off"
-                      ? "text-primary hover:text-primary hover:bg-primary/10"
-                      : "text-zinc-400 hover:text-white hover:bg-primary/15"
-                  }`}
-                >
-                  {repeat === "one" ? <Repeat1 size={20} /> : <Repeat size={20} />}
-                  {repeat !== "off" && (
-                    <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{getRepeatLabel()}</p>
-              </TooltipContent>
-            </Tooltip>
+                {/* Repeat */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={toggleRepeat}
+                      disabled={!currentTrack}
+                      aria-label={`Repeat: ${repeat}`}
+                      className={`h-10 w-10 relative transition-colors ${
+                        repeat !== "off"
+                          ? "text-primary hover:text-primary hover:bg-primary/10"
+                          : "text-zinc-400 hover:text-white hover:bg-primary/15"
+                      }`}
+                    >
+                      {repeat === "one" ? <Repeat1 size={20} /> : <Repeat size={20} />}
+                      {repeat !== "off" && (
+                        <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{getRepeatLabel()}</p>
+                  </TooltipContent>
+                </Tooltip>
 
-            {/* Video toggle */}
-            {playbackSource === "youtube" && (
+                {/* Video toggle */}
+                {playbackSource === "youtube" && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setBarVideoMode((v) => !v)}
+                        disabled={!currentTrack}
+                        aria-label={barVideoMode ? "Hide video" : "Show video"}
+                        className={`h-10 w-10 transition-colors ${
+                          barVideoMode ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"
+                        }`}
+                      >
+                        {barVideoMode ? <Video size={20} /> : <Music size={20} />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{barVideoMode ? "Hide Video" : "Show Video"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+            </div>
+
+            {/* Desktop: right side controls */}
+            <div className="flex items-center gap-2 flex-1 justify-end" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => setBarVideoMode((v) => !v)}
+                    onClick={() => navigateToView(playerView === "lyrics" ? "player" : "lyrics")}
                     disabled={!currentTrack}
-                    aria-label={barVideoMode ? "Hide video" : "Show video"}
-                    className={`h-10 w-10 transition-colors ${
-                      barVideoMode ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"
-                    }`}
+                    aria-label="Lyrics"
+                    className={`h-10 w-10 transition-colors ${playerView === "lyrics" ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"}`}
                   >
-                    {barVideoMode ? <Video size={20} /> : <Music size={20} />}
+                    <Type size={20} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{barVideoMode ? "Hide Video" : "Show Video"}</p>
+                  <p>Lyrics</p>
                 </TooltipContent>
               </Tooltip>
-            )}
-          </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => navigateToView(playerView === "queue" ? "player" : "queue")}
+                    className={`text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors ${playerView === "queue" ? "text-primary" : ""}`}
+                    aria-label="Queue"
+                  >
+                    <List size={20} />
+                    {queue.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center rounded-[6px]">
+                        {queue.length}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Queue</p>
+                </TooltipContent>
+              </Tooltip>
 
-          {/* Desktop: right side controls */}
-          <div className="flex items-center gap-2 flex-1 justify-end" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => isLyricsOpen ? closeLyrics() : openLyrics()}
-                  disabled={!currentTrack}
-                  aria-label="Lyrics"
-                  className={`h-10 w-10 transition-colors ${isLyricsOpen ? "text-primary" : "text-zinc-400 hover:text-white hover:bg-primary/15"}`}
-                >
-                  <Type size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Lyrics</p>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => isQueueOpen ? closeQueue() : openQueue()}
-                  className={`text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 relative transition-colors ${isQueueOpen ? "text-primary" : ""}`}
-                  aria-label="Queue"
-                >
-                  <List size={20} />
-                  {queue.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-primary text-white text-xs h-4 w-4 flex items-center justify-center rounded-[6px]">
-                      {queue.length}
-                    </span>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Queue</p>
-              </TooltipContent>
-            </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setIsMiniPlayer(true)}
+                    className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
+                    disabled={!currentTrack}
+                    aria-label="Mini player"
+                  >
+                    <Minimize2 size={20} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Mini Player</p>
+                </TooltipContent>
+              </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setIsMiniPlayer(true)}
-                  className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
-                  disabled={!currentTrack}
-                  aria-label="Mini player"
-                >
-                  <Minimize2 size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Mini Player</p>
-              </TooltipContent>
-            </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <SleepTimer onTimerEnd={handleSleepTimerEnd} isPlaying={isPlaying} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Sleep Timer</p>
+                </TooltipContent>
+              </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <SleepTimer onTimerEnd={handleSleepTimerEnd} isPlaying={isPlaying} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Sleep Timer</p>
-              </TooltipContent>
-            </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={toggleMute}
+                    className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                  >
+                    {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isMuted ? "Unmute" : "Mute"}</p>
+                </TooltipContent>
+              </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={toggleMute}
-                  className="text-zinc-400 hover:text-white hover:bg-primary/15 h-10 w-10 transition-colors"
-                  aria-label={isMuted ? "Unmute" : "Mute"}
-                >
-                  {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isMuted ? "Unmute" : "Mute"}</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <div className="w-24">
-              <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} aria-label="Volume" />
+              <div className="w-24">
+                <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} aria-label="Volume" />
+              </div>
             </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
 
-      {/* ── Expandable Player (Unified Single Architecture) ─────────────────── */}
+      {/* ── Overlay Expandable Player ────────────────────────────────────────── */}
       {currentTrack && (
         <ExpandablePlayer
-          sheetNav={sheetNav}
+          playerView={playerView}
+          onNavigateView={navigateToView}
+          playerY={playerY}
           vh={vh}
           currentTime={currentTime}
           isPlaying={isPlaying}
