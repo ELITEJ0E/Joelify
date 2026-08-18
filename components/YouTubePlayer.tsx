@@ -19,6 +19,7 @@ interface YouTubePlayerProps {
   /** When true, renders the iframe visibly in the bar. Same single player instance — no second iframe created. */
   videoMode?: boolean
   isPlaying?: boolean
+  onCloseVideo?: () => void
 }
 
 function isValidYouTubeId(id: string | undefined | null): boolean {
@@ -38,6 +39,7 @@ function YouTubeIframePlayer({
   onTimeUpdate,
   videoMode = false,
   isPlaying = false,
+  onCloseVideo,
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -129,9 +131,9 @@ function YouTubeIframePlayer({
     try {
       const playerVars: any = {
         autoplay: isPlayingRef.current ? 1 : 0,
-        controls: 0,
-        disablekb: 1,
-        fs: 0,
+        controls: 1,
+        disablekb: 0,
+        fs: 1,
         modestbranding: 1,
         playsinline: 1,
         rel: 0,
@@ -158,6 +160,16 @@ function YouTubeIframePlayer({
         events: {
           onReady: (event: any) => {
             isPlayerReadyRef.current = true
+            try {
+              // Ensure iframe attributes allow native fullscreen
+              const iframe = containerRef.current?.querySelector("iframe")
+              if (iframe) {
+                iframe.setAttribute("allowfullscreen", "1")
+                iframe.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen")
+              }
+            } catch (e) {
+              console.warn("Error setting fullscreen attributes:", e)
+            }
             try {
               event.target.setVolume(100)
               if (isValidYouTubeId(currentTrack?.id) && playbackSource === "youtube") {
@@ -345,13 +357,13 @@ function YouTubeIframePlayer({
 
   return (
     <div
-      className={videoMode
-        ? "flex justify-center items-center bg-black w-full overflow-hidden relative z-10"
-        : "absolute inset-0 opacity-[0.01] pointer-events-none z-[-1]"
+      className={
+        videoMode
+          ? "w-full max-w-5xl aspect-video mx-auto bg-black rounded-xl md:rounded-2xl overflow-hidden shadow-2xl border border-white/15 relative z-30 pointer-events-auto mb-2 max-h-[calc(100vh-140px)] flex items-center justify-center transition-all duration-300"
+          : "fixed -left-[9999px] top-0 w-[320px] h-[180px] opacity-[0.001] pointer-events-none -z-50 overflow-hidden"
       }
-      style={videoMode ? { maxWidth: 640, maxHeight: 360, margin: "0 auto", aspectRatio: "16/9" } : undefined}
     >
-      <div ref={containerRef} className="w-full h-full" style={{ aspectRatio: "16/9" }} />
+      <div ref={containerRef} className="w-full h-full flex items-center justify-center" style={{ width: "100%", height: "100%", aspectRatio: "16/9" }} />
     </div>
   )
 }

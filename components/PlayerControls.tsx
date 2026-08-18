@@ -56,10 +56,11 @@ export function PlayerControls() {
 
   const [vh, setVh] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 800))
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
-  const [scrollProgress, setScrollProgress] = useState(0)
+  const scrollProgressMV = useMotionValue(0)
+  const isExpandedRef = useRef(false)
 
-  const miniBarOpacity = Math.max(0, 1 - scrollProgress / 0.2)
-  const miniBarPointerEvents = scrollProgress > 0.15 ? ("none" as const) : ("auto" as const)
+  const miniBarOpacity = useTransform(scrollProgressMV, [0, 0.2], [1, 0])
+  const miniBarPointerEvents = useTransform(scrollProgressMV, (p) => (p > 0.15 ? "none" : "auto"))
 
   const shouldReduceMotion = useReducedMotion()
   const springConfig = shouldReduceMotion 
@@ -86,12 +87,12 @@ export function PlayerControls() {
         const h = window.innerHeight || 800
         const scrollTop = container.scrollTop
         const progress = Math.min(1, Math.max(0, scrollTop / h))
-        setScrollProgress(progress)
+        scrollProgressMV.set(progress)
 
-        if (scrollTop < h / 2) {
-          setIsExpandedPlayer((prev) => (prev ? false : prev))
-        } else {
-          setIsExpandedPlayer((prev) => (!prev ? true : prev))
+        const isExpanded = scrollTop >= h / 2
+        if (isExpanded !== isExpandedRef.current) {
+          isExpandedRef.current = isExpanded
+          setIsExpandedPlayer(isExpanded)
         }
       })
     }
@@ -103,19 +104,7 @@ export function PlayerControls() {
       if (rafId) cancelAnimationFrame(rafId)
       container.removeEventListener("scroll", handleScroll)
     }
-  }, [isExpandedPlayer])
-
-  // Sync scroll position when isExpandedPlayer changes programmatically
-  useEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) return
-    const h = window.innerHeight || 800
-    const targetTop = isExpandedPlayer ? h : 0
-
-    if (Math.abs(container.scrollTop - targetTop) > 10) {
-      container.scrollTo({ top: targetTop, behavior: "smooth" })
-    }
-  }, [isExpandedPlayer])
+  }, [scrollProgressMV])
 
   // ─── Popstate / Hardware Back Button Navigation ───────────────────────
 
@@ -981,6 +970,7 @@ export function PlayerControls() {
           onTimeUpdate={handleYouTubeTimeUpdate}
           videoMode={barVideoMode}
           isPlaying={isPlaying}
+          onCloseVideo={() => setBarVideoMode(false)}
         />
         <MiniPlayer
           isPlaying={isPlaying}
@@ -998,25 +988,25 @@ export function PlayerControls() {
 
   return (
     <>
-      <YouTubePlayer
-        onPlayerReady={handleYouTubePlayerReady}
-        onStateChange={handleYouTubeStateChange}
-        onError={handleError}
-        onDurationReady={handleYouTubeDurationReady}
-        onTimeUpdate={handleYouTubeTimeUpdate}
-        videoMode={barVideoMode}
-        isPlaying={isPlaying}
-      />
-
       {/* ── Scroll-Snap Container ────────────────────────────────────────── */}
       <div
         ref={scrollContainerRef}
         className={`fixed inset-0 z-40 overflow-y-scroll snap-y snap-mandatory h-screen overscroll-behavior-y-contain ${
-          isExpandedPlayer || scrollProgress > 0 ? "pointer-events-auto" : "pointer-events-none"
+          isExpandedPlayer ? "pointer-events-auto" : "pointer-events-none"
         }`}
       >
         {/* Section 1: Collapsed mini-bar snap section */}
-        <div className="snap-start min-h-screen w-full flex flex-col justify-end pb-[50px] lg:pb-0 pointer-events-none">
+        <div className="snap-start min-h-screen w-full flex flex-col justify-end pb-[50px] lg:pb-0 pointer-events-none px-2 sm:px-4 lg:px-0">
+          <YouTubePlayer
+            onPlayerReady={handleYouTubePlayerReady}
+            onStateChange={handleYouTubeStateChange}
+            onError={handleError}
+            onDurationReady={handleYouTubeDurationReady}
+            onTimeUpdate={handleYouTubeTimeUpdate}
+            videoMode={barVideoMode && !isExpandedPlayer}
+            isPlaying={isPlaying}
+          />
+
           <motion.div
             style={{ opacity: miniBarOpacity, pointerEvents: miniBarPointerEvents as any, x: trackX }}
             onPanStart={handlePanStart}
@@ -1427,7 +1417,7 @@ export function PlayerControls() {
         {currentTrack && (
           <ExpandablePlayer
             isExpanded={isExpandedPlayer}
-            scrollProgress={scrollProgress}
+            scrollProgress={isExpandedPlayer ? 1 : 0}
             vh={vh}
             onExpandChange={(expanded) => {
               if (expanded) openExpandedPlayer();

@@ -151,6 +151,7 @@ export function ExpandablePlayer({
         playerVars: {
           autoplay: 0,
           controls: 1,
+          fs: 1,
           modestbranding: 1,
           playsinline: 1,
           rel: 0,
@@ -158,6 +159,15 @@ export function ExpandablePlayer({
         },
         events: {
           onReady: () => {
+            try {
+              const iframe = document.getElementById("expanded-yt-video")
+              if (iframe) {
+                iframe.setAttribute("allowfullscreen", "1")
+                iframe.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen")
+              }
+            } catch (e) {
+              console.warn(e)
+            }
             videoReadyRef.current = true
             initialSyncDoneRef.current = false
             onVideoActiveChange?.(true)
@@ -255,28 +265,24 @@ export function ExpandablePlayer({
     const el = verticalScrollRef.current
     if (!el) return
     const isShowing = el.scrollTop > el.clientHeight / 2
-    setShowLyrics((prev) => {
-      if (!prev && isShowing) {
-        if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-          window.history.pushState({ view: "lyrics" }, "")
-        }
+    if (isShowing !== showLyricsRef.current) {
+      setShowLyrics(isShowing)
+      if (isShowing && typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
+        window.history.pushState({ view: "lyrics" }, "")
       }
-      return prev !== isShowing ? isShowing : prev
-    })
+    }
   }, [])
 
   const handleHorizontalScroll = useCallback(() => {
     const el = horizontalScrollRef.current
     if (!el) return
     const isShowing = el.scrollLeft > el.clientWidth / 2
-    setShowQueue((prev) => {
-      if (!prev && isShowing) {
-        if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
-          window.history.pushState({ view: "queue" }, "")
-        }
+    if (isShowing !== showQueueRef.current) {
+      setShowQueue(isShowing)
+      if (isShowing && typeof window !== "undefined" && window.history.state?.view !== "queue") {
+        window.history.pushState({ view: "queue" }, "")
       }
-      return prev !== isShowing ? isShowing : prev
-    })
+    }
   }, [])
 
   const showLyricsRef = useRef(false)
@@ -480,7 +486,7 @@ export function ExpandablePlayer({
                   className={[
                     "relative overflow-hidden rounded-2xl shadow-2xl shadow-black/80 transition-all duration-300",
                     !showVideo && "w-full max-w-[min(88vw,380px)] sm:max-w-[440px] aspect-square lg:w-[440px] lg:h-[440px]",
-                    showVideo && "w-full h-[35vh] sm:h-[45vh] lg:max-w-[800px] lg:aspect-video lg:h-auto",
+                    showVideo && "w-full max-w-4xl aspect-video h-auto max-h-[55vh] lg:max-h-[65vh]",
                   ].filter(Boolean).join(" ")}
                 >
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30">
