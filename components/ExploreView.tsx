@@ -10,9 +10,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { getCachedData, setCachedData } from "@/lib/cache"
+
+import { ALL_REGIONS, ASIAN_REGIONS, INTERNATIONAL_REGIONS, FEATURED_REGIONS, getRegion } from "@/lib/regions"
 
 interface VideoItem {
   id: string
@@ -27,15 +31,6 @@ interface ExploreViewProps {
   onOpenSidebar?: () => void
 }
 
-const REGIONS = [
-  { code: "US", name: "United States" },
-  { code: "GB", name: "United Kingdom" },
-  { code: "ID", name: "Indonesia" },
-  { code: "KR", name: "South Korea" },
-  { code: "JP", name: "Japan" },
-  { code: "BR", name: "Brazil" },
-]
-
 const GENRES = [
   { name: "Pop", color: "from-blue-600 to-indigo-900" },
   { name: "Hip-Hop", color: "from-amber-600 to-red-900" },
@@ -48,7 +43,7 @@ const GENRES = [
 ]
 
 export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
-  const [regionCode, setRegionCode] = useState("US")
+  const [regionCode, setRegionCode] = useState("MY")
   const [heroVideos, setHeroVideos] = useState<VideoItem[]>([])
   const [trendingVideos, setTrendingVideos] = useState<VideoItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,6 +61,8 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
     addTrackToPlaylist,
     setPlaybackSource,
   } = useApp()
+
+  const currentRegion = getRegion(regionCode)
 
   useEffect(() => {
     fetchExploreData(regionCode)
@@ -155,8 +152,6 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
     }
   }
 
-  const currentRegionName = REGIONS.find((r) => r.code === regionCode)?.name || "United States"
-
   return (
     <div className="flex-1 bg-gradient-to-b from-black via-zinc-950 to-black text-foreground p-4 md:p-8 overflow-y-auto pb-24">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -185,30 +180,101 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
           </form>
         </div>
 
-        {/* REGION SELECTOR */}
-        <div className="flex items-center">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="rounded-full border-white/20 bg-zinc-900/80 text-white text-xs font-medium hover:bg-zinc-800 flex items-center gap-2 h-8 px-4"
-              >
-                {currentRegionName}
-                <ChevronDown size={14} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="bg-zinc-900 border-white/10 text-white">
-              {REGIONS.map((r) => (
+        {/* REGION SELECTION HEADER & CHIPS */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">{currentRegion.flag}</span>
+              <h2 className="text-base font-bold text-white">Trending in {currentRegion.name}</h2>
+            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="rounded-full border-white/20 bg-zinc-900/80 text-white text-xs font-medium hover:bg-zinc-800 flex items-center gap-2 h-8 px-3.5"
+                >
+                  <span>{currentRegion.flag}</span>
+                  <span>{currentRegion.name}</span>
+                  <ChevronDown size={14} className="text-gray-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white max-h-80 overflow-y-auto">
+                <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-primary">
+                  Asian Countries
+                </DropdownMenuLabel>
+                {ASIAN_REGIONS.map((r) => (
+                  <DropdownMenuItem
+                    key={r.code}
+                    onClick={() => setRegionCode(r.code)}
+                    className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                      regionCode === r.code ? "bg-primary/20 text-primary font-bold" : ""
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>{r.flag}</span>
+                      <span>{r.name}</span>
+                    </span>
+                    {regionCode === r.code && <span className="text-[10px] text-primary">Active</span>}
+                  </DropdownMenuItem>
+                ))}
+
+                <DropdownMenuSeparator className="bg-white/10" />
+
+                <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  Global & International
+                </DropdownMenuLabel>
                 <DropdownMenuItem
+                  onClick={() => setRegionCode("GLOBAL")}
+                  className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                    regionCode === "GLOBAL" ? "bg-primary/20 font-bold text-primary" : ""
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🌐</span>
+                    <span>Global (Worldwide)</span>
+                  </span>
+                  {regionCode === "GLOBAL" && <span className="text-[10px] text-primary">Active</span>}
+                </DropdownMenuItem>
+                {INTERNATIONAL_REGIONS.map((r) => (
+                  <DropdownMenuItem
+                    key={r.code}
+                    onClick={() => setRegionCode(r.code)}
+                    className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                      regionCode === r.code ? "bg-primary/20 text-primary font-bold" : ""
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>{r.flag}</span>
+                      <span>{r.name}</span>
+                    </span>
+                    {regionCode === r.code && <span className="text-[10px] text-primary">Active</span>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Quick Asian & International Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+            {FEATURED_REGIONS.map((r) => {
+              const isSelected = regionCode === r.code
+              return (
+                <button
                   key={r.code}
                   onClick={() => setRegionCode(r.code)}
-                  className="hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs"
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all select-none cursor-pointer border ${
+                    isSelected
+                      ? "bg-primary text-black border-primary font-bold shadow-sm"
+                      : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/10 hover:border-white/20"
+                  }`}
                 >
-                  {r.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <span>{r.flag}</span>
+                  <span>{r.name}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* IF A GENRE IS SELECTED, SHOW FILTERED LIST */}
@@ -317,7 +383,7 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
                       <h3 className="text-2xl font-black text-white mt-1">TOP 20</h3>
                     </div>
                     <div className="mt-6">
-                      <p className="text-xs font-semibold text-white">Trending {currentRegionName}</p>
+                      <p className="text-xs font-semibold text-white">Trending {currentRegion.name}</p>
                       <p className="text-[10px] text-gray-300">Chart • YouTube Music</p>
                     </div>
                   </div>

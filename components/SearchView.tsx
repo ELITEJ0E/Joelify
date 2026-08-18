@@ -36,11 +36,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DiscoverMore } from "./DiscoverMore"
 import { getCachedData, setCachedData } from "@/lib/cache"
+import { ALL_REGIONS, ASIAN_REGIONS, INTERNATIONAL_REGIONS, FEATURED_REGIONS, getRegion } from "@/lib/regions"
 
 const loadingMessages = [
   "Searching YouTube Music...",
@@ -61,15 +63,6 @@ interface VideoItem {
   thumbnail: string
   viewCount?: string
 }
-
-const REGIONS = [
-  { code: "US", name: "United States" },
-  { code: "GB", name: "United Kingdom" },
-  { code: "ID", name: "Indonesia" },
-  { code: "KR", name: "South Korea" },
-  { code: "JP", name: "Japan" },
-  { code: "BR", name: "Brazil" },
-]
 
 const GENRES = [
   { name: "Pop", color: "from-blue-600 to-indigo-900" },
@@ -116,7 +109,7 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
   const [lastQuery, setLastQuery] = useState("")
 
   // Explore State
-  const [regionCode, setRegionCode] = useState("US")
+  const [regionCode, setRegionCode] = useState("MY")
   const [heroVideos, setHeroVideos] = useState<VideoItem[]>([])
   const [trendingVideos, setTrendingVideos] = useState<VideoItem[]>([])
   const [exploreLoading, setExploreLoading] = useState(true)
@@ -413,7 +406,8 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
     runSearch(artistName)
   }
 
-  const currentRegionName = REGIONS.find((r) => r.code === regionCode)?.name || "United States"
+  const currentRegion = getRegion(regionCode)
+  const currentRegionName = currentRegion.name
 
   const hasResults = searchResponse && (searchResponse.results.length > 0 || searchResponse.topResult)
   const topResult = searchResponse?.topResult
@@ -472,25 +466,69 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
             )}
           </form>
 
-          {/* Region Selector Pill */}
+          {/* Region Selector Pill with categorized Asian & International dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="rounded-2xl border-white/15 bg-zinc-900/80 text-white text-xs font-semibold hover:bg-zinc-800 flex items-center gap-1.5 h-12 px-3.5 shrink-0"
+                className="rounded-2xl border-white/15 bg-zinc-900/90 text-white text-xs font-semibold hover:bg-zinc-800 flex items-center gap-2 h-12 px-3.5 shrink-0 shadow-sm"
               >
-                {regionCode}
-                <ChevronDown size={14} />
+                <span>{currentRegion.flag}</span>
+                <span className="hidden sm:inline">{currentRegion.name}</span>
+                <span className="sm:hidden">{currentRegion.code}</span>
+                <ChevronDown size={14} className="text-gray-400" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10 text-white">
-              {REGIONS.map((r) => (
+            <DropdownMenuContent align="end" className="w-56 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white max-h-80 overflow-y-auto">
+              <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-primary">
+                Asian Countries
+              </DropdownMenuLabel>
+              {ASIAN_REGIONS.map((r) => (
                 <DropdownMenuItem
                   key={r.code}
                   onClick={() => setRegionCode(r.code)}
-                  className="hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs"
+                  className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                    regionCode === r.code ? "bg-primary/20 font-bold text-primary" : ""
+                  }`}
                 >
-                  {r.name} ({r.code})
+                  <span className="flex items-center gap-2">
+                    <span>{r.flag}</span>
+                    <span>{r.name}</span>
+                  </span>
+                  {regionCode === r.code && <span className="text-[10px] text-primary">Active</span>}
+                </DropdownMenuItem>
+              ))}
+
+              <DropdownMenuSeparator className="bg-white/10" />
+
+              <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                Global & International
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => setRegionCode("GLOBAL")}
+                className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                  regionCode === "GLOBAL" ? "bg-primary/20 font-bold text-primary" : ""
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span>🌐</span>
+                  <span>Global (Worldwide)</span>
+                </span>
+                {regionCode === "GLOBAL" && <span className="text-[10px] text-primary">Active</span>}
+              </DropdownMenuItem>
+              {INTERNATIONAL_REGIONS.map((r) => (
+                <DropdownMenuItem
+                  key={r.code}
+                  onClick={() => setRegionCode(r.code)}
+                  className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                    regionCode === r.code ? "bg-primary/20 font-bold text-primary" : ""
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span>{r.flag}</span>
+                    <span>{r.name}</span>
+                  </span>
+                  {regionCode === r.code && <span className="text-[10px] text-primary">Active</span>}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -836,17 +874,44 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
             </div>
 
             {/* TRENDING IN REGION */}
-            {exploreLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="animate-spin text-primary mb-3" size={32} />
-                <p className="text-xs text-gray-400">Loading trending music in {currentRegionName}...</p>
-              </div>
-            ) : trendingVideos.length > 0 ? (
-              <div className="space-y-4">
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Flame size={18} className="text-orange-500" />
-                  <h3 className="text-lg font-bold text-white">Trending in {currentRegionName}</h3>
+                  <Flame size={18} className="text-orange-500 shrink-0" />
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <span>Trending in {currentRegionName}</span>
+                    <span>{currentRegion.flag}</span>
+                  </h3>
                 </div>
+
+                {/* Quick Regional Filter Chips */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+                  {FEATURED_REGIONS.map((r) => {
+                    const isSelected = regionCode === r.code
+                    return (
+                      <button
+                        key={r.code}
+                        onClick={() => setRegionCode(r.code)}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 flex items-center gap-1.5 ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground shadow-md scale-105"
+                            : "bg-zinc-900/90 text-gray-300 border border-white/10 hover:bg-zinc-800 hover:text-white"
+                        }`}
+                      >
+                        <span>{r.flag}</span>
+                        <span>{r.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {exploreLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="animate-spin text-primary mb-3" size={32} />
+                  <p className="text-xs text-gray-400">Loading trending music in {currentRegionName}...</p>
+                </div>
+              ) : trendingVideos.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {trendingVideos.slice(0, 8).map((video, idx) => (
                     <div
@@ -867,8 +932,8 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
                     </div>
                   ))}
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
 
             {/* DISCOVER MORE / FEATURED CONTENT */}
             <DiscoverMore onNavigate={onNavigate} />

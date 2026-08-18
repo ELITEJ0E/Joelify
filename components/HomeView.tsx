@@ -2,15 +2,18 @@
 
 import { useState, useEffect } from "react"
 import { useApp } from "@/contexts/AppContext"
-import { Play, MoreVertical, Plus, Music2, Sparkles, TrendingUp, Zap } from "lucide-react"
+import { Play, MoreVertical, Plus, Music2, Sparkles, TrendingUp, Zap, ChevronDown } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ALL_REGIONS, ASIAN_REGIONS, INTERNATIONAL_REGIONS, FEATURED_REGIONS, getRegion } from "@/lib/regions"
 
 interface HomeViewProps {
   onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore") => void
@@ -24,9 +27,6 @@ interface ChartVideo {
   thumbnail: string
   viewCount?: string
 }
-
-const CHARTS_CACHE_KEY = "charts:US"
-const CHARTS_CACHE_TTL = 6 * 60 * 60 * 1000 // 6 hours
 
 export function HomeView({ onNavigate }: HomeViewProps) {
   const {
@@ -43,6 +43,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     setPlaybackSource,
   } = useApp()
 
+  const [chartRegion, setChartRegion] = useState("MY")
   const [chartVideos, setChartVideos] = useState<ChartVideo[]>([])
   const [chartsLoading, setChartsLoading] = useState(true)
 
@@ -51,9 +52,12 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     let isMounted = true
 
     const loadCharts = async () => {
+      setChartsLoading(true)
+      const targetRegion = chartRegion === "GLOBAL" ? "US" : chartRegion
+      const cacheKey = `charts_home:${targetRegion}`
       try {
         if (typeof window !== "undefined" && window.sessionStorage) {
-          const cachedRaw = sessionStorage.getItem(CHARTS_CACHE_KEY)
+          const cachedRaw = sessionStorage.getItem(cacheKey)
           if (cachedRaw) {
             const cached = JSON.parse(cachedRaw)
             if (
@@ -71,7 +75,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           }
         }
 
-        const res = await fetch("/api/charts?regionCode=US")
+        const res = await fetch(`/api/charts?regionCode=${encodeURIComponent(targetRegion)}`)
         if (!res.ok) {
           if (isMounted) setChartsLoading(false)
           return
@@ -84,7 +88,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           }
           if (typeof window !== "undefined" && window.sessionStorage) {
             sessionStorage.setItem(
-              CHARTS_CACHE_KEY,
+              cacheKey,
               JSON.stringify({
                 videos: data.videos,
                 timestamp: Date.now(),
@@ -104,7 +108,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [chartRegion])
 
   const getTimeGreeting = () => {
     const hour = new Date().getHours()
@@ -374,12 +378,116 @@ export function HomeView({ onNavigate }: HomeViewProps) {
         )}
 
         {/* PART B: TOP CHARTS ROW (Horizontally scrollable with loading skeleton and 6-hr cache) */}
-        {chartsLoading ? (
-          <section className="space-y-3 pt-2">
+        {/* TOP CHARTS SECTION */}
+        <section className="space-y-3 pt-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <TrendingUp size={20} className="text-primary animate-pulse" />
+              <TrendingUp size={20} className="text-primary" />
               <h2 className="text-xl font-bold text-primary tracking-tight">Top Charts</h2>
             </div>
+            
+            <div className="flex items-center gap-2">
+              {/* Region Selector Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full border-white/20 bg-zinc-900/90 text-white text-xs font-semibold hover:bg-zinc-800 flex items-center gap-1.5 h-8 px-3 shadow-sm"
+                  >
+                    <span>{getRegion(chartRegion).flag}</span>
+                    <span>{getRegion(chartRegion).name}</span>
+                    <ChevronDown size={13} className="text-gray-400" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white max-h-80 overflow-y-auto">
+                  <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-primary">
+                    Asian Countries
+                  </DropdownMenuLabel>
+                  {ASIAN_REGIONS.map((r) => (
+                    <DropdownMenuItem
+                      key={r.code}
+                      onClick={() => setChartRegion(r.code)}
+                      className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                        chartRegion === r.code ? "bg-primary/20 font-bold text-primary" : ""
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>{r.flag}</span>
+                        <span>{r.name}</span>
+                      </span>
+                      {chartRegion === r.code && <span className="text-[10px] text-primary">Active</span>}
+                    </DropdownMenuItem>
+                  ))}
+
+                  <DropdownMenuSeparator className="bg-white/10" />
+
+                  <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                    Global & International
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => setChartRegion("GLOBAL")}
+                    className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                      chartRegion === "GLOBAL" ? "bg-primary/20 font-bold text-primary" : ""
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>🌐</span>
+                      <span>Global (Worldwide)</span>
+                    </span>
+                    {chartRegion === "GLOBAL" && <span className="text-[10px] text-primary">Active</span>}
+                  </DropdownMenuItem>
+                  {INTERNATIONAL_REGIONS.map((r) => (
+                    <DropdownMenuItem
+                      key={r.code}
+                      onClick={() => setChartRegion(r.code)}
+                      className={`hover:bg-primary/20 focus:bg-primary/20 cursor-pointer text-xs flex items-center justify-between ${
+                        chartRegion === r.code ? "bg-primary/20 font-bold text-primary" : ""
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>{r.flag}</span>
+                        <span>{r.name}</span>
+                      </span>
+                      {chartRegion === r.code && <span className="text-[10px] text-primary">Active</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onNavigate("charts")}
+                className="text-xs text-gray-400 hover:text-white"
+              >
+                View All →
+              </Button>
+            </div>
+          </div>
+
+          {/* Quick Asian & Global Region Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+            {FEATURED_REGIONS.map((r) => {
+              const isSelected = chartRegion === r.code
+              return (
+                <button
+                  key={r.code}
+                  onClick={() => setChartRegion(r.code)}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all select-none cursor-pointer border ${
+                    isSelected
+                      ? "bg-primary text-black border-primary shadow-sm font-bold"
+                      : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <span>{r.flag}</span>
+                  <span>{r.name}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {chartsLoading ? (
             <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
               {[1, 2, 3, 4, 5].map((n) => (
                 <div
@@ -392,24 +500,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                 </div>
               ))}
             </div>
-          </section>
-        ) : chartVideos.length > 0 ? (
-          <section className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp size={20} className="text-primary" />
-                <h2 className="text-xl font-bold text-primary tracking-tight">Top Charts</h2>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onNavigate("charts")}
-                className="text-xs text-gray-400 hover:text-white"
-              >
-                View All ({chartVideos.length})
-              </Button>
-            </div>
-
+          ) : chartVideos.length > 0 ? (
             <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
               {chartVideos.map((video, idx) => (
                 <div
@@ -439,8 +530,8 @@ export function HomeView({ onNavigate }: HomeViewProps) {
                 </div>
               ))}
             </div>
-          </section>
-        ) : null}
+          ) : null}
+        </section>
 
         {/* LAST SESSION SECTION (Unchanged) */}
         <section className="space-y-3 pt-2">
