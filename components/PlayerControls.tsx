@@ -32,17 +32,10 @@ export function PlayerControls() {
   } = useApp()
 
   // ── Unified Sheet Navigation Controller ────────────────────────────────────
-  const handleNextRef = useRef<() => void>(() => {})
-  const handlePreviousRef = useRef<() => void>(() => {})
-
-  const sheetNav = useSheetNavigation({
-    onNext: () => handleNextRef.current?.(),
-    onPrevious: () => handlePreviousRef.current?.(),
-  })
+  const sheetNav = useSheetNavigation()
   const {
     sheetState,
     playerY,
-    trackX,
     openPlayer,
     closePlayer,
     openLyrics,
@@ -67,6 +60,9 @@ export function PlayerControls() {
   const [barVideoMode, setBarVideoMode] = useState(false)
   const [offlineSunoUrl, setOfflineSunoUrl] = useState<string | null>(null)
   const [localFileUrl, setLocalFileUrl] = useState<string | null>(null)
+
+  const trackX = useMotionValue(0)
+  const hasMovedRef = useRef(false)
 
   const [vh, setVh] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 800))
 
@@ -95,13 +91,28 @@ export function PlayerControls() {
     }
   }, [isMiniPlayer])
 
+  // ─── Touch Swipe UP on Mini Player Bar ─────────────────────────────────
+  const miniTouchStartYRef = useRef<number | null>(null)
+
+  const handleMiniTouchStart = useCallback((e: React.TouchEvent) => {
+    miniTouchStartYRef.current = e.touches[0].clientY
+  }, [])
+
+  const handleMiniTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (miniTouchStartYRef.current === null) return
+    const dy = miniTouchStartYRef.current - e.changedTouches[0].clientY
+    miniTouchStartYRef.current = null
+    if (dy > 30) {
+      openPlayer()
+    }
+  }, [openPlayer])
+
   const trackEndHandledRef = useRef(false)
   const isSeekingRef = useRef(false)
   const hasRestoredPositionRef = useRef(false)
   const initialLoadHandledRef = useRef(false)
   const playedTracksRef = useRef(new Set<string>())
   const playHistoryRef = useRef<string[]>([])
-  const lastLoggedTrackIdRef = useRef<string | null>(null)
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -264,11 +275,6 @@ export function PlayerControls() {
     currentTime, playbackSource, getContextTracks, currentTrack
   ])
 
-  useEffect(() => {
-    handleNextRef.current = handleNext
-    handlePreviousRef.current = handlePrevious
-  }, [handleNext, handlePrevious])
-
   // ─── play / pause ───────────────────────────────────────────────────────────
 
   const handlePlayPause = useCallback(() => {
@@ -397,6 +403,80 @@ export function PlayerControls() {
     const newTime = (offsetX / rect.width) * duration
     handleSeek([newTime])
   }, [duration, handleSeek])
+
+  // ─── Swipe & Pan Gesture Handlers on Mini Bar ──────────────────────────────
+
+  const handlePanStart = useCallback(() => {
+    hasMovedRef.current = false
+  }, [])
+
+  const handlePan = useCallback((_: any, info: PanInfo) => {
+    const absX = Math.abs(info.offset.x)
+    const absY = Math.abs(info.offset.y)
+
+    if (absX > absY && absX >= 6) {
+      hasMovedRef.current = true
+      trackX.set(info.offset.x)
+    } else if (absY > absX && absY >= 6 && info.offset.y < 0) {
+      hasMovedRef.current = true
+      playerY.set(Math.min(1, Math.max(0, -info.offset.y / vh)))
+    }
+  }, [trackX, playerY, vh])
+
+  const handlePanEnd = useCallback((_: any, info: PanInfo) => {
+    const absX = Math.abs(info.offset.x)
+    const absY = Math.abs(info.offset.y)
+
+    if (absX > absY && (absX > 50 || Math.abs(info.velocity.x) > 300)) {
+      const isSwipeLeft = info.offset.x < -50 || info.velocity.x < -300
+      const isSwipeRight = info.offset.x > 50 || info.velocity.x > 300
+
+      if (isSwipeLeft) {
+        if (shouldReduceMotion) {
+          handleNext()
+          trackX.set(0)
+        } else {
+          animate(trackX, -150, { duration: 0.12, ease: "easeOut" }).then(() => {
+            handleNext()
+            trackX.set(120)
+            animate(trackX, 0, springConfig)
+          })
+        }
+      } else if (isSwipeRight) {
+        if (shouldReduceMotion) {
+          handlePrevious()
+          trackX.set(0)
+        } else {
+          animate(trackX, 150, { duration: 0.12, ease: "easeOut" }).then(() => {
+            handlePrevious()
+            trackX.set(-120)
+            animate(trackX, 0, springConfig)
+          })
+        }
+      } else {
+        animate(trackX, 0, springConfig)
+      }
+    } else if (absY > absX && (info.offset.y < -50 || info.velocity.y < -250)) {
+      openPlayer()
+    } else if (absY > absX && info.offset.y < 0) {
+      if (playerY.get() > 0.25) {
+        openPlayer()
+      } else {
+        closePlayer()
+      }
+    } else {
+      animate(trackX, 0, springConfig)
+    }
+
+    setTimeout(() => {
+      hasMovedRef.current = false
+    }, 60)
+  }, [trackX, playerY, springConfig, shouldReduceMotion, handleNext, handlePrevious, openPlayer, closePlayer])
+
+  const handleBarClick = useCallback(() => {
+    if (hasMovedRef.current) return
+    openPlayer()
+  }, [openPlayer])
 
   // ─── YouTube callbacks ───────────────────────────────────────────────────────
 
@@ -531,7 +611,6 @@ export function PlayerControls() {
       setCurrentTime(0); setPlaybackPosition(0); setDuration(0)
       hasRestoredPositionRef.current = false
       trackEndHandledRef.current = false
-      lastLoggedTrackIdRef.current = null
       
       if (initialLoadHandledRef.current) {
         setIsPlaying(true)
@@ -649,81 +728,51 @@ export function PlayerControls() {
 
   const saveToListeningHistory = useCallback((track: typeof currentTrack) => {
     if (!track) return
-    if (lastLoggedTrackIdRef.current === track.id) return
-    lastLoggedTrackIdRef.current = track.id
 
     const now = new Date()
     const fifteenDaysAgo = now.getTime() - 15 * 24 * 60 * 60 * 1000
     
-    let history: any[] = []
+    let history = []
     try {
-      const stored = localStorage.getItem("listening_history")
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed)) history = parsed
-      }
+      history = JSON.parse(localStorage.getItem("listening_history") || "[]")
     } catch(e) {}
     
-    history = history.filter((h: any) => h && h.playedAt && new Date(h.playedAt).getTime() > fifteenDaysAgo)
+    history = history.filter((h: any) => new Date(h.playedAt).getTime() > fifteenDaysAgo)
     
     history.push({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      thumbnail: track.thumbnail,
-      duration: duration || 0,
-      playedAt: now.toISOString(),
-      source: playbackSource,
+      id: track.id, title: track.title, artist: track.artist,
+      thumbnail: track.thumbnail, duration: duration || 0,
+      playedAt: now.toISOString(), source: playbackSource,
     })
     
     if (history.length > 2000) history = history.slice(-2000)
-    try {
-      localStorage.setItem("listening_history", JSON.stringify(history))
-    } catch (e) {}
+    localStorage.setItem("listening_history", JSON.stringify(history))
 
-    let allTimeStats: any = { totalPlays: 0, totalTime: 0, trackPlays: {}, artistPlays: {} }
+    let allTimeStats = { totalPlays: 0, totalTime: 0, trackPlays: {} as any, artistPlays: {} as any }
     try {
       const storedStats = localStorage.getItem("listening_stats_all_time")
-      if (storedStats) {
-        const parsed = JSON.parse(storedStats)
-        if (parsed && typeof parsed === "object") {
-          allTimeStats = {
-            totalPlays: typeof parsed.totalPlays === "number" ? parsed.totalPlays : 0,
-            totalTime: typeof parsed.totalTime === "number" ? parsed.totalTime : 0,
-            trackPlays: (parsed.trackPlays && typeof parsed.trackPlays === "object") ? parsed.trackPlays : {},
-            artistPlays: (parsed.artistPlays && typeof parsed.artistPlays === "object") ? parsed.artistPlays : {},
-          }
-        }
-      }
+      if (storedStats) allTimeStats = JSON.parse(storedStats)
     } catch (e) {}
 
-    allTimeStats.totalPlays = (typeof allTimeStats.totalPlays === "number" ? allTimeStats.totalPlays : 0) + 1
-    allTimeStats.totalTime = (typeof allTimeStats.totalTime === "number" ? allTimeStats.totalTime : 0) + (duration || 0)
+    allTimeStats.totalPlays += 1
+    allTimeStats.totalTime += (duration || 0)
 
     const trackKey = `${track.id}-${track.title}`
-    const existingTrack = allTimeStats.trackPlays[trackKey]
-    if (!existingTrack || typeof existingTrack !== "object" || !existingTrack.track) {
-      const prevCount = typeof existingTrack === "number" ? existingTrack : 0
+    if (!allTimeStats.trackPlays[trackKey]) {
       allTimeStats.trackPlays[trackKey] = { 
         track: { id: track.id, title: track.title, artist: track.artist }, 
-        count: prevCount + 1 
+        count: 0 
       }
-    } else {
-      existingTrack.count = (typeof existingTrack.count === "number" ? existingTrack.count : 0) + 1
     }
+    allTimeStats.trackPlays[trackKey].count += 1
 
     const artistKey = track.artist || "Unknown Artist"
-    const existingArtist = allTimeStats.artistPlays[artistKey]
-    const currentArtistCount = typeof existingArtist === "number"
-      ? existingArtist
-      : (existingArtist && typeof existingArtist === "object" && typeof existingArtist.count === "number")
-        ? existingArtist.count
-        : 0
-    allTimeStats.artistPlays[artistKey] = currentArtistCount + 1
+    if (!allTimeStats.artistPlays[artistKey]) {
+      allTimeStats.artistPlays[artistKey] = { artist: artistKey, count: 0 }
+    }
+    allTimeStats.artistPlays[artistKey].count += 1
 
-    try {
-      localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats))
-    } catch (e) {}
+    localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats))
   }, [duration, playbackSource])
 
   useEffect(() => {
@@ -861,14 +910,12 @@ export function PlayerControls() {
 
       {/* ── Collapsed Bottom Player Bar (Mini Player) ────────────────────────── */}
       <motion.div
-        style={{
-          opacity: miniBarOpacity,
-          pointerEvents: miniBarPointerEvents as any,
-          x: trackX,
-          touchAction: "none",
-        }}
-        {...sheetNav.miniBarPointerHandlers}
-        className="fixed bottom-0 left-0 right-0 z-30 pointer-events-auto bottom-player-bar bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-none mb-[50px] lg:mb-0"
+        style={{ opacity: miniBarOpacity, pointerEvents: miniBarPointerEvents as any, x: trackX }}
+        onPanStart={handlePanStart}
+        onPan={handlePan}
+        onPanEnd={handlePanEnd}
+        onClick={handleBarClick}
+        className="fixed bottom-0 left-0 right-0 z-30 pointer-events-auto bottom-player-bar bg-black/85 md:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] text-white p-2 md:p-3 w-full cursor-pointer select-none touch-pan-y mb-[50px] lg:mb-0"
       >
         {/* ── Top Interactive Seeker Bar on Mini-Player ── */}
         <div
@@ -920,7 +967,11 @@ export function PlayerControls() {
         </div>
 
         {/* Mobile minimal mini player (<md) */}
-        <div className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full">
+        <div 
+          className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full"
+          onTouchStart={handleMiniTouchStart}
+          onTouchEnd={handleMiniTouchEnd}
+        >
           <motion.div
             style={{ x: trackX }}
             className="flex items-center gap-3 flex-1 min-w-0"
