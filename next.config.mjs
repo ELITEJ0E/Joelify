@@ -1,10 +1,3 @@
-import withPWAInit from "@ducanh2912/next-pwa";
-
-const withPWA = withPWAInit({
-  dest: "public",
-  disable: true, // Disable PWA worker compilation during static build to prevent webpack manifest corruption
-});
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -21,6 +14,6 @@ const nextConfig = {
   },
 };
 
-export default withPWA(nextConfig);
+export default nextConfig;
 
 

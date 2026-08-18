@@ -182,10 +182,10 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
 
         {/* REGION SELECTION HEADER & CHIPS */}
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-2 shrink-0">
               <span className="text-xl">{currentRegion.flag}</span>
-              <h2 className="text-base font-bold text-white">Trending in {currentRegion.name}</h2>
+              <h2 className="text-base font-bold text-white whitespace-nowrap">Trending in {currentRegion.name}</h2>
             </div>
 
             <DropdownMenu>

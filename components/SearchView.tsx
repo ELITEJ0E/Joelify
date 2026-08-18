@@ -874,18 +874,18 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
             </div>
 
             {/* TRENDING IN REGION */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Flame size={18} className="text-orange-500 shrink-0" />
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <div className="space-y-3.5 pt-2">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 shrink-0">
+                  <Flame size={20} className="text-orange-500 shrink-0" />
+                  <h3 className="text-lg font-bold text-white whitespace-nowrap flex items-center gap-2">
                     <span>Trending in {currentRegionName}</span>
-                    <span>{currentRegion.flag}</span>
+                    <span className="text-base">{currentRegion.flag}</span>
                   </h3>
                 </div>
 
                 {/* Quick Regional Filter Chips */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar min-w-0 max-w-full -mx-4 px-4 sm:mx-0 sm:px-0">
                   {FEATURED_REGIONS.map((r) => {
                     const isSelected = regionCode === r.code
                     return (
