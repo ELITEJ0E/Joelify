@@ -10,20 +10,39 @@ import { JoelsMusicView } from "./JoelsMusicView"
 import { DownloadedView } from "./DownloadedView"
 import { ChartsView } from "./ChartsView"
 import { ExploreView } from "./ExploreView"
+import { AlbumView } from "./AlbumView"
 
 interface MainContentProps {
-  view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore"
-  onNavigate: (view: "home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore") => void
+  view: string
+  albumId?: string | null
+  searchQuery?: string
+  onNavigate: (view: any, params?: any) => void
   onOpenSidebar?: () => void
 }
 
-export function MainContent({ view, onNavigate, onOpenSidebar }: MainContentProps) {
+export function MainContent({ view, albumId, searchQuery, onNavigate, onOpenSidebar }: MainContentProps) {
+  if (view === "album" && albumId) {
+    return (
+      <AlbumView
+        albumId={albumId}
+        onNavigate={onNavigate}
+        onBack={() => onNavigate("search")}
+      />
+    )
+  }
+
   if (view === "charts") {
     return <ChartsView onNavigate={onNavigate} onOpenSidebar={onOpenSidebar} />
   }
 
   if (view === "search" || view === "explore") {
-    return <SearchView onNavigate={onNavigate} onOpenSidebar={onOpenSidebar} />
+    return (
+      <SearchView
+        initialQuery={searchQuery}
+        onNavigate={onNavigate}
+        onOpenSidebar={onOpenSidebar}
+      />
+    )
   }
 
   if (view === "playlist") {

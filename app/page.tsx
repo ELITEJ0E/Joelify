@@ -15,7 +15,9 @@ import { useApp } from "@/contexts/AppContext"
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
-  const [currentView, setCurrentView] = useState<"home" | "search" | "playlist" | "liked" | "library" | "stats" | "joels" | "downloaded" | "charts" | "explore">("home")
+  const [currentView, setCurrentView] = useState<string>("home")
+  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState<string>("")
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { theme, setTheme, audioSettings, setAudioSettings } = useApp()
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -28,6 +30,8 @@ export default function Home() {
     const handlePopState = (event: PopStateEvent) => {
       if (event.state?.view) {
         setCurrentView(event.state.view)
+        if (event.state.albumId) setSelectedAlbumId(event.state.albumId)
+        if (event.state.query) setSearchQuery(event.state.query)
       } else if (!event.state?.modal) {
         // If we go back and there's no specific state, default to home
         setCurrentView("home")
@@ -38,7 +42,21 @@ export default function Home() {
     return () => window.removeEventListener("popstate", handlePopState)
   }, [])
 
-  const handleNavigate = (view: any) => {
+  const handleNavigate = (view: any, params?: any) => {
+    if (view === "album" && params?.albumId) {
+      setSelectedAlbumId(params.albumId)
+      setCurrentView("album")
+      window.history.pushState({ view: "album", albumId: params.albumId }, "")
+      return
+    }
+
+    if (view === "search" && params?.query) {
+      setSearchQuery(params.query)
+      setCurrentView("search")
+      window.history.pushState({ view: "search", query: params.query }, "")
+      return
+    }
+
     if (view !== currentView) {
       setCurrentView(view)
       window.history.pushState({ view }, "")
@@ -115,7 +133,13 @@ export default function Home() {
           >
             <Sidebar onNavigate={handleNavigate} isOpen={isSidebarOpen} onClose={closeSidebar} />
           </Suspense>
-          <MainContent view={currentView} onNavigate={handleNavigate} onOpenSidebar={() => setIsSidebarOpen(true)} />
+          <MainContent
+            view={currentView}
+            albumId={selectedAlbumId}
+            searchQuery={searchQuery}
+            onNavigate={handleNavigate}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+          />
         </div>
 
         <PlayerControls />

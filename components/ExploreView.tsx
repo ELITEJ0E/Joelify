@@ -360,15 +360,15 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-primary tracking-tight">Genres</h2>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
                 {GENRES.map((g) => (
                   <div
                     key={g.name}
                     onClick={() => handleSelectGenre(g.name)}
-                    className={`bg-gradient-to-br ${g.color} border border-white/10 rounded-2xl p-4 h-28 flex flex-col justify-between cursor-pointer hover:scale-[1.03] transition-transform shadow-lg relative overflow-hidden group`}
+                    className={`shrink-0 w-36 sm:w-44 md:flex-1 bg-gradient-to-br ${g.color} border border-white/10 rounded-2xl p-4 h-24 flex flex-col justify-between cursor-pointer hover:scale-[1.03] transition-transform shadow-lg relative overflow-hidden group select-none`}
                   >
-                    <span className="text-xs font-bold uppercase tracking-wider text-white/70">TOP 50</span>
-                    <h3 className="text-lg font-bold text-white group-hover:text-primary transition-colors">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">TOP 50</span>
+                    <h3 className="text-sm font-bold text-white group-hover:text-primary transition-colors truncate">
                       {g.name}
                     </h3>
                   </div>

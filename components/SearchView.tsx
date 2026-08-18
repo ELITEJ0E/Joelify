@@ -5,49 +5,53 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Search,
   Play,
-  Plus,
-  ExternalLink,
-  Loader2,
+  ListPlus,
   Heart,
-  Compass,
   Music2,
   Disc3,
   User,
   ListMusic,
-  Menu,
+  Video,
   ChevronDown,
-  ArrowLeft,
   MoreVertical,
+  Loader2,
+  Sparkles,
+  Share2,
+  Check,
+  Flame,
+  ArrowRight,
+  TrendingUp,
 } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
-import type { SearchResult } from "@/lib/music/types"
+import type {
+  SearchResult,
+  SearchResultType,
+  MusicSearchResponse,
+  SearchShelf,
+} from "@/lib/music/types"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DiscoverMore } from "./DiscoverMore"
 import { getCachedData, setCachedData } from "@/lib/cache"
 
 const loadingMessages = [
-  "Joelifying...",
-  "Applying autotune...",
-  "Buffering bangers...",
-  "Searching the soundwaves...",
-  "Finding your jam...",
-  "Tuning in...",
-  "Still buffering... blame the Wi-Fi...",
-  "Joelify is currently vibing...",
+  "Searching YouTube Music...",
+  "Retrieving songs, albums, and artists...",
+  "Formatting audio soundwaves...",
+  "Joelifying your search...",
+  "Tuning into the beat...",
 ]
 
 interface CachedSearch {
-  results: SearchResult[]
-  continuation: string | null
+  response: MusicSearchResponse
 }
 
 interface VideoItem {
@@ -74,7 +78,7 @@ const GENRES = [
   { name: "Rock", color: "from-red-600 to-zinc-900" },
   { name: "R&B", color: "from-purple-600 to-indigo-900" },
   { name: "EDM", color: "from-emerald-600 to-teal-900" },
-  { name: "Latin", color: "from-orange-600 to-amber-900" },
+  { name: "City Pop", color: "from-fuchsia-600 to-rose-900" },
   { name: "Indie", color: "from-teal-600 to-slate-900" },
 ]
 
@@ -84,18 +88,23 @@ function toTrack(result: SearchResult) {
     title: result.title,
     artist: result.artist,
     thumbnail: result.thumbnail,
-    duration: result.duration,
+    duration: result.duration || "0:00",
+    album: result.album,
   }
 }
 
+type FilterChip = "all" | "songs" | "albums" | "artists" | "videos" | "playlists"
+
 interface SearchViewProps {
-  onNavigate?: (view: any) => void
+  onNavigate?: (view: any, params?: any) => void
   onOpenSidebar?: () => void
+  initialQuery?: string
 }
 
-export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
-  const [query, setQuery] = useState("")
-  const [results, setResults] = useState<SearchResult[]>([])
+export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: SearchViewProps) {
+  const [query, setQuery] = useState(initialQuery)
+  const [activeFilter, setActiveFilter] = useState<FilterChip>("all")
+  const [searchResponse, setSearchResponse] = useState<MusicSearchResponse | null>(null)
   const [continuation, setContinuation] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -136,6 +145,13 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
     fetchExploreData(regionCode)
   }, [regionCode])
 
+  useEffect(() => {
+    if (initialQuery && initialQuery !== lastQuery) {
+      setQuery(initialQuery)
+      runSearch(initialQuery)
+    }
+  }, [initialQuery])
+
   const fetchExploreData = async (region: string) => {
     const cacheKey = `explore_data_${region}`
     const cached = getCachedData<any>(cacheKey)
@@ -147,7 +163,6 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
     }
 
     setExploreLoading(true)
-
     try {
       const res = await fetch(`/api/explore?regionCode=${encodeURIComponent(region)}`)
       if (res.ok) {
@@ -189,7 +204,7 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
     }
   }
 
-  // Debounced search suggestions with request cancellation
+  // Debounced search suggestions
   useEffect(() => {
     if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current)
     const q = query.trim()
@@ -232,9 +247,7 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
   }, [])
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showSuggestions || suggestions.length === 0) {
-      return
-    }
+    if (!showSuggestions || suggestions.length === 0) return
 
     if (e.key === "ArrowDown") {
       e.preventDefault()
@@ -269,6 +282,7 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
     setLastQuery(trimmed)
     setIsLoading(true)
     setError(null)
+    setActiveFilter("all")
     setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
 
     searchAbortRef.current?.abort()
@@ -276,25 +290,25 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
     searchAbortRef.current = controller
 
     try {
-      const cacheKey = `musicSearchCache_${searchQuery.toLowerCase()}`
+      const cacheKey = `music_search_v2_${searchQuery.toLowerCase()}`
       const cached = getCachedData<CachedSearch>(cacheKey, sessionStorage)
 
       if (cached) {
-        setResults(cached.results)
-        setContinuation(cached.continuation)
+        setSearchResponse(cached.response)
+        setContinuation(cached.response.continuation ?? null)
       } else {
         const res = await fetch(`/api/music/search?q=${encodeURIComponent(searchQuery)}`, { signal: controller.signal })
-        const data = await res.json()
+        const data: MusicSearchResponse = await res.json()
         if (controller.signal.aborted) return
 
         if (data.error && (!data.results || data.results.length === 0)) {
           setError(data.error)
-          setResults([])
+          setSearchResponse(null)
           setContinuation(null)
         } else {
-          setResults(data.results)
+          setSearchResponse(data)
           setContinuation(data.continuation ?? null)
-          setCachedData(cacheKey, { results: data.results, continuation: data.continuation ?? null }, sessionStorage)
+          setCachedData(cacheKey, { response: data }, sessionStorage)
         }
       }
       setIsLoading(false)
@@ -316,22 +330,38 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
     runSearch(suggestion)
   }
 
-  const handleLoadMore = async () => {
+  const handleLoadMoreSongs = async () => {
     if (!continuation || isLoadingMore) return
     setIsLoadingMore(true)
     try {
       const res = await fetch(`/api/music/continuation?token=${encodeURIComponent(continuation)}`)
       const data = await res.json()
       if (data.results?.length > 0) {
-        setResults((prev) => {
-          const seen = new Set(prev.map((r) => r.videoId ?? r.id))
-          const merged = [...prev, ...data.results.filter((r: SearchResult) => !seen.has(r.videoId ?? r.id))]
-          return merged
+        setSearchResponse((prev) => {
+          if (!prev) return prev
+          const currentSongs = prev.shelves.songs?.items ?? []
+          const seen = new Set(currentSongs.map((r) => r.videoId ?? r.id))
+          const newSongs = data.results.filter((r: SearchResult) => !seen.has(r.videoId ?? r.id))
+          const updatedSongs = [...currentSongs, ...newSongs]
+
+          return {
+            ...prev,
+            shelves: {
+              ...prev.shelves,
+              songs: {
+                title: "Songs",
+                type: "song",
+                items: updatedSongs,
+                continuation: data.continuation ?? null,
+              },
+            },
+            results: [...prev.results, ...newSongs],
+          }
         })
       }
       setContinuation(data.continuation ?? null)
     } catch (err) {
-      console.error("[SearchView] Load more failed:", err)
+      console.error("[SearchView] Load more songs failed:", err)
       setContinuation(null)
     } finally {
       setIsLoadingMore(false)
@@ -341,6 +371,15 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
   const handlePlayNow = (result: SearchResult) => {
     setPlaybackSource("youtube")
     setCurrentTrack(toTrack(result) as any)
+  }
+
+  const handlePlaySongQueue = (items: SearchResult[], startIndex: number) => {
+    setPlaybackSource("youtube")
+    const selected = items[startIndex]
+    setCurrentTrack(toTrack(selected) as any)
+
+    const remaining = items.slice(startIndex + 1).map((r) => toTrack(r))
+    setQueue(remaining as any)
   }
 
   const handlePlayExploreTrack = (video: VideoItem, list: VideoItem[], index: number) => {
@@ -360,37 +399,44 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
       thumbnail: v.thumbnail,
       duration: "0:00",
     }))
-    setQueue(remaining)
+    setQueue(remaining as any)
   }
 
-  const handleAddToQueue = (result: SearchResult) => {
-    addToQueue(toTrack(result) as any)
+  const handleOpenAlbum = (browseId: string) => {
+    if (onNavigate) {
+      onNavigate("album", { albumId: browseId })
+    }
   }
 
-  const handleBrowseResult = (result: SearchResult) => {
-    const nextQuery = result.type === "artist" ? result.title : `${result.artist} ${result.title}`.trim()
-    setQuery(nextQuery)
-    runSearch(nextQuery)
+  const handleBrowseArtist = (artistName: string) => {
+    setQuery(artistName)
+    runSearch(artistName)
   }
-
-  const playable = results.filter((r) => r.type === "song" || r.type === "video")
-  const artists = results.filter((r) => r.type === "artist")
-  const albums = results.filter((r) => r.type === "album")
-  const playlistResults = results.filter((r) => r.type === "playlist")
 
   const currentRegionName = REGIONS.find((r) => r.code === regionCode)?.name || "United States"
 
-  return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground p-4 md:p-8 overflow-y-auto pb-28">
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* HEADER: SEARCH INPUT */}
-        <div className="pt-2">
+  const hasResults = searchResponse && (searchResponse.results.length > 0 || searchResponse.topResult)
+  const topResult = searchResponse?.topResult
+  const shelves = searchResponse?.shelves ?? {}
+  const shelfOrder = searchResponse?.shelfOrder ?? ["song", "video", "album", "artist", "playlist"]
 
+  // Filter shelf visibility based on active filter chip
+  const showSongs = (activeFilter === "all" || activeFilter === "songs") && shelves.songs && shelves.songs.items.length > 0
+  const showVideos = (activeFilter === "all" || activeFilter === "videos") && shelves.videos && shelves.videos.items.length > 0
+  const showAlbums = (activeFilter === "all" || activeFilter === "albums") && shelves.albums && shelves.albums.items.length > 0
+  const showArtists = (activeFilter === "all" || activeFilter === "artists") && shelves.artists && shelves.artists.items.length > 0
+  const showPlaylists = (activeFilter === "all" || activeFilter === "playlists") && shelves.playlists && shelves.playlists.items.length > 0
+
+  return (
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] via-zinc-950/80 to-black text-foreground p-4 md:p-8 overflow-y-auto pb-32">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* TOP SEARCH HEADER */}
+        <div className="pt-2 flex items-center gap-3">
           <form onSubmit={handleSearch} className="flex-1 relative" ref={searchBoxRef}>
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
             <Input
               type="text"
-              placeholder="Songs, albums or artists..."
+              placeholder="Search songs, albums, artists, or videos..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value)
@@ -398,11 +444,11 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
               }}
               onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
               onKeyDown={handleInputKeyDown}
-              className="pl-10 pr-10 h-11 rounded-xl bg-zinc-900/90 border-white/10 text-white placeholder:text-gray-400 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              className="pl-10 pr-10 h-12 rounded-2xl bg-zinc-900/90 border-white/10 text-white placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-primary shadow-lg"
               autoComplete="off"
             />
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden py-1">
                 {suggestions.map((s, index) => (
                   <button
                     key={s}
@@ -431,7 +477,7 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="rounded-full border-white/20 bg-zinc-900/80 text-white text-xs font-medium hover:bg-zinc-800 flex items-center gap-1.5 h-11 px-3 shrink-0"
+                className="rounded-2xl border-white/15 bg-zinc-900/80 text-white text-xs font-semibold hover:bg-zinc-800 flex items-center gap-1.5 h-12 px-3.5 shrink-0"
               >
                 {regionCode}
                 <ChevronDown size={14} />
@@ -451,248 +497,381 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
           </DropdownMenu>
         </div>
 
-        {/* LOADING STATE FOR SEARCH */}
-        {isLoading && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="animate-spin text-primary mb-4" size={40} />
-            <p className="text-sm text-gray-400">{loadingMessage}</p>
+        {/* FILTER CHIPS (Visible when search results exist) */}
+        {!isLoading && hasResults && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {[
+              { id: "all", label: "All" },
+              { id: "songs", label: "Songs", count: shelves.songs?.items.length },
+              { id: "albums", label: "Albums", count: shelves.albums?.items.length },
+              { id: "artists", label: "Artists", count: shelves.artists?.items.length },
+              { id: "videos", label: "Videos", count: shelves.videos?.items.length },
+              { id: "playlists", label: "Playlists", count: shelves.playlists?.items.length },
+            ].map((chip) => {
+              if (chip.id !== "all" && !chip.count) return null
+              const isSelected = activeFilter === chip.id
+              return (
+                <button
+                  key={chip.id}
+                  onClick={() => setActiveFilter(chip.id as FilterChip)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 ${
+                    isSelected
+                      ? "bg-white text-black shadow-md scale-105"
+                      : "bg-zinc-900/90 text-gray-300 border border-white/10 hover:bg-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              )
+            })}
           </div>
         )}
 
-        {/* ERROR STATE FOR SEARCH */}
+        {/* LOADING STATE */}
+        {isLoading && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="animate-spin text-primary mb-4" size={44} />
+            <p className="text-sm font-medium text-gray-400">{loadingMessage}</p>
+          </div>
+        )}
+
+        {/* ERROR STATE */}
         {error && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 mb-6">
-            <p className="text-destructive font-semibold mb-1">Search Error</p>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 mb-6">
+            <p className="text-destructive font-bold mb-1">Search Error</p>
             <p className="text-xs text-gray-400 mb-3">{error}</p>
-            <Button onClick={() => runSearch(lastQuery || query)} variant="outline" size="sm">
+            <Button onClick={() => runSearch(lastQuery || query)} variant="outline" size="sm" className="rounded-full">
               Try Again
             </Button>
           </div>
         )}
 
-        {/* ACTIVE SEARCH RESULTS GRID */}
-        {!isLoading && results.length > 0 && (
-          <div className="mb-8">
-            {lastQuery && <p className="text-xs text-gray-400 mb-4">Showing results for "{lastQuery}"</p>}
+        {/* ========================================================================= */}
+        {/* ACTIVE SEARCH RESULTS — YOUTUBE MUSIC SEMANTIC STRUCTURE                  */}
+        {/* ========================================================================= */}
+        {!isLoading && hasResults && (
+          <div className="space-y-10">
+            {/* TOP RESULT SECTION */}
+            {activeFilter === "all" && topResult && (
+              <div className="space-y-3">
+                <h2 className="text-sm font-bold tracking-wider uppercase text-gray-400">Top Result</h2>
+                <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 border border-white/[0.08] rounded-2xl p-4 md:p-6 shadow-xl hover:border-primary/30 transition-all">
+                  <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                    {/* Top Result Artwork */}
+                    <div
+                      className={`relative shrink-0 overflow-hidden shadow-2xl bg-zinc-800 ${
+                        topResult.type === "artist"
+                          ? "w-28 h-28 sm:w-36 sm:h-36 rounded-full ring-2 ring-primary/40"
+                          : "w-28 h-28 sm:w-36 sm:h-36 rounded-xl"
+                      }`}
+                    >
+                      {topResult.thumbnail ? (
+                        <Image
+                          src={topResult.thumbnail}
+                          alt={topResult.title}
+                          fill
+                          className="object-cover"
+                          sizes="144px"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500">
+                          {topResult.type === "artist" ? <User size={40} /> : <Music2 size={40} />}
+                        </div>
+                      )}
+                    </div>
 
-            {(artists.length > 0 || albums.length > 0 || playlistResults.length > 0) && (
-              <div className="mb-8 space-y-6">
-                {artists.length > 0 && (
-                  <BrowseRow title="Artists" icon={<User size={18} />} items={artists.slice(0, 6)} rounded onBrowse={handleBrowseResult} />
-                )}
-                {albums.length > 0 && (
-                  <BrowseRow title="Albums" icon={<Disc3 size={18} />} items={albums.slice(0, 6)} onBrowse={handleBrowseResult} />
-                )}
-                {playlistResults.length > 0 && (
-                  <BrowseRow title="Playlists" icon={<ListMusic size={18} />} items={playlistResults.slice(0, 6)} onBrowse={handleBrowseResult} />
+                    {/* Top Result Metadata */}
+                    <div className="flex-1 text-center sm:text-left space-y-2 min-w-0">
+                      <div className="flex items-center justify-center sm:justify-start gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider bg-primary/20 text-primary px-2.5 py-0.5 rounded-full border border-primary/30">
+                          {topResult.type}
+                        </span>
+                        {topResult.year && (
+                          <span className="text-xs text-gray-400 font-medium">• {topResult.year}</span>
+                        )}
+                        {topResult.duration && (
+                          <span className="text-xs text-gray-400 font-mono">• {topResult.duration}</span>
+                        )}
+                      </div>
+
+                      <h3 className="text-xl sm:text-2xl md:text-3xl font-black text-white truncate">
+                        {topResult.title}
+                      </h3>
+
+                      <div className="text-sm text-gray-300 truncate">
+                        {topResult.type === "artist" ? (
+                          <span className="text-gray-400">Artist</span>
+                        ) : (
+                          <>
+                            <span className="font-semibold text-gray-200">{topResult.artist}</span>
+                            {topResult.album && (
+                              <>
+                                <span className="text-gray-500 mx-1.5">•</span>
+                                <span className="text-gray-400">{topResult.album}</span>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Top Result Actions */}
+                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 pt-2">
+                        {topResult.type === "song" || topResult.type === "video" ? (
+                          <>
+                            <Button
+                              onClick={() => handlePlayNow(topResult)}
+                              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 h-10 rounded-full gap-2 shadow-md hover:scale-105 transition-all"
+                            >
+                              <Play size={16} fill="currentColor" />
+                              Play
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => addToQueue(toTrack(topResult) as any)}
+                              className="border-white/15 bg-zinc-900/60 hover:bg-zinc-800 text-white rounded-full h-10 px-4 gap-1.5 text-xs"
+                            >
+                              <ListPlus size={15} />
+                              Add to Queue
+                            </Button>
+                            {topResult.albumEntity?.browseId && (
+                              <Button
+                                variant="ghost"
+                                onClick={() => handleOpenAlbum(topResult.albumEntity!.browseId!)}
+                                className="text-primary hover:text-white hover:bg-primary/20 rounded-full h-10 px-4 text-xs gap-1.5"
+                              >
+                                <Disc3 size={15} />
+                                Go to Album
+                              </Button>
+                            )}
+                          </>
+                        ) : topResult.type === "album" ? (
+                          <Button
+                            onClick={() => handleOpenAlbum(topResult.browseId || topResult.id)}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 h-10 rounded-full gap-2 shadow-md hover:scale-105 transition-all"
+                          >
+                            <Disc3 size={16} />
+                            Open Album
+                          </Button>
+                        ) : topResult.type === "artist" ? (
+                          <Button
+                            onClick={() => handleBrowseArtist(topResult.title)}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 h-10 rounded-full gap-2 shadow-md hover:scale-105 transition-all"
+                          >
+                            <User size={16} />
+                            View Artist
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SONGS SHELF — HIGH-DENSITY COMPACT MUSIC ROWS */}
+            {showSongs && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Music2 size={18} className="text-primary" />
+                    <h2 className="text-lg font-bold text-white">Songs</h2>
+                  </div>
+                  {shelves.songs?.items && (
+                    <span className="text-xs text-gray-500 font-medium">
+                      {shelves.songs.items.length} tracks
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-zinc-950/60 border border-white/[0.06] rounded-2xl overflow-hidden divide-y divide-white/[0.04]">
+                  {shelves.songs!.items.map((song, index) => {
+                    const liked = isTrackLiked(song.videoId ?? song.id)
+                    return (
+                      <CompactSongRow
+                        key={song.id || index}
+                        song={song}
+                        index={index}
+                        liked={liked}
+                        playlists={playlists}
+                        onPlay={() => handlePlaySongQueue(shelves.songs!.items, index)}
+                        onAddToQueue={() => addToQueue(toTrack(song) as any)}
+                        onToggleLike={() => toggleLikedSong(toTrack(song) as any)}
+                        onAddToPlaylist={(playlistId) => addTrackToPlaylist(playlistId, toTrack(song) as any)}
+                        onOpenAlbum={handleOpenAlbum}
+                        onBrowseArtist={handleBrowseArtist}
+                      />
+                    )
+                  })}
+                </div>
+
+                {/* Continuation for Songs */}
+                {continuation && (
+                  <div className="pt-2 text-center">
+                    <Button
+                      variant="outline"
+                      onClick={handleLoadMoreSongs}
+                      disabled={isLoadingMore}
+                      className="rounded-full border-white/15 bg-zinc-900/80 hover:bg-zinc-800 text-white text-xs px-6 h-9 gap-2"
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin text-primary" />
+                          Loading more songs...
+                        </>
+                      ) : (
+                        "Load More Songs"
+                      )}
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
 
-            {playable.length > 0 && (
-              <>
-                <div className="flex items-center gap-2 mb-4">
-                  <Music2 size={18} className="text-primary" />
-                  <h2 className="text-lg font-bold text-white">Songs</h2>
+            {/* ALBUMS SHELF — SQUARE ALBUM CARDS WITH DIRECT ALBUM NAVIGATION */}
+            {showAlbums && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Disc3 size={18} className="text-primary" />
+                  <h2 className="text-lg font-bold text-white">Albums</h2>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {playable.map((result) => (
-                    <SearchResultCard
-                      key={result.id}
-                      result={result}
-                      playlists={playlists}
-                      onPlayNow={handlePlayNow}
-                      onAddToQueue={handleAddToQueue}
-                      onAddToPlaylist={addTrackToPlaylist}
-                      onToggleLike={toggleLikedSong}
-                      isLiked={isTrackLiked(result.videoId ?? result.id)}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {shelves.albums!.items.map((album, idx) => (
+                    <AlbumCard
+                      key={album.browseId || album.id || idx}
+                      album={album}
+                      onOpen={() => handleOpenAlbum(album.browseId || album.id)}
+                      onBrowseArtist={handleBrowseArtist}
                     />
                   ))}
                 </div>
-              </>
+              </div>
             )}
 
-            {continuation && (
-              <div className="flex justify-center mt-8">
-                <Button onClick={handleLoadMore} disabled={isLoadingMore} variant="secondary" size="lg" className="rounded-full px-8">
-                  {isLoadingMore ? <Loader2 className="animate-spin mr-2" size={18} /> : null}
-                  {isLoadingMore ? "Loading..." : "Load more results"}
-                </Button>
+            {/* VIDEOS SHELF — 16:9 VIDEO CARDS */}
+            {showVideos && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Video size={18} className="text-primary" />
+                  <h2 className="text-lg font-bold text-white">Videos & Performances</h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {shelves.videos!.items.map((video, idx) => (
+                    <VideoCard
+                      key={video.videoId || video.id || idx}
+                      video={video}
+                      onPlay={() => handlePlayNow(video)}
+                      onAddToQueue={() => addToQueue(toTrack(video) as any)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ARTISTS SHELF — CIRCULAR ARTIST AVATARS */}
+            {showArtists && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <User size={18} className="text-primary" />
+                  <h2 className="text-lg font-bold text-white">Artists</h2>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {shelves.artists!.items.map((artist, idx) => (
+                    <ArtistCard
+                      key={artist.artistId || artist.id || idx}
+                      artist={artist}
+                      onOpen={() => handleBrowseArtist(artist.title)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* PLAYLISTS SHELF */}
+            {showPlaylists && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <ListMusic size={18} className="text-primary" />
+                  <h2 className="text-lg font-bold text-white">Community & Curated Playlists</h2>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {shelves.playlists!.items.map((playlist, idx) => (
+                    <PlaylistCard
+                      key={playlist.playlistId || playlist.id || idx}
+                      playlist={playlist}
+                      onBrowse={() => runSearch(playlist.title)}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* DEFAULT EXPLORE VIEW CONTENT (When query/results are empty) */}
-        {!isLoading && results.length === 0 && (
-          <div className="space-y-6">
-            {/* IF A GENRE IS SELECTED */}
-            {selectedGenre ? (
-              <div className="space-y-4 pt-2">
-                <div className="flex items-center gap-3">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => setSelectedGenre(null)}
-                    className="text-primary hover:bg-primary/10 rounded-full"
-                  >
-                    <ArrowLeft size={20} />
-                  </Button>
-                  <h2 className="text-2xl font-bold text-primary">{selectedGenre} Songs</h2>
-                </div>
-
-                {genreLoading ? (
-                  <div className="space-y-3 py-4">
-                    {[...Array(6)].map((_, i) => (
-                      <div key={i} className="flex items-center gap-4 p-2 bg-white/[0.02] rounded-xl animate-pulse">
-                        <div className="w-14 h-14 bg-secondary/60 rounded-xl shrink-0" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-4 bg-secondary/60 rounded w-1/2" />
-                          <div className="h-3 bg-secondary/40 rounded w-1/3" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {genreVideos.map((video, idx) => (
-                      <div
-                        key={video.id}
-                        onClick={() => handlePlayExploreTrack(video, genreVideos, idx)}
-                        className="group flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-secondary">
-                            <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover" />
-                          </div>
-                          <div className="min-w-0">
-                            <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-primary transition-colors">
-                              {idx + 1}. {video.title}
-                            </h3>
-                            <p className="text-xs text-gray-400 line-clamp-1">{video.artist}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+        {/* ========================================================================= */}
+        {/* EXPLORE / TRENDING VIEW (SHOWN WHEN NO ACTIVE SEARCH RESULTS)              */}
+        {/* ========================================================================= */}
+        {!isLoading && !hasResults && (
+          <div className="space-y-10 pt-2">
+            {/* GENRES QUICK FILTER */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles size={16} className="text-primary" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Explore Genres</h3>
               </div>
-            ) : (
-              <>
-                {/* HERO FEATURE CAROUSEL */}
-                {!exploreLoading && heroVideos.length > 0 && (
-                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-                    {heroVideos.map((item, idx) => (
-                      <div
-                        key={item.id}
-                        onClick={() => handlePlayExploreTrack(item, heroVideos, idx)}
-                        className="flex-shrink-0 w-72 md:w-80 group cursor-pointer"
-                      >
-                        <div className="relative aspect-video rounded-2xl overflow-hidden bg-secondary shadow-lg border border-white/10 mb-2">
-                          <Image
-                            src={item.thumbnail || "/placeholder.svg"}
-                            alt={item.title}
-                            fill
-                            className="object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Button size="icon" className="bg-primary text-black rounded-full h-12 w-12 shadow-lg">
-                              <Play fill="currentColor" size={20} className="ml-0.5" />
-                            </Button>
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-hide no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+                {GENRES.map((g) => (
+                  <button
+                    key={g.name}
+                    onClick={() => {
+                      setQuery(g.name)
+                      runSearch(g.name)
+                    }}
+                    className={`shrink-0 w-32 sm:w-36 md:flex-1 md:w-auto h-16 rounded-xl p-3 text-left font-bold text-sm text-white bg-gradient-to-br ${g.color} shadow-md hover:scale-105 active:scale-95 transition-all flex flex-col justify-between select-none cursor-pointer`}
+                  >
+                    <span className="truncate">{g.name}</span>
+                    <span className="text-[10px] text-white/70 font-normal">Explore →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* TRENDING IN REGION */}
+            {exploreLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="animate-spin text-primary mb-3" size={32} />
+                <p className="text-xs text-gray-400">Loading trending music in {currentRegionName}...</p>
+              </div>
+            ) : trendingVideos.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Flame size={18} className="text-orange-500" />
+                  <h3 className="text-lg font-bold text-white">Trending in {currentRegionName}</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {trendingVideos.slice(0, 8).map((video, idx) => (
+                    <div
+                      key={video.id}
+                      onClick={() => handlePlayExploreTrack(video, trendingVideos, idx)}
+                      className="group bg-zinc-900/60 border border-white/[0.06] hover:border-primary/30 rounded-2xl overflow-hidden p-3 cursor-pointer transition-all hover:bg-zinc-900"
+                    >
+                      <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-800 mb-2.5">
+                        <Image src={video.thumbnail} alt={video.title} fill className="object-cover group-hover:scale-105 transition-transform" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
+                            <Play size={16} fill="currentColor" className="translate-x-0.5" />
                           </div>
                         </div>
-                        <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-primary transition-colors">
-                          {item.title}
-                        </h3>
-                        <p className="text-xs text-gray-400 line-clamp-1">{item.artist}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* VIDEO CHARTS CARDS */}
-                <section className="space-y-3">
-                  <h2 className="text-xl font-bold text-primary tracking-tight">Video charts</h2>
-
-                  <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-                    {/* Card 1: Trending Top 20 */}
-                    <div
-                      onClick={() => onNavigate?.("charts")}
-                      className="flex-shrink-0 w-44 md:w-48 bg-gradient-to-br from-red-600/80 to-zinc-900 border border-white/10 rounded-2xl p-4 flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
-                    >
-                      <div>
-                        <span className="text-[10px] font-bold tracking-wider uppercase text-red-200">TRENDING</span>
-                        <h3 className="text-2xl font-black text-white mt-1">TOP 20</h3>
-                      </div>
-                      <div className="mt-6">
-                        <p className="text-xs font-semibold text-white">Trending {currentRegionName}</p>
-                        <p className="text-[10px] text-gray-300">Chart • YouTube Music</p>
-                      </div>
+                      <p className="text-sm font-semibold text-white truncate group-hover:text-primary transition-colors">{video.title}</p>
+                      <p className="text-xs text-gray-400 truncate">{video.artist}</p>
                     </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
-                    {/* Card 2: Live Performances */}
-                    <div
-                      onClick={() => handleSelectGenre("Live Performance")}
-                      className="flex-shrink-0 w-44 md:w-48 bg-gradient-to-br from-zinc-800 to-black border border-white/10 rounded-2xl p-4 flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
-                    >
-                      <div>
-                        <span className="text-[10px] font-bold tracking-wider uppercase text-gray-400">WEEKLY</span>
-                        <h3 className="text-xl font-black text-white mt-1">TOP 100</h3>
-                        <p className="text-xs text-red-400 font-semibold">LIVE SHOWS</p>
-                      </div>
-                      <div className="mt-6">
-                        <p className="text-xs font-semibold text-white">Top Live Shows</p>
-                        <p className="text-[10px] text-gray-400">Chart • YouTube Music</p>
-                      </div>
-                    </div>
-
-                    {/* Card 3: Top Hits */}
-                    <div
-                      onClick={() => handleSelectGenre("Top Hits")}
-                      className="flex-shrink-0 w-44 md:w-48 bg-gradient-to-br from-emerald-600/80 to-zinc-900 border border-white/10 rounded-2xl p-4 flex flex-col justify-between cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
-                    >
-                      <div>
-                        <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-200">DAILY</span>
-                        <h3 className="text-2xl font-black text-white mt-1">TOP HITS</h3>
-                      </div>
-                      <div className="mt-6">
-                        <p className="text-xs font-semibold text-white">Daily Top Hits</p>
-                        <p className="text-[10px] text-gray-300">Chart • YouTube Music</p>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* GENRES GRID */}
-                <section className="space-y-3">
-                  <h2 className="text-xl font-bold text-primary tracking-tight">Genres</h2>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {GENRES.map((g) => (
-                      <div
-                        key={g.name}
-                        onClick={() => handleSelectGenre(g.name)}
-                        className={`bg-gradient-to-br ${g.color} border border-white/10 rounded-2xl p-4 h-28 flex flex-col justify-between cursor-pointer hover:scale-[1.03] transition-transform shadow-lg relative overflow-hidden group`}
-                      >
-                        <span className="text-xs font-bold uppercase tracking-wider text-white/70">TOP 50</span>
-                        <h3 className="text-lg font-bold text-white group-hover:text-primary transition-colors">
-                          {g.name}
-                        </h3>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                {/* DISCOVER MORE */}
-                <section className="pt-4">
-                  <div className="flex items-center gap-3 mb-6">
-                    <Compass size={24} className="text-primary" />
-                    <h2 className="text-xl font-bold text-white">Discover More</h2>
-                  </div>
-                  <DiscoverMore />
-                </section>
-              </>
-            )}
+            {/* DISCOVER MORE / FEATURED CONTENT */}
+            <DiscoverMore onNavigate={onNavigate} />
           </div>
         )}
       </div>
@@ -700,148 +879,304 @@ export function SearchView({ onNavigate, onOpenSidebar }: SearchViewProps) {
   )
 }
 
-function BrowseRow({
-  title,
-  icon,
-  items,
-  rounded,
+// ============================================================================
+// SUB-COMPONENTS: COMPACT SONG ROW, ALBUM CARD, VIDEO CARD, ARTIST CARD
+// ============================================================================
+
+interface CompactSongRowProps {
+  song: SearchResult
+  index: number
+  liked: boolean
+  playlists: any[]
+  onPlay: () => void
+  onAddToQueue: () => void
+  onToggleLike: () => void
+  onAddToPlaylist: (playlistId: string) => void
+  onOpenAlbum: (browseId: string) => void
+  onBrowseArtist: (artist: string) => void
+}
+
+function CompactSongRow({
+  song,
+  index,
+  liked,
+  playlists,
+  onPlay,
+  onAddToQueue,
+  onToggleLike,
+  onAddToPlaylist,
+  onOpenAlbum,
+  onBrowseArtist,
+}: CompactSongRowProps) {
+  return (
+    <div className="group flex items-center gap-3 md:gap-4 px-3 md:px-4 py-2.5 hover:bg-zinc-900/90 transition-all text-sm">
+      {/* Thumbnail with Hover Play Button */}
+      <div
+        className="relative shrink-0 w-11 h-11 md:w-12 md:h-12 rounded-lg overflow-hidden bg-zinc-800 cursor-pointer"
+        onClick={onPlay}
+      >
+        {song.thumbnail ? (
+          <Image src={song.thumbnail} alt={song.title} fill className="object-cover" sizes="48px" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-500">
+            <Music2 size={20} />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+          <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:scale-110 transition-transform">
+            <Play size={12} fill="currentColor" className="translate-x-0.5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Song Title & Artist */}
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={onPlay}>
+        <p className="font-semibold text-white truncate group-hover:text-primary transition-colors text-sm">
+          {song.title}
+        </p>
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onBrowseArtist(song.artist)
+            }}
+            className="hover:text-white hover:underline truncate"
+          >
+            {song.artist}
+          </button>
+          {song.album && (
+            <>
+              <span className="text-gray-600">•</span>
+              {song.albumEntity?.browseId ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenAlbum(song.albumEntity!.browseId!)
+                  }}
+                  className="hover:text-primary hover:underline truncate text-gray-400"
+                >
+                  {song.album}
+                </button>
+              ) : (
+                <span className="truncate text-gray-400">{song.album}</span>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Duration */}
+      <div className="hidden sm:block text-xs text-gray-400 font-mono pr-2 shrink-0">
+        {song.duration || "--:--"}
+      </div>
+
+      {/* Like Heart Button */}
+      <button
+        type="button"
+        onClick={onToggleLike}
+        className={`p-1.5 rounded-full hover:bg-zinc-800 transition-colors shrink-0 ${
+          liked ? "text-primary" : "text-gray-400 opacity-0 group-hover:opacity-100 hover:text-white"
+        }`}
+        aria-label="Like song"
+      >
+        <Heart size={16} fill={liked ? "currentColor" : "none"} />
+      </button>
+
+      {/* 3-dots Overflow Menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0"
+          >
+            <MoreVertical size={16} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10 text-white min-w-44">
+          <DropdownMenuItem onClick={onPlay} className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20">
+            <Play size={14} />
+            Play Now
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onAddToQueue} className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20">
+            <ListPlus size={14} />
+            Add to Queue
+          </DropdownMenuItem>
+          {song.albumEntity?.browseId && (
+            <DropdownMenuItem
+              onClick={() => onOpenAlbum(song.albumEntity!.browseId!)}
+              className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20 text-primary font-medium"
+            >
+              <Disc3 size={14} />
+              Go to Album
+            </DropdownMenuItem>
+          )}
+          {playlists.length > 0 && (
+            <>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <div className="px-2 py-1 text-[10px] uppercase text-gray-400 font-semibold tracking-wider">
+                Add to Playlist
+              </div>
+              {playlists.map((p) => (
+                <DropdownMenuItem
+                  key={p.id}
+                  onClick={() => onAddToPlaylist(p.id)}
+                  className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                >
+                  {p.name}
+                </DropdownMenuItem>
+              ))}
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
+
+function AlbumCard({
+  album,
+  onOpen,
+  onBrowseArtist,
+}: {
+  album: SearchResult
+  onOpen: () => void
+  onBrowseArtist: (artist: string) => void
+}) {
+  return (
+    <div
+      onClick={onOpen}
+      className="group bg-zinc-900/60 border border-white/[0.06] hover:border-primary/40 rounded-2xl p-3 cursor-pointer transition-all hover:bg-zinc-900/90 shadow-md"
+    >
+      <div className="relative aspect-square rounded-xl overflow-hidden bg-zinc-800 mb-2.5 shadow-lg">
+        {album.thumbnail ? (
+          <Image src={album.thumbnail} alt={album.title} fill className="object-cover group-hover:scale-105 transition-transform" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-500">
+            <Disc3 size={32} />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+          <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+            <Play size={16} fill="currentColor" className="translate-x-0.5" />
+          </div>
+        </div>
+      </div>
+      <p className="text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
+        {album.title}
+      </p>
+      <div className="flex items-center gap-1 text-xs text-gray-400 truncate">
+        <span className="truncate">{album.artist}</span>
+        {album.year && <span>• {album.year}</span>}
+      </div>
+    </div>
+  )
+}
+
+function VideoCard({
+  video,
+  onPlay,
+  onAddToQueue,
+}: {
+  video: SearchResult
+  onPlay: () => void
+  onAddToQueue: () => void
+}) {
+  return (
+    <div
+      onClick={onPlay}
+      className="group bg-zinc-900/60 border border-white/[0.06] hover:border-primary/40 rounded-2xl p-3 cursor-pointer transition-all hover:bg-zinc-900/90 shadow-md"
+    >
+      <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-800 mb-2.5 shadow-lg">
+        {video.thumbnail ? (
+          <Image src={video.thumbnail} alt={video.title} fill className="object-cover group-hover:scale-105 transition-transform" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-500">
+            <Video size={32} />
+          </div>
+        )}
+        {video.duration && (
+          <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] font-mono px-1.5 py-0.5 rounded">
+            {video.duration}
+          </span>
+        )}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+          <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+            <Play size={16} fill="currentColor" className="translate-x-0.5" />
+          </div>
+        </div>
+      </div>
+      <p className="text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
+        {video.title}
+      </p>
+      <p className="text-xs text-gray-400 truncate">{video.channel || video.artist}</p>
+    </div>
+  )
+}
+
+function ArtistCard({
+  artist,
+  onOpen,
+}: {
+  artist: SearchResult
+  onOpen: () => void
+}) {
+  return (
+    <div
+      onClick={onOpen}
+      className="group bg-zinc-900/60 border border-white/[0.06] hover:border-primary/40 rounded-2xl p-4 cursor-pointer transition-all hover:bg-zinc-900/90 shadow-md text-center flex flex-col items-center"
+    >
+      <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-zinc-800 mb-3 shadow-lg ring-1 ring-white/10 group-hover:ring-primary/50 transition-all">
+        {artist.thumbnail ? (
+          <Image src={artist.thumbnail} alt={artist.title} fill className="object-cover group-hover:scale-105 transition-transform" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-500">
+            <User size={36} />
+          </div>
+        )}
+      </div>
+      <p className="text-sm font-bold text-white truncate group-hover:text-primary transition-colors w-full">
+        {artist.title}
+      </p>
+      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">
+        Artist
+      </span>
+    </div>
+  )
+}
+
+function PlaylistCard({
+  playlist,
   onBrowse,
 }: {
-  title: string
-  icon: React.ReactNode
-  items: SearchResult[]
-  rounded?: boolean
-  onBrowse: (result: SearchResult) => void
+  playlist: SearchResult
+  onBrowse: () => void
 }) {
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3 text-primary">
-        {icon}
-        <h2 className="text-lg font-bold text-foreground">{title}</h2>
-      </div>
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onBrowse(item)}
-            className="flex items-center gap-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.07] rounded-xl p-3 pr-5 transition-all shrink-0 text-left group"
-            title={`Search for ${item.title}`}
-          >
-            <div className={`relative w-12 h-12 overflow-hidden shrink-0 ${rounded ? "rounded-full" : "rounded-md"}`}>
-              <Image src={item.thumbnail || "/placeholder.svg"} alt={item.title} fill className="object-cover" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold line-clamp-1 group-hover:text-primary transition-colors">{item.title}</p>
-              <p className="text-xs text-muted-foreground line-clamp-1">
-                {item.type === "artist" ? "Artist" : item.artist || (item.type === "album" ? "Album" : "Playlist")}
-                {item.year ? ` • ${item.year}` : ""}
-              </p>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function SearchResultCard({
-  result,
-  playlists,
-  onPlayNow,
-  onAddToQueue,
-  onAddToPlaylist,
-  onToggleLike,
-  isLiked,
-}: {
-  result: SearchResult
-  playlists: any[]
-  onPlayNow: (result: SearchResult) => void
-  onAddToQueue: (result: SearchResult) => void
-  onAddToPlaylist: (playlistId: string, track: any) => void
-  onToggleLike: (track: any) => void
-  isLiked: boolean
-}) {
-  const [selectedPlaylist, setSelectedPlaylist] = useState("")
-  const [showSuccess, setShowSuccess] = useState(false)
-
-  const handleAddToPlaylist = () => {
-    if (!selectedPlaylist) return
-    onAddToPlaylist(selectedPlaylist, toTrack(result))
-    setShowSuccess(true)
-    setTimeout(() => setShowSuccess(false), 2000)
-  }
-
-  const videoId = result.videoId ?? result.id
-  const externalUrl = `https://www.youtube.com/watch?v=${videoId}`
-
-  return (
-    <div className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] backdrop-blur-xl rounded-xl p-4 transition-all duration-300 group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40">
-      <div className="relative mb-4 aspect-square rounded-lg overflow-hidden shadow-lg">
-        <Image src={result.thumbnail || "/placeholder.svg"} alt={result.title} fill className="object-cover" />
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
-          <Button
-            size="icon"
-            className="bg-primary hover:bg-primary/90 hover:scale-105 text-white rounded-full h-12 w-12 shadow-lg shadow-primary/20 translate-y-4 group-hover:translate-y-0 transition-all duration-300 opacity-0 group-hover:opacity-100"
-            onClick={() => onPlayNow(result)}
-          >
-            <Play fill="currentColor" size={20} className="ml-1" />
-          </Button>
-        </div>
-        {result.duration && (
-          <div className="absolute top-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
-            {result.duration}
+    <div
+      onClick={onBrowse}
+      className="group bg-zinc-900/60 border border-white/[0.06] hover:border-primary/40 rounded-2xl p-3 cursor-pointer transition-all hover:bg-zinc-900/90 shadow-md"
+    >
+      <div className="relative aspect-square rounded-xl overflow-hidden bg-zinc-800 mb-2.5 shadow-lg">
+        {playlist.thumbnail ? (
+          <Image src={playlist.thumbnail} alt={playlist.title} fill className="object-cover group-hover:scale-105 transition-transform" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-500">
+            <ListMusic size={32} />
           </div>
         )}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+          <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
+            <Play size={16} fill="currentColor" className="translate-x-0.5" />
+          </div>
+        </div>
       </div>
-
-      <h3 className="font-semibold text-sm line-clamp-2 mb-1">{result.title}</h3>
-      <p className="text-xs text-muted-foreground line-clamp-1">{result.artist}</p>
-      {result.album && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{result.album}</p>}
-
-      <div className="flex gap-2 mt-3">
-        <Button size="sm" variant="secondary" className="flex-1 text-xs h-8" onClick={() => onAddToQueue(result)}>
-          <Plus size={14} className="mr-1" /> Queue
-        </Button>
-        <Button
-          size="icon"
-          variant="secondary"
-          className={`h-8 w-8 ${isLiked ? "text-primary" : ""}`}
-          onClick={() => onToggleLike(toTrack(result))}
-        >
-          <Heart size={14} fill={isLiked ? "currentColor" : "none"} />
-        </Button>
-        <Button size="icon" variant="secondary" className="h-8 w-8" asChild>
-          <a href={externalUrl} target="_blank" rel="noopener noreferrer" aria-label="Open on YouTube">
-            <ExternalLink size={14} />
-          </a>
-        </Button>
-      </div>
-
-      <div className="flex gap-2 mt-2">
-        <Select value={selectedPlaylist} onValueChange={setSelectedPlaylist}>
-          <SelectTrigger className="flex-1 h-8 text-xs">
-            <SelectValue placeholder="Add to playlist..." />
-          </SelectTrigger>
-          <SelectContent>
-            {playlists.map((playlist: any) => (
-              <SelectItem key={playlist.id} value={playlist.id} className="text-xs">
-                {playlist.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="h-8 px-3 text-xs"
-          onClick={handleAddToPlaylist}
-          disabled={!selectedPlaylist}
-        >
-          Add
-        </Button>
-      </div>
-
-      {showSuccess && <p className="text-xs text-primary text-center animate-in fade-in mt-2">Added to playlist!</p>}
+      <p className="text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
+        {playlist.title}
+      </p>
+      <p className="text-xs text-gray-400 truncate">{playlist.artist || "Playlist"}</p>
     </div>
   )
 }

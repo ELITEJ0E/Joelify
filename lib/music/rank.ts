@@ -114,6 +114,14 @@ export function rankResults(results: SearchResult[], query: string): SearchResul
     .map(({ r }) => r)
 }
 
+/** Rank items within a single semantic shelf without cross-polluting or flattening shelves */
+export function rankShelf(items: SearchResult[], query: string): SearchResult[] {
+  return dedupeResults(items)
+    .map((r) => ({ r, s: scoreResult(r, query) }))
+    .sort((a, b) => b.s - a.s)
+    .map(({ r }) => r)
+}
+
 /** Heuristic: are the primary provider's results too weak to stand alone? */
 export function resultsAreWeak(results: SearchResult[], query: string): boolean {
   const playable = results.filter((r) => r.type === "song" || r.type === "video")
