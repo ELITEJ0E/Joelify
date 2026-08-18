@@ -2,11 +2,11 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { motion, useMotionValue, useTransform, type PanInfo, type MotionValue, AnimatePresence, animate, useReducedMotion } from "framer-motion"
+import { motion, useTransform, AnimatePresence, useReducedMotion } from "framer-motion"
 import { 
-  ChevronDown, ChevronUp, ChevronRight, Music, AudioLinesIcon, Video, VideoOff,
+  ChevronDown, ChevronRight, Music, AudioLinesIcon, Video, VideoOff,
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
-  Disc, Image as ImageIcon, Type, ListMusic, Sparkles
+  Disc, Image as ImageIcon, Type, ListMusic
 } from "lucide-react"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { QueueSheet } from "./QueueSheet"
@@ -18,13 +18,11 @@ import { SimpleVisualizer } from "./SimpleVisualizer"
 import VinylRecord from "./VinylRecord"
 import { useApp } from "@/contexts/AppContext"
 import { extractAmbientColors, type AmbientColors } from "@/lib/ambientColor"
+import type { useSheetNavigation } from "@/hooks/useSheetNavigation"
 
 interface ExpandablePlayerProps {
-  isExpanded: boolean
-  onExpandChange: (expanded: boolean) => void
-  scrollProgress?: number
+  sheetNav: ReturnType<typeof useSheetNavigation>
   vh?: number
-  scrollContainerRef?: React.RefObject<HTMLDivElement | null>
   currentTime: number
   isPlaying: boolean
   duration: number
@@ -50,11 +48,8 @@ function isValidYouTubeId(id: string | undefined | null): boolean {
 const tweenConfig = { type: "tween" as const, duration: 0.22, ease: [0.32, 0.72, 0, 1] as const }
 
 export function ExpandablePlayer({
-  isExpanded,
-  onExpandChange,
-  scrollProgress = 0,
+  sheetNav,
   vh,
-  scrollContainerRef,
   currentTime,
   isPlaying,
   duration,
@@ -74,19 +69,50 @@ export function ExpandablePlayer({
   const [showVisualizer, setShowVisualizer] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
   const [viewMode, setViewMode] = useState<'vinyl' | 'cover'>('cover')
-  const [showLyrics, setShowLyrics] = useState(false)
-  const [showQueue, setShowQueue] = useState(false)
   const [ambientColors, setAmbientColors] = useState<AmbientColors | null>(null)
 
+  const {
+    sheetState,
+    playerY,
+    lyricsY,
+    queueX,
+    openPlayer,
+    closePlayer,
+    openLyrics,
+    closeLyrics,
+    openQueue,
+    closeQueue,
+    stopAllAnimations,
+    handleWheel,
+  } = sheetNav
+
+  const isExpanded = sheetState !== "none"
+  const isLyricsOpen = sheetState === "lyrics"
+  const isQueueOpen = sheetState === "queue"
+
   const actualVh = vh || (typeof window !== "undefined" ? window.innerHeight : 800)
+  const actualVw = typeof window !== "undefined" ? window.innerWidth : 800
 
-  const progressMV = useMotionValue(scrollProgress)
-  useEffect(() => {
-    progressMV.set(scrollProgress)
-  }, [scrollProgress, progressMV])
+  // ── Transform Mapping (GPU Accelerated) ───────────────────────────────────
+  const sheetTranslateY = useTransform(playerY, [0, 1], ["100%", "0%"])
+  const sheetScale = useTransform(playerY, [0, 1], [0.94, 1])
+  const backdropOpacity = useTransform(playerY, [0.05, 1], [0, 1])
+  const rootPointerEvents = useTransform(playerY, (y) => (y > 0.05 ? "auto" : "none"))
 
-  const backdropOpacity = useTransform(progressMV, [0.1, 1], [0, 1])
-  const sheetScale = useTransform(progressMV, [0, 1], [0.96, 1])
+  // Main Player transformations when sub-sheets open
+  const mainPlayerScale = useTransform(lyricsY, [0, 1], [1, 0.94])
+  const mainPlayerX = useTransform(queueX, [0, 1], ["0%", "-16%"])
+  const mainPlayerOpacity = useTransform(
+    [lyricsY, queueX],
+    ([ly, qx]: number[]) => Math.max(0, 1 - ly * 0.7 - qx * 0.7)
+  )
+
+  // Sub-sheet transforms
+  const lyricsTranslateY = useTransform(lyricsY, [0, 1], ["100%", "0%"])
+  const lyricsOpacity = useTransform(lyricsY, [0, 0.08], [0, 1])
+
+  const queueTranslateX = useTransform(queueX, [0, 1], ["100%", "0%"])
+  const queueOpacity = useTransform(queueX, [0, 0.08], [0, 1])
 
   // ── Ambient Color Extraction ──────────────────────────────
   useEffect(() => {
@@ -128,13 +154,11 @@ export function ExpandablePlayer({
     })
   }, [onVideoActiveChange])
 
-  // ── Destroy video player and reset state on close ─────────────────────────
+  // ── Destroy video player and reset local features on close ───────────────
   useEffect(() => {
     if (!isExpanded) {
       setShowVisualizer(false)
       setShowVideo(false)
-      setShowLyrics(false)
-      setShowQueue(false)
       destroyVideoPlayer()
     }
   }, [isExpanded, destroyVideoPlayer])
@@ -149,52 +173,52 @@ export function ExpandablePlayer({
       videoPlayerRef.current = new window.YT.Player("expanded-yt-video", {
         height: "100%",
         width: "100%",
-        videoId: currentTrack!.id,
+        videoId: currentTrack.id,
         playerVars: {
-          autoplay: 0,
-          controls: 1,
-          modestbranding: 1,
-          playsinline: 1,
+          autoplay: 1,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
           rel: 0,
+          modestbranding: 1,
           iv_load_policy: 3,
+          playsinline: 1,
+          origin: window.location.origin,
         },
         events: {
           onReady: () => {
             videoReadyRef.current = true
-            initialSyncDoneRef.current = false
-            onVideoActiveChange?.(true)
+            try {
+              if (currentTime > 0) {
+                videoPlayerRef.current.seekTo(currentTime, true)
+              }
+              if (isPlaying) {
+                videoPlayerRef.current.playVideo()
+              } else {
+                videoPlayerRef.current.pauseVideo()
+              }
+              if (volume !== undefined) {
+                videoPlayerRef.current.setVolume(volume)
+              }
+              initialSyncDoneRef.current = true
+              onVideoActiveChange?.(true)
+            } catch (error) {
+              console.error("Error during initial YouTube video sync:", error)
+            }
           },
         },
       })
-    }, 50)
+    }, 100)
 
     return () => {
       clearTimeout(timer)
       destroyVideoPlayer()
     }
-  }, [isExpanded, showVideo, currentTrack?.id])
+  }, [showVideo, currentTrack?.id, isExpanded, playbackSource, destroyVideoPlayer, onVideoActiveChange])
 
-  // ── One-time sync ───────────
+  // ── Sync play/pause with embedded video ───────────────────────────────────
   useEffect(() => {
-    if (!videoReadyRef.current || initialSyncDoneRef.current || !videoPlayerRef.current) return
-    initialSyncDoneRef.current = true
-    try {
-      if (typeof videoPlayerRef.current.seekTo === 'function') {
-        videoPlayerRef.current.seekTo(currentTime, true)
-      }
-      if (isPlaying) {
-        if (typeof videoPlayerRef.current.playVideo === 'function') videoPlayerRef.current.playVideo()
-      } else {
-        if (typeof videoPlayerRef.current.pauseVideo === 'function') videoPlayerRef.current.pauseVideo()
-      }
-    } catch (error) {
-      console.warn("Error syncing expanded YouTube player (initial):", error)
-    }
-  }, [isPlaying, currentTime])
-
-  // ── Keep video in sync ───────────────────────────────
-  useEffect(() => {
-    if (!videoPlayerRef.current || !videoReadyRef.current) return
+    if (!videoReadyRef.current || !videoPlayerRef.current || !initialSyncDoneRef.current) return
     try {
       if (isPlaying) {
         if (typeof videoPlayerRef.current.playVideo === 'function') videoPlayerRef.current.playVideo()
@@ -213,351 +237,335 @@ export function ExpandablePlayer({
     }
   }, [showVideo, playbackSource, destroyVideoPlayer])
 
-  // ── Swipe & Trackpad gesture handling for lyrics, queue & player ─────────────
-  const wheelAccumulatorX = useRef<number>(0)
-  const verticalScrollRef = useRef<HTMLDivElement>(null)
-  const horizontalScrollRef = useRef<HTMLDivElement>(null)
-
-  const recentlyClosedSubsheetRef = useRef(false)
-  const subsheetTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const markSubsheetClosed = useCallback(() => {
-    recentlyClosedSubsheetRef.current = true
-    if (subsheetTimerRef.current) clearTimeout(subsheetTimerRef.current)
-    subsheetTimerRef.current = setTimeout(() => {
-      recentlyClosedSubsheetRef.current = false
-    }, 600)
-  }, [])
-
-  const openLyrics = useCallback(() => {
-    if (verticalScrollRef.current) {
-      verticalScrollRef.current.scrollTo({ top: actualVh, behavior: "smooth" })
-    }
-    if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-      window.history.pushState({ view: "lyrics" }, "")
-    }
-  }, [actualVh])
-
-  const closeLyrics = useCallback(() => {
-    markSubsheetClosed()
-    if (verticalScrollRef.current) {
-      verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
-    }
-    if (typeof window !== "undefined" && window.history.state?.view === "lyrics") {
-      window.history.back()
-    }
-  }, [markSubsheetClosed])
-
-  const openQueue = useCallback(() => {
-    if (horizontalScrollRef.current) {
-      horizontalScrollRef.current.scrollTo({ left: window.innerWidth, behavior: "smooth" })
-    }
-    if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
-      window.history.pushState({ view: "queue" }, "")
-    }
-  }, [])
-
-  const closeQueue = useCallback(() => {
-    markSubsheetClosed()
-    if (horizontalScrollRef.current) {
-      horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
-    }
-    if (typeof window !== "undefined" && window.history.state?.view === "queue") {
-      window.history.back()
-    }
-  }, [markSubsheetClosed])
-
-  const handleVerticalScroll = useCallback(() => {
-    const el = verticalScrollRef.current
-    if (!el) return
-    const isShowing = el.scrollTop > el.clientHeight / 2
-    setShowLyrics((prev) => {
-      if (!prev && isShowing) {
-        if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-          window.history.pushState({ view: "lyrics" }, "")
-        }
-      }
-      return prev !== isShowing ? isShowing : prev
-    })
-  }, [])
-
-  const handleHorizontalScroll = useCallback(() => {
-    const el = horizontalScrollRef.current
-    if (!el) return
-    const isShowing = el.scrollLeft > el.clientWidth / 2
-    setShowQueue((prev) => {
-      if (!prev && isShowing) {
-        if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
-          window.history.pushState({ view: "queue" }, "")
-        }
-      }
-      return prev !== isShowing ? isShowing : prev
-    })
-  }, [])
-
-  const showLyricsRef = useRef(false)
-  const showQueueRef = useRef(false)
-
+  // ── Prevent pull-to-refresh when expanded ─────────────────────────────────
   useEffect(() => {
-    showLyricsRef.current = showLyrics;
-    showQueueRef.current = showQueue;
-  }, [showLyrics, showQueue]);
-
-  // ── Hardware Back Button / PopState Handler ──────────────────────────────
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      const view = e.state?.view
-      if (view === "expandable") {
-        if (showLyricsRef.current && verticalScrollRef.current) {
-          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
-        }
-        if (showQueueRef.current && horizontalScrollRef.current) {
-          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
-        }
-      } else if (!view || view === "base") {
-        if (showLyricsRef.current && verticalScrollRef.current) {
-          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
-        }
-        if (showQueueRef.current && horizontalScrollRef.current) {
-          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
-        }
-        onExpandChange(false)
-      }
-    }
-
-    window.addEventListener("popstate", handlePopState)
-    return () => window.removeEventListener("popstate", handlePopState)
-  }, [onExpandChange])
-
-  // ── Mobile Touch Swipe Down to Close Expandable Player ────────────────────
-  const touchStartYRef = useRef<number | null>(null)
-  const touchStartXRef = useRef<number | null>(null)
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const target = e.target as HTMLElement
-    // Ignore direct touches on interactive sliders, buttons, inputs, links
-    if (target.closest('button, input, [role="slider"], .slider-thumb, a')) {
-      touchStartYRef.current = null
-      touchStartXRef.current = null
-      return
-    }
-
-    const vEl = verticalScrollRef.current
-    if (!vEl || vEl.scrollTop <= 20) {
-      touchStartYRef.current = e.touches[0].clientY
-      touchStartXRef.current = e.touches[0].clientX
+    if (isExpanded) {
+      document.documentElement.style.overscrollBehavior = 'none'
+      document.body.style.overscrollBehavior = 'none'
     } else {
-      touchStartYRef.current = null
-      touchStartXRef.current = null
+      document.documentElement.style.overscrollBehavior = ''
+      document.body.style.overscrollBehavior = ''
     }
-  }, [])
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (touchStartYRef.current === null || touchStartXRef.current === null) return
-    const endY = e.changedTouches[0].clientY
-    const endX = e.changedTouches[0].clientX
-    const dy = endY - touchStartYRef.current
-    const dx = Math.abs(endX - touchStartXRef.current)
-
-    touchStartYRef.current = null
-    touchStartXRef.current = null
-
-    // If swiped DOWN significantly (dy > 35) and move was predominantly vertical
-    if (dy > 35 && dy > dx) {
-      const vEl = verticalScrollRef.current
-      if (!vEl || vEl.scrollTop <= 20) {
-        onExpandChange(false)
-      }
+    return () => {
+      document.documentElement.style.overscrollBehavior = ''
+      document.body.style.overscrollBehavior = ''
     }
-  }, [onExpandChange])
+  }, [isExpanded])
 
-  // ── Desktop Mouse Drag-to-Scroll (Without Hand Grab Cursor) ─────────────
-  const isDraggingRef = useRef(false)
-  const dragStartRef = useRef<{
-    x: number
-    y: number
-    scrollLeft: number
-    scrollTop: number
-  } | null>(null)
-
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Only handle primary mouse button (left click)
-    if (e.button !== 0) return
-
-    const target = e.target as HTMLElement
-    // Ignore interactive elements so buttons, sliders, inputs, links operate normally
-    if (target.closest('button, input, [role="slider"], .slider-thumb, a, [data-no-drag="true"]')) {
-      return
-    }
-
-    const hEl = horizontalScrollRef.current
-    const vEl = verticalScrollRef.current
-    if (!hEl || !vEl) return
-
-    isDraggingRef.current = true
-    dragStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      scrollLeft: hEl.scrollLeft,
-      scrollTop: vEl.scrollTop,
-    }
-  }, [])
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDraggingRef.current || !dragStartRef.current) return
-
-    const hEl = horizontalScrollRef.current
-    const vEl = verticalScrollRef.current
-    if (!hEl || !vEl) return
-
-    const dx = e.clientX - dragStartRef.current.x
-    const dy = e.clientY - dragStartRef.current.y
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-      hEl.scrollLeft = dragStartRef.current.scrollLeft - dx
-    } else {
-      vEl.scrollTop = dragStartRef.current.scrollTop - dy
-    }
-  }, [])
-
-  const handlePointerUp = useCallback(() => {
-    isDraggingRef.current = false
-    dragStartRef.current = null
-  }, [])
-
-  // ── Desktop Mouse Wheel Swipe Handler ─────────────────────────────
-  const wheelCooldownRef = useRef(false)
-  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    // Ignore wheel events originating from sliders or inputs
-    const target = e.target as HTMLElement
-    if (target.closest('input, [role="slider"], .overflow-y-auto')) {
-      return
-    }
-
-    if (wheelCooldownRef.current) return
-
-    const absX = Math.abs(e.deltaX)
-    const absY = Math.abs(e.deltaY)
-
-    const setCooldown = () => {
-      wheelCooldownRef.current = true
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
-      cooldownTimerRef.current = setTimeout(() => {
-        wheelCooldownRef.current = false
-      }, 250)
-    }
-
-    const vEl = verticalScrollRef.current
-    const hEl = horizontalScrollRef.current
-    if (!vEl || !hEl) return
-
-    const isAtTop = vEl.scrollTop < 10
-    const isAtMainHorizontal = hEl.scrollLeft < 10
-    const isAtLyrics = vEl.scrollTop > vEl.clientHeight / 2
-    const isAtQueue = hEl.scrollLeft > hEl.clientWidth / 2
-
-    // Horizontal wheel swipe (Shift + Wheel or Horizontal Trackpad)
-    if (absX > absY && absX > 20) {
-      if (e.deltaX > 20 && isAtMainHorizontal && !isAtLyrics) {
-        openQueue()
-        setCooldown()
-      } else if (e.deltaX < -20 && isAtQueue) {
-        closeQueue()
-        setCooldown()
-      }
-      return
-    }
-
-    // Vertical wheel swipe (Mouse Wheel or Vertical Trackpad)
-    if (absY > absX && absY > 20) {
-      if (isAtMainHorizontal && isAtTop) {
-        if (e.deltaY < -20) {
-          // Wheeling UP / Trackpad swipe DOWN on Main Player -> Close ExpandablePlayer!
-          if (!recentlyClosedSubsheetRef.current && !showLyricsRef.current) {
-            onExpandChange(false)
-            setCooldown()
-          }
-        } else if (e.deltaY > 20 && !isAtLyrics) {
-          // Wheeling DOWN at top of main player -> Open Lyrics!
-          openLyrics()
-          setCooldown()
-        }
-      } else if (isAtLyrics && e.deltaY < -20 && vEl.scrollTop <= 10) {
-        // Wheeling UP in Lyrics -> Close Lyrics!
-        closeLyrics()
-        setCooldown()
-      } else if (isAtQueue && e.deltaY < -20) {
-        // Wheeling UP in Queue -> Close Queue!
-        closeQueue()
-        setCooldown()
-      }
-    }
-  }, [openQueue, closeQueue, openLyrics, closeLyrics, onExpandChange])
-
-  const handleBackdropClick = useCallback(() => {
-    onExpandChange(false)
-  }, [onExpandChange])
-
+  // ── Keyboard Escape Handler ───────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (showLyrics) {
-          closeLyrics();
-        } else if (showQueue) {
-          closeQueue();
-        } else {
-          onExpandChange(false);
+        if (isLyricsOpen) {
+          closeLyrics()
+        } else if (isQueueOpen) {
+          closeQueue()
+        } else if (isExpanded) {
+          closePlayer()
         }
       }
     }
     if (isExpanded) {
-      window.addEventListener("keydown", handleKeyDown);
+      window.addEventListener("keydown", handleKeyDown)
     }
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    }
-  }, [isExpanded, onExpandChange, showLyrics, showQueue, closeLyrics, closeQueue])
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isExpanded, isLyricsOpen, isQueueOpen, closeLyrics, closeQueue, closePlayer])
 
-  useEffect(() => {
-    if (isExpanded) {
-      document.documentElement.style.overscrollBehavior = 'none';
-      document.body.style.overscrollBehavior = 'none';
-      let style = document.getElementById('prevent-pull-to-refresh');
-      if (!style) {
-        style = document.createElement('style');
-        style.id = 'prevent-pull-to-refresh';
-        style.textContent = `
-          body, html {
-            overscroll-behavior-y: none !important;
+  // ─── UNIFIED GESTURE CONTROLLERS ──────────────────────────────────────────
+
+  // 1. MAIN PLAYER GESTURE CONTROLLER (Drag Down -> None, Drag Up -> Lyrics, Drag Left -> Queue)
+  const mainDragRef = useRef<{
+    active: boolean
+    startX: number
+    startY: number
+    startTime: number
+    lastX: number
+    lastY: number
+    lastTime: number
+    mode: "player-down" | "lyrics-up" | "queue-left" | null
+    initPlayerY: number
+    initLyricsY: number
+    initQueueX: number
+  }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    lastX: 0,
+    lastY: 0,
+    lastTime: 0,
+    mode: null,
+    initPlayerY: 1,
+    initLyricsY: 0,
+    initQueueX: 0,
+  })
+
+  const startMainDrag = (clientX: number, clientY: number, target: HTMLElement) => {
+    // Ignore interactive elements
+    if (target.closest('button, input, [role="slider"], .slider-thumb, a, [data-no-drag="true"]')) {
+      return false
+    }
+    if (isLyricsOpen || isQueueOpen) return false
+
+    stopAllAnimations()
+
+    mainDragRef.current = {
+      active: true,
+      startX: clientX,
+      startY: clientY,
+      startTime: Date.now(),
+      lastX: clientX,
+      lastY: clientY,
+      lastTime: Date.now(),
+      mode: null,
+      initPlayerY: playerY.get(),
+      initLyricsY: lyricsY.get(),
+      initQueueX: queueX.get(),
+    }
+    return true
+  }
+
+  const moveMainDrag = (clientX: number, clientY: number) => {
+    const drag = mainDragRef.current
+    if (!drag.active) return
+
+    const dx = clientX - drag.startX
+    const dy = clientY - drag.startY
+    const absX = Math.abs(dx)
+    const absY = Math.abs(dy)
+
+    if (drag.mode === null) {
+      if (absY > 8 || absX > 8) {
+        if (absY > absX) {
+          if (dy > 0) {
+            drag.mode = "player-down"
+          } else {
+            drag.mode = "lyrics-up"
           }
-        `;
-        document.head.appendChild(style);
+        } else {
+          if (dx < 0) {
+            drag.mode = "queue-left"
+          }
+        }
       }
+    }
+
+    const vh = actualVh
+    const vw = actualVw
+
+    if (drag.mode === "player-down") {
+      const nextY = Math.max(0, Math.min(1, drag.initPlayerY - dy / vh))
+      playerY.set(nextY)
+    } else if (drag.mode === "lyrics-up") {
+      const nextL = Math.max(0, Math.min(1, drag.initLyricsY + (-dy) / vh))
+      lyricsY.set(nextL)
+    } else if (drag.mode === "queue-left") {
+      const nextQ = Math.max(0, Math.min(1, drag.initQueueX + (-dx) / vw))
+      queueX.set(nextQ)
+    }
+
+    drag.lastX = clientX
+    drag.lastY = clientY
+    drag.lastTime = Date.now()
+  }
+
+  const endMainDrag = (clientX: number, clientY: number) => {
+    const drag = mainDragRef.current
+    if (!drag.active) return
+    drag.active = false
+
+    const timeDiff = Math.max(1, Date.now() - drag.startTime)
+    const vy = ((clientY - drag.startY) / timeDiff) * 1000
+    const vx = ((clientX - drag.startX) / timeDiff) * 1000
+
+    if (drag.mode === "player-down") {
+      if (playerY.get() < 0.7 || vy > 400) {
+        closePlayer()
+      } else {
+        openPlayer()
+      }
+    } else if (drag.mode === "lyrics-up") {
+      if (lyricsY.get() > 0.25 || vy < -400) {
+        openLyrics()
+      } else {
+        closeLyrics()
+      }
+    } else if (drag.mode === "queue-left") {
+      if (queueX.get() > 0.25 || vx < -400) {
+        openQueue()
+      } else {
+        closeQueue()
+      }
+    }
+  }
+
+  // Pointer event wrappers
+  const handleMainPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    startMainDrag(e.clientX, e.clientY, e.target as HTMLElement)
+  }
+  const handleMainPointerMove = (e: React.PointerEvent) => {
+    moveMainDrag(e.clientX, e.clientY)
+  }
+  const handleMainPointerUp = (e: React.PointerEvent) => {
+    endMainDrag(e.clientX, e.clientY)
+  }
+
+  // Touch event wrappers
+  const handleMainTouchStart = (e: React.TouchEvent) => {
+    startMainDrag(e.touches[0].clientX, e.touches[0].clientY, e.target as HTMLElement)
+  }
+  const handleMainTouchMove = (e: React.TouchEvent) => {
+    moveMainDrag(e.touches[0].clientX, e.touches[0].clientY)
+  }
+  const handleMainTouchEnd = (e: React.TouchEvent) => {
+    const touch = e.changedTouches[0]
+    endMainDrag(touch.clientX, touch.clientY)
+  }
+
+  // 2. LYRICS SHEET GESTURE CONTROLLER (Downward drag at top of scroll -> Close Lyrics)
+  const lyricsDragRef = useRef<{
+    active: boolean
+    startY: number
+    startTime: number
+    lastY: number
+  }>({
+    active: false,
+    startY: 0,
+    startTime: 0,
+    lastY: 0,
+  })
+
+  const startLyricsDrag = (clientY: number, target: HTMLElement) => {
+    if (target.closest('button, input, [role="slider"], a')) return false
+    const scrollContainer = target.closest(".overflow-y-auto, [data-radix-scroll-area-viewport]")
+    if (scrollContainer && scrollContainer.scrollTop > 5) {
+      return false
+    }
+
+    stopAllAnimations()
+    lyricsDragRef.current = {
+      active: true,
+      startY: clientY,
+      startTime: Date.now(),
+      lastY: clientY,
+    }
+    return true
+  }
+
+  const moveLyricsDrag = (clientY: number) => {
+    const drag = lyricsDragRef.current
+    if (!drag.active) return
+    const dy = clientY - drag.startY
+    if (dy > 0) {
+      const next = Math.max(0, Math.min(1, 1 - dy / actualVh))
+      lyricsY.set(next)
+    }
+    drag.lastY = clientY
+  }
+
+  const endLyricsDrag = (clientY: number) => {
+    const drag = lyricsDragRef.current
+    if (!drag.active) return
+    drag.active = false
+
+    const timeDiff = Math.max(1, Date.now() - drag.startTime)
+    const vy = ((clientY - drag.startY) / timeDiff) * 1000
+
+    if (lyricsY.get() < 0.7 || vy > 400) {
+      closeLyrics()
     } else {
-      document.documentElement.style.overscrollBehavior = '';
-      document.body.style.overscrollBehavior = '';
-      const style = document.getElementById('prevent-pull-to-refresh');
-      if (style) style.remove();
+      openLyrics()
     }
-    
-    return () => {
-      document.documentElement.style.overscrollBehavior = '';
-      document.body.style.overscrollBehavior = '';
-      const style = document.getElementById('prevent-pull-to-refresh');
-      if (style) style.remove();
+  }
+
+  // 3. QUEUE SHEET GESTURE CONTROLLER (Rightward horizontal drag -> Close Queue)
+  const queueDragRef = useRef<{
+    active: boolean
+    startX: number
+    startY: number
+    startTime: number
+    lastX: number
+    isLockedHorizontal: boolean
+  }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    lastX: 0,
+    isLockedHorizontal: false,
+  })
+
+  const startQueueDrag = (clientX: number, clientY: number, target: HTMLElement) => {
+    if (target.closest('button, input, a, [draggable="true"]')) return false
+    stopAllAnimations()
+    queueDragRef.current = {
+      active: true,
+      startX: clientX,
+      startY: clientY,
+      startTime: Date.now(),
+      lastX: clientX,
+      isLockedHorizontal: false,
     }
-  }, [isExpanded])
+    return true
+  }
+
+  const moveQueueDrag = (clientX: number, clientY: number) => {
+    const drag = queueDragRef.current
+    if (!drag.active) return
+
+    const dx = clientX - drag.startX
+    const dy = clientY - drag.startY
+
+    if (!drag.isLockedHorizontal) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+        drag.isLockedHorizontal = true
+      } else if (Math.abs(dy) > 8) {
+        // Vertical scrolling inside queue list
+        drag.active = false
+        return
+      }
+    }
+
+    if (drag.isLockedHorizontal && dx > 0) {
+      const next = Math.max(0, Math.min(1, 1 - dx / actualVw))
+      queueX.set(next)
+    }
+    drag.lastX = clientX
+  }
+
+  const endQueueDrag = (clientX: number) => {
+    const drag = queueDragRef.current
+    if (!drag.active) return
+    drag.active = false
+
+    const timeDiff = Math.max(1, Date.now() - drag.startTime)
+    const vx = ((clientX - drag.startX) / timeDiff) * 1000
+
+    if (queueX.get() < 0.7 || vx > 400) {
+      closeQueue()
+    } else {
+      openQueue()
+    }
+  }
 
   return (
     <motion.div
       style={{
+        y: sheetTranslateY,
         scale: sheetScale,
-        originY: 1,
+        pointerEvents: rootPointerEvents as any,
       }}
-      className="h-full w-full relative overflow-hidden overscroll-none"
-      onClick={handleBackdropClick}
+      className="fixed inset-0 z-40 overflow-hidden select-none overscroll-none"
+      onWheel={handleWheel}
+      onPointerDown={handleMainPointerDown}
+      onPointerMove={handleMainPointerMove}
+      onPointerUp={handleMainPointerUp}
+      onPointerCancel={handleMainPointerUp}
+      onTouchStart={handleMainTouchStart}
+      onTouchMove={handleMainTouchMove}
+      onTouchEnd={handleMainTouchEnd}
+      onTouchCancel={handleMainTouchEnd}
     >
       {/* ── Ambient color extraction background with smooth crossfade ────────── */}
       <motion.div style={{ opacity: backdropOpacity }} className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
@@ -586,42 +594,24 @@ export function ExpandablePlayer({
         </div>
       )}
 
-      {/* ── Scroll Snap Container (Horizontal: Main + Queue) ─────────────────────────────── */}
-      <div 
-        ref={horizontalScrollRef}
-        onScroll={handleHorizontalScroll}
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        className="absolute inset-0 z-20 overflow-x-scroll snap-x snap-mandatory flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-behavior-x-contain pointer-events-auto select-none"
+      {/* ── 1. MAIN PLAYER VIEW (Album Art + Track Info + Controls) ────────────── */}
+      <motion.div
+        style={{
+          x: mainPlayerX,
+          scale: mainPlayerScale,
+          opacity: mainPlayerOpacity,
+          pointerEvents: isLyricsOpen || isQueueOpen ? "none" : "auto",
+        }}
+        className="absolute inset-0 z-10 flex flex-col glass-specular"
       >
-        {/* SNAP PAGE 1: Main Player + Lyrics (Vertical Scroll) */}
-        <div className="w-full h-full flex-shrink-0 relative snap-start">
-          
-          <div 
-            ref={verticalScrollRef}
-            onScroll={handleVerticalScroll}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            className="absolute inset-0 overflow-y-scroll snap-y snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {/* SNAP PAGE 1.1: Main Player UI */}
-            <div 
-              className="w-full h-full flex-shrink-0 relative snap-start flex flex-col z-20 glass-specular"
-              onClick={(e) => e.stopPropagation()}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-            >
-              {/* ── Header ────────────────────────────────────────────────────── */}
+        {/* ── Header ────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
           {/* Collapse button */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost" size="icon"
-                onClick={() => onExpandChange(false)}
+                onClick={closePlayer}
                 className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all active:scale-95 flex-shrink-0"
                 aria-label="Close player"
               >
@@ -631,7 +621,7 @@ export function ExpandablePlayer({
             <TooltipContent side="bottom"><p>Minimize</p></TooltipContent>
           </Tooltip>
 
-          {/* Centered NOW PLAYING title (no icon, no border) */}
+          {/* Centered NOW PLAYING title */}
           <div className="flex-1 flex items-center justify-center text-center">
             <p className="text-xs md:text-sm font-semibold uppercase tracking-[0.2em] text-white/70 select-none">
               NOW PLAYING
@@ -643,7 +633,7 @@ export function ExpandablePlayer({
         </div>
 
         {/* Mobile drag handle indicator */}
-        <div className="flex justify-center mb-2 lg:hidden group cursor-pointer" onClick={() => onExpandChange(false)}>
+        <div className="flex justify-center mb-2 lg:hidden group cursor-pointer" onClick={closePlayer}>
           <div className="w-12 h-1.5 bg-white/20 rounded-full group-hover:w-16 group-hover:bg-white/40 transition-all duration-300" />
         </div>
 
@@ -728,10 +718,10 @@ export function ExpandablePlayer({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => showLyrics ? closeLyrics() : openLyrics()}
-                    aria-label={showLyrics ? "Hide Lyrics" : "Show Lyrics"}
+                    onClick={() => isLyricsOpen ? closeLyrics() : openLyrics()}
+                    aria-label={isLyricsOpen ? "Hide Lyrics" : "Show Lyrics"}
                     className={`h-9 px-3.5 rounded-full transition-all gap-1.5 text-xs font-medium shrink-0 whitespace-nowrap ${
-                      showLyrics
+                      isLyricsOpen
                         ? "text-primary bg-primary/20 border border-primary/40 shadow-lg shadow-primary/20"
                         : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
                     }`}
@@ -740,7 +730,7 @@ export function ExpandablePlayer({
                     <span>Lyrics</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top"><p>{showLyrics ? "Hide Lyrics" : "Show Lyrics"}</p></TooltipContent>
+                <TooltipContent side="top"><p>{isLyricsOpen ? "Hide Lyrics" : "Show Lyrics"}</p></TooltipContent>
               </Tooltip>
 
               {/* Queue Toggle */}
@@ -749,10 +739,10 @@ export function ExpandablePlayer({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => showQueue ? closeQueue() : openQueue()}
-                    aria-label={showQueue ? "Hide Queue" : "Show Queue"}
+                    onClick={() => isQueueOpen ? closeQueue() : openQueue()}
+                    aria-label={isQueueOpen ? "Hide Queue" : "Show Queue"}
                     className={`h-9 px-3.5 rounded-full transition-all gap-1.5 text-xs font-medium shrink-0 whitespace-nowrap relative ${
-                      showQueue
+                      isQueueOpen
                         ? "text-primary bg-primary/20 border border-primary/40 shadow-lg shadow-primary/20"
                         : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
                     }`}
@@ -766,7 +756,7 @@ export function ExpandablePlayer({
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top"><p>{showQueue ? "Hide Queue" : "Show Queue"}</p></TooltipContent>
+                <TooltipContent side="top"><p>{isQueueOpen ? "Hide Queue" : "Show Queue"}</p></TooltipContent>
               </Tooltip>
 
               {/* Visualizer Toggle */}
@@ -848,7 +838,7 @@ export function ExpandablePlayer({
                 {/* Progress bar */}
                 <div className="flex items-center gap-3 w-full max-w-2xl mx-auto">
                   <span className="text-xs font-medium text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
-                  <div className="flex-1" onPointerDown={(e) => e.stopPropagation()}>
+                  <div className="flex-1" onPointerDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                     <Slider 
                       value={[currentTime]} 
                       max={duration > 0 ? duration : 1} 
@@ -970,14 +960,29 @@ export function ExpandablePlayer({
             </motion.div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* SNAP PAGE 1.2: Lyrics UI */}
-      <div 
-        className="w-full h-full flex-shrink-0 relative snap-start sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
-        onClick={(e) => e.stopPropagation()}
+      {/* ── 2. LYRICS SHEET (Stacked over player, slides up from bottom) ───── */}
+      <motion.div
+        style={{
+          y: lyricsTranslateY,
+          opacity: lyricsOpacity,
+          pointerEvents: isLyricsOpen ? "auto" : "none",
+        }}
+        className="absolute inset-0 z-20 sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return
+          startLyricsDrag(e.clientY, e.target as HTMLElement)
+        }}
+        onPointerMove={(e) => moveLyricsDrag(e.clientY)}
+        onPointerUp={(e) => endLyricsDrag(e.clientY)}
+        onPointerCancel={(e) => endLyricsDrag(e.clientY)}
+        onTouchStart={(e) => startLyricsDrag(e.touches[0].clientY, e.target as HTMLElement)}
+        onTouchMove={(e) => moveLyricsDrag(e.touches[0].clientY)}
+        onTouchEnd={(e) => endLyricsDrag(e.changedTouches[0].clientY)}
+        onTouchCancel={(e) => endLyricsDrag(e.changedTouches[0].clientY)}
       >
-        <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3">
+        <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
           <Button 
             variant="ghost" 
             size="icon" 
@@ -993,40 +998,51 @@ export function ExpandablePlayer({
         <div className="flex-1 w-full max-w-5xl mx-auto overflow-hidden relative">
           <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
         </div>
-      </div>
-    </div>
-  </div>
+      </motion.div>
 
-  {/* SNAP PAGE 2: Queue */}
-  <div 
-    className="w-full h-full flex-shrink-0 relative snap-start sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
-    onClick={(e) => e.stopPropagation()}
-  >
-    <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3">
-      <Button 
-        variant="ghost" 
-        size="icon" 
-        onClick={closeQueue}
-        className="text-white/70 hover:text-white rounded-full"
-        aria-label="Close Queue"
+      {/* ── 3. QUEUE SHEET (Stacked over player, slides in from right) ─────── */}
+      <motion.div
+        style={{
+          x: queueTranslateX,
+          opacity: queueOpacity,
+          pointerEvents: isQueueOpen ? "auto" : "none",
+        }}
+        className="absolute inset-0 z-20 sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return
+          startQueueDrag(e.clientX, e.clientY, e.target as HTMLElement)
+        }}
+        onPointerMove={(e) => moveQueueDrag(e.clientX, e.clientY)}
+        onPointerUp={(e) => endQueueDrag(e.clientX)}
+        onPointerCancel={(e) => endQueueDrag(e.clientX)}
+        onTouchStart={(e) => startQueueDrag(e.touches[0].clientX, e.touches[0].clientY, e.target as HTMLElement)}
+        onTouchMove={(e) => moveQueueDrag(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={(e) => endQueueDrag(e.changedTouches[0].clientX)}
+        onTouchCancel={(e) => endQueueDrag(e.changedTouches[0].clientX)}
       >
-        <ChevronRight size={24} />
-      </Button>
-      <div className="flex items-center gap-2">
-        <div className="w-12 h-1.5 bg-white/30 rounded-full" />
-      </div>
-      <div className="w-10" />
-    </div>
+        <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 cursor-grab active:cursor-grabbing">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={closeQueue}
+            className="text-white/70 hover:text-white rounded-full"
+            aria-label="Close Queue"
+          >
+            <ChevronRight size={24} />
+          </Button>
+          <div className="flex items-center gap-2">
+            <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+          </div>
+          <div className="w-10" />
+        </div>
 
-    <div 
-      className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      <QueueSheet onClose={closeQueue} />
-    </div>
-  </div>
-</div>
-</motion.div>
+        <div 
+          className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <QueueSheet onClose={closeQueue} />
+        </div>
+      </motion.div>
+    </motion.div>
   )
 }
-

@@ -27,74 +27,111 @@ export function StatisticsView() {
     } catch(e) {}
 
     // 2. Get all-time stats, or migrate old history if they don't exist
-    let allTimeStats = { totalPlays: 0, totalTime: 0, trackPlays: {} as any, artistPlays: {} as any }
-    let needsMigration = false;
+    let allTimeStats: any = { totalPlays: 0, totalTime: 0, trackPlays: {}, artistPlays: {} }
+    let needsMigration = false
     
     try {
-      const storedStats = localStorage.getItem("listening_stats_all_time");
+      const storedStats = localStorage.getItem("listening_stats_all_time")
       if (storedStats) {
-        allTimeStats = JSON.parse(storedStats);
+        const parsed = JSON.parse(storedStats)
+        if (parsed && typeof parsed === "object") {
+          allTimeStats = {
+            totalPlays: typeof parsed.totalPlays === "number" ? parsed.totalPlays : 0,
+            totalTime: typeof parsed.totalTime === "number" ? parsed.totalTime : 0,
+            trackPlays: (parsed.trackPlays && typeof parsed.trackPlays === "object") ? parsed.trackPlays : {},
+            artistPlays: (parsed.artistPlays && typeof parsed.artistPlays === "object") ? parsed.artistPlays : {},
+          }
+        } else {
+          needsMigration = true
+        }
       } else {
-        needsMigration = true;
+        needsMigration = true
       }
     } catch(e) {
-      needsMigration = true;
+      needsMigration = true
     }
 
     if (needsMigration && history.length > 0) {
       // Migrate old raw history to all-time stats
       history.forEach((item: any) => {
-        allTimeStats.totalPlays += 1;
-        if (item.duration && typeof item.duration === 'number') {
-          allTimeStats.totalTime += item.duration;
+        if (!item) return
+        allTimeStats.totalPlays += 1
+        if (item.duration && typeof item.duration === "number") {
+          allTimeStats.totalTime += item.duration
         }
 
-        const trackKey = `${item.id}-${item.title}`;
-        if (!allTimeStats.trackPlays[trackKey]) {
+        const trackKey = `${item.id}-${item.title}`
+        const existingTrack = allTimeStats.trackPlays[trackKey]
+        if (!existingTrack || typeof existingTrack !== "object" || !existingTrack.track) {
+          const prevCount = typeof existingTrack === "number" ? existingTrack : 0
           allTimeStats.trackPlays[trackKey] = {
             track: { id: item.id, title: item.title, artist: item.artist },
-            count: 0
-          };
+            count: prevCount + 1,
+          }
+        } else {
+          existingTrack.count = (typeof existingTrack.count === "number" ? existingTrack.count : 0) + 1
         }
-        allTimeStats.trackPlays[trackKey].count += 1;
-        allTimeStats.artistPlays[item.artist] = (allTimeStats.artistPlays[item.artist] || 0) + 1;
-      });
-      localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats));
+
+        const artistKey = item.artist || "Unknown Artist"
+        const existingArtist = allTimeStats.artistPlays[artistKey]
+        const artistCount = typeof existingArtist === "number"
+          ? existingArtist
+          : (existingArtist && typeof existingArtist === "object" && typeof existingArtist.count === "number")
+            ? existingArtist.count
+            : 0
+        allTimeStats.artistPlays[artistKey] = artistCount + 1
+      })
+      try {
+        localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats))
+      } catch (e) {}
     }
 
     // Weekly activity (Last 7 days strictly, or based on days recorded)
     const dayPlays = new Map<string, number>()
     // Initialize current week days
     const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    weekDays.forEach(d => dayPlays.set(d, 0))
+    weekDays.forEach((d) => dayPlays.set(d, 0))
 
     history.forEach((item: any) => {
-      // Only count for charts if it's within the last 7 days? Or just the days themselves
+      if (!item || !item.playedAt) return
       const date = new Date(item.playedAt)
+      if (isNaN(date.getTime())) return
       const now = new Date()
-      // Optional: only show current week's data
-      if ((now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000) {
+      if (now.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
         const day = date.toLocaleDateString("en-US", { weekday: "short" })
         dayPlays.set(day, (dayPlays.get(day) || 0) + 1)
       }
     })
 
-    const topTracks = Object.values(allTimeStats.trackPlays)
-      .sort((a: any, b: any) => b.count - a.count)
+    const topTracks = Object.values(allTimeStats.trackPlays || {})
+      .map((data: any) => {
+        if (!data) return null
+        if (typeof data === "number") return null
+        const track = data.track || {}
+        return {
+          id: track.id || "unknown",
+          title: track.title || "Unknown Title",
+          artist: track.artist || "Unknown Artist",
+          plays: typeof data.count === "number" ? data.count : 1,
+        }
+      })
+      .filter((t): t is { id: string; title: string; artist: string; plays: number } => t !== null)
+      .sort((a, b) => b.plays - a.plays)
       .slice(0, 10)
-      .map((data: any) => ({
-        id: data.track.id,
-        title: data.track.title,
-        artist: data.track.artist,
-        plays: data.count,
-      }))
 
-    const topArtists = Object.entries(allTimeStats.artistPlays)
-      .sort((a: any, b: any) => b[1] - a[1])
+    const topArtists = Object.entries(allTimeStats.artistPlays || {})
+      .map(([name, val]: [string, any]) => {
+        let plays = 0
+        if (typeof val === "number") plays = val
+        else if (val && typeof val === "object" && typeof val.count === "number") plays = val.count
+        else plays = 1
+        return { name, plays }
+      })
+      .sort((a, b) => b.plays - a.plays)
       .slice(0, 10)
-      .map(([name, plays]) => ({ name, plays: plays as number }))
 
     const recentlyPlayed = [...history]
+      .filter((item: any) => item && item.playedAt)
       .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime())
       .slice(0, 20)
       .map((item: any) => ({
