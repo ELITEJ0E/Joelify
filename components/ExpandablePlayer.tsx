@@ -2,11 +2,11 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { motion, useMotionValue, useTransform, AnimatePresence, animate, useReducedMotion, type MotionValue } from "framer-motion"
+import { motion, useMotionValue, useTransform, type PanInfo, type MotionValue, AnimatePresence, animate, useReducedMotion } from "framer-motion"
 import { 
-  ChevronDown, ChevronRight, Music, AudioLinesIcon, Video, VideoOff,
+  ChevronDown, ChevronUp, ChevronRight, Music, AudioLinesIcon, Video, VideoOff,
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
-  Disc, Image as ImageIcon, Type, ListMusic
+  Disc, Image as ImageIcon, Type, ListMusic, Sparkles
 } from "lucide-react"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { QueueSheet } from "./QueueSheet"
@@ -19,13 +19,12 @@ import VinylRecord from "./VinylRecord"
 import { useApp } from "@/contexts/AppContext"
 import { extractAmbientColors, type AmbientColors } from "@/lib/ambientColor"
 
-export type PlayerViewState = "none" | "player" | "queue" | "lyrics"
-
-export interface ExpandablePlayerProps {
-  playerView: PlayerViewState
-  onNavigateView: (targetView: PlayerViewState) => void
-  playerY?: MotionValue<number>
+interface ExpandablePlayerProps {
+  isExpanded: boolean
+  onExpandChange: (expanded: boolean) => void
+  scrollProgress?: number
   vh?: number
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>
   currentTime: number
   isPlaying: boolean
   duration: number
@@ -39,6 +38,7 @@ export interface ExpandablePlayerProps {
   onToggleRepeat: () => void
   onSeek: (value: number[]) => void
   formatTime: (time: number) => string
+  /** Called with true when video player takes over audio, false when it releases */
   onVideoActiveChange?: (videoActive: boolean) => void
 }
 
@@ -50,10 +50,11 @@ function isValidYouTubeId(id: string | undefined | null): boolean {
 const tweenConfig = { type: "tween" as const, duration: 0.22, ease: [0.32, 0.72, 0, 1] as const }
 
 export function ExpandablePlayer({
-  playerView,
-  onNavigateView,
-  playerY,
+  isExpanded,
+  onExpandChange,
+  scrollProgress = 0,
   vh,
+  scrollContainerRef,
   currentTime,
   isPlaying,
   duration,
@@ -73,44 +74,19 @@ export function ExpandablePlayer({
   const [showVisualizer, setShowVisualizer] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
   const [viewMode, setViewMode] = useState<'vinyl' | 'cover'>('cover')
+  const [showLyrics, setShowLyrics] = useState(false)
+  const [showQueue, setShowQueue] = useState(false)
   const [ambientColors, setAmbientColors] = useState<AmbientColors | null>(null)
 
   const actualVh = vh || (typeof window !== "undefined" ? window.innerHeight : 800)
-  const actualVw = typeof window !== "undefined" ? window.innerWidth : 400
 
-  // Motion Values for Hybrid Gesture Architecture
-  const internalPlayerY = useMotionValue(playerView === "none" ? actualVh : 0)
-  const effectivePlayerY = playerY || internalPlayerY
-
-  const sheetX = useMotionValue(playerView === "queue" ? -actualVw : 0)
-  const sheetY = useMotionValue(playerView === "lyrics" ? -actualVh : 0)
-
-  const shouldReduceMotion = useReducedMotion()
-  const springConfig = shouldReduceMotion 
-    ? { duration: 0.15 } 
-    : { type: "spring" as const, stiffness: 320, damping: 32 }
-
-  // ── Sync motion values whenever playerView changes ────────────────────────
+  const progressMV = useMotionValue(scrollProgress)
   useEffect(() => {
-    const vw = typeof window !== "undefined" ? window.innerWidth : 400
-    const h = actualVh
+    progressMV.set(scrollProgress)
+  }, [scrollProgress, progressMV])
 
-    if (playerView === "none") {
-      animate(effectivePlayerY, h, springConfig)
-    } else if (playerView === "player") {
-      animate(effectivePlayerY, 0, springConfig)
-      animate(sheetX, 0, springConfig)
-      animate(sheetY, 0, springConfig)
-    } else if (playerView === "queue") {
-      animate(effectivePlayerY, 0, springConfig)
-      animate(sheetX, -vw, springConfig)
-      animate(sheetY, 0, springConfig)
-    } else if (playerView === "lyrics") {
-      animate(effectivePlayerY, 0, springConfig)
-      animate(sheetX, 0, springConfig)
-      animate(sheetY, -h, springConfig)
-    }
-  }, [playerView, actualVh, effectivePlayerY, sheetX, sheetY, springConfig])
+  const backdropOpacity = useTransform(progressMV, [0.1, 1], [0, 1])
+  const sheetScale = useTransform(progressMV, [0, 1], [0.96, 1])
 
   // ── Ambient Color Extraction ──────────────────────────────
   useEffect(() => {
@@ -152,18 +128,20 @@ export function ExpandablePlayer({
     })
   }, [onVideoActiveChange])
 
-  // Destroy video player on minimize
+  // ── Destroy video player and reset state on close ─────────────────────────
   useEffect(() => {
-    if (playerView === "none") {
+    if (!isExpanded) {
       setShowVisualizer(false)
       setShowVideo(false)
+      setShowLyrics(false)
+      setShowQueue(false)
       destroyVideoPlayer()
     }
-  }, [playerView, destroyVideoPlayer])
+  }, [isExpanded, destroyVideoPlayer])
 
-  // Init video player when showVideo becomes true
+  // ── Init video player when showVideo becomes true ──────────────────────────
   useEffect(() => {
-    if (playerView === "none" || !showVideo || !isValidYouTubeId(currentTrack?.id) || playbackSource !== "youtube") return
+    if (!isExpanded || !showVideo || !isValidYouTubeId(currentTrack?.id) || playbackSource !== "youtube") return
 
     const timer = setTimeout(() => {
       if (!window.YT?.Player || videoPlayerRef.current) return
@@ -194,9 +172,9 @@ export function ExpandablePlayer({
       clearTimeout(timer)
       destroyVideoPlayer()
     }
-  }, [playerView, showVideo, currentTrack?.id, playbackSource, onVideoActiveChange, destroyVideoPlayer])
+  }, [isExpanded, showVideo, currentTrack?.id])
 
-  // Sync video time
+  // ── One-time sync ───────────
   useEffect(() => {
     if (!videoReadyRef.current || initialSyncDoneRef.current || !videoPlayerRef.current) return
     initialSyncDoneRef.current = true
@@ -214,6 +192,7 @@ export function ExpandablePlayer({
     }
   }, [isPlaying, currentTime])
 
+  // ── Keep video in sync ───────────────────────────────
   useEffect(() => {
     if (!videoPlayerRef.current || !videoReadyRef.current) return
     try {
@@ -227,258 +206,361 @@ export function ExpandablePlayer({
     }
   }, [isPlaying])
 
+  // ── Destroy video player when toggled off or source changes ───────────────
   useEffect(() => {
     if (!showVideo || playbackSource !== "youtube") {
       destroyVideoPlayer()
     }
   }, [showVideo, playbackSource, destroyVideoPlayer])
 
-  // ── Touch Gesture Engine ───────────────────────────────────────────────────
+  // ── Swipe & Trackpad gesture handling for lyrics, queue & player ─────────────
+  const wheelAccumulatorX = useRef<number>(0)
+  const verticalScrollRef = useRef<HTMLDivElement>(null)
+  const horizontalScrollRef = useRef<HTMLDivElement>(null)
 
-  // 1. Main Player Gestures (Swipe DOWN -> Minimize, Swipe LEFT -> Queue, Swipe UP -> Lyrics)
-  const mainTouchRef = useRef<{
-    startX: number
-    startY: number
-    startTime: number
-    gesture: "none" | "close_player" | "open_queue" | "open_lyrics"
-  }>({ startX: 0, startY: 0, startTime: 0, gesture: "none" })
+  const recentlyClosedSubsheetRef = useRef(false)
+  const subsheetTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const handleMainTouchStart = (e: React.TouchEvent) => {
-    const target = e.target as HTMLElement
-    if (target.closest('button, input, [role="slider"], a, .no-drag')) {
-      mainTouchRef.current.gesture = "none"
-      return
+  const markSubsheetClosed = useCallback(() => {
+    recentlyClosedSubsheetRef.current = true
+    if (subsheetTimerRef.current) clearTimeout(subsheetTimerRef.current)
+    subsheetTimerRef.current = setTimeout(() => {
+      recentlyClosedSubsheetRef.current = false
+    }, 600)
+  }, [])
+
+  const openLyrics = useCallback(() => {
+    if (verticalScrollRef.current) {
+      verticalScrollRef.current.scrollTo({ top: actualVh, behavior: "smooth" })
     }
-    const touch = e.touches[0]
-    mainTouchRef.current = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      startTime: Date.now(),
-      gesture: "none",
+    if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
+      window.history.pushState({ view: "lyrics" }, "")
     }
-  }
+  }, [actualVh])
 
-  const handleMainTouchMove = (e: React.TouchEvent) => {
-    if (playerView !== "player") return
-    const touch = e.touches[0]
-    const dx = touch.clientX - mainTouchRef.current.startX
-    const dy = touch.clientY - mainTouchRef.current.startY
+  const closeLyrics = useCallback(() => {
+    markSubsheetClosed()
+    if (verticalScrollRef.current) {
+      verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
+    }
+    if (typeof window !== "undefined" && window.history.state?.view === "lyrics") {
+      window.history.back()
+    }
+  }, [markSubsheetClosed])
 
-    if (mainTouchRef.current.gesture === "none") {
-      const absX = Math.abs(dx)
-      const absY = Math.abs(dy)
-      if (absX > 8 || absY > 8) {
-        if (absX > absY) {
-          if (dx < 0) mainTouchRef.current.gesture = "open_queue"
-        } else {
-          if (dy > 0) mainTouchRef.current.gesture = "close_player"
-          else if (dy < 0) mainTouchRef.current.gesture = "open_lyrics"
+  const openQueue = useCallback(() => {
+    if (horizontalScrollRef.current) {
+      horizontalScrollRef.current.scrollTo({ left: window.innerWidth, behavior: "smooth" })
+    }
+    if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
+      window.history.pushState({ view: "queue" }, "")
+    }
+  }, [])
+
+  const closeQueue = useCallback(() => {
+    markSubsheetClosed()
+    if (horizontalScrollRef.current) {
+      horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
+    }
+    if (typeof window !== "undefined" && window.history.state?.view === "queue") {
+      window.history.back()
+    }
+  }, [markSubsheetClosed])
+
+  const handleVerticalScroll = useCallback(() => {
+    const el = verticalScrollRef.current
+    if (!el) return
+    const isShowing = el.scrollTop > el.clientHeight / 2
+    setShowLyrics((prev) => {
+      if (!prev && isShowing) {
+        if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
+          window.history.pushState({ view: "lyrics" }, "")
         }
       }
-    }
+      return prev !== isShowing ? isShowing : prev
+    })
+  }, [])
 
-    if (mainTouchRef.current.gesture === "close_player") {
-      if (dy > 0) {
-        effectivePlayerY.set(dy)
+  const handleHorizontalScroll = useCallback(() => {
+    const el = horizontalScrollRef.current
+    if (!el) return
+    const isShowing = el.scrollLeft > el.clientWidth / 2
+    setShowQueue((prev) => {
+      if (!prev && isShowing) {
+        if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
+          window.history.pushState({ view: "queue" }, "")
+        }
       }
-    } else if (mainTouchRef.current.gesture === "open_queue") {
-      if (dx < 0) {
-        sheetX.set(Math.max(-actualVw, dx))
-      }
-    } else if (mainTouchRef.current.gesture === "open_lyrics") {
-      if (dy < 0) {
-        sheetY.set(Math.max(-actualVh, dy))
-      }
-    }
-  }
+      return prev !== isShowing ? isShowing : prev
+    })
+  }, [])
 
-  const handleMainTouchEnd = (e: React.TouchEvent) => {
-    if (mainTouchRef.current.gesture === "none") return
-    const touch = e.changedTouches[0]
-    const dx = touch.clientX - mainTouchRef.current.startX
-    const dy = touch.clientY - mainTouchRef.current.startY
-    const dt = Math.max(0.01, (Date.now() - mainTouchRef.current.startTime) / 1000)
-    const vx = dx / dt
-    const vy = dy / dt
+  const showLyricsRef = useRef(false)
+  const showQueueRef = useRef(false)
 
-    const gesture = mainTouchRef.current.gesture
-    mainTouchRef.current.gesture = "none"
+  useEffect(() => {
+    showLyricsRef.current = showLyrics;
+    showQueueRef.current = showQueue;
+  }, [showLyrics, showQueue]);
 
-    if (gesture === "close_player") {
-      if (dy > actualVh * 0.18 || vy > 350) {
-        onNavigateView("none")
-      } else {
-        animate(effectivePlayerY, 0, springConfig)
-      }
-    } else if (gesture === "open_queue") {
-      if (dx < -actualVw * 0.18 || vx < -350) {
-        onNavigateView("queue")
-      } else {
-        animate(sheetX, 0, springConfig)
-      }
-    } else if (gesture === "open_lyrics") {
-      if (dy < -actualVh * 0.18 || vy < -350) {
-        onNavigateView("lyrics")
-      } else {
-        animate(sheetY, 0, springConfig)
-      }
-    }
-  }
-
-  // 2. Queue Sheet Gestures (Swipe RIGHT -> Return to Player, preserves vertical queue scrolling)
-  const queueTouchRef = useRef<{
-    startX: number
-    startY: number
-    startTime: number
-    isClosing: boolean
-  }>({ startX: 0, startY: 0, startTime: 0, isClosing: false })
-
-  const handleQueueTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0]
-    queueTouchRef.current = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      startTime: Date.now(),
-      isClosing: false,
-    }
-  }
-
-  const handleQueueTouchMove = (e: React.TouchEvent) => {
-    if (playerView !== "queue") return
-    const touch = e.touches[0]
-    const dx = touch.clientX - queueTouchRef.current.startX
-    const dy = touch.clientY - queueTouchRef.current.startY
-
-    if (!queueTouchRef.current.isClosing) {
-      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) && dx > 0) {
-        queueTouchRef.current.isClosing = true
+  // ── Hardware Back Button / PopState Handler ──────────────────────────────
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const view = e.state?.view
+      if (view === "expandable") {
+        if (showLyricsRef.current && verticalScrollRef.current) {
+          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
+        }
+        if (showQueueRef.current && horizontalScrollRef.current) {
+          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
+        }
+      } else if (!view || view === "base") {
+        if (showLyricsRef.current && verticalScrollRef.current) {
+          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
+        }
+        if (showQueueRef.current && horizontalScrollRef.current) {
+          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
+        }
+        onExpandChange(false)
       }
     }
 
-    if (queueTouchRef.current.isClosing) {
-      if (e.cancelable) e.preventDefault()
-      sheetX.set(Math.min(0, Math.max(-actualVw, -actualVw + dx)))
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [onExpandChange])
+
+  // ── Mobile Touch Swipe Down to Close Expandable Player ────────────────────
+  const touchStartYRef = useRef<number | null>(null)
+  const touchStartXRef = useRef<number | null>(null)
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as HTMLElement
+    // Ignore direct touches on interactive sliders, buttons, inputs, links
+    if (target.closest('button, input, [role="slider"], .slider-thumb, a')) {
+      touchStartYRef.current = null
+      touchStartXRef.current = null
+      return
     }
-  }
 
-  const handleQueueTouchEnd = (e: React.TouchEvent) => {
-    if (!queueTouchRef.current.isClosing) return
-    const touch = e.changedTouches[0]
-    const dx = touch.clientX - queueTouchRef.current.startX
-    const dt = Math.max(0.01, (Date.now() - queueTouchRef.current.startTime) / 1000)
-    const vx = dx / dt
-
-    queueTouchRef.current.isClosing = false
-
-    if (dx > actualVw * 0.18 || vx > 350) {
-      onNavigateView("player")
+    const vEl = verticalScrollRef.current
+    if (!vEl || vEl.scrollTop <= 20) {
+      touchStartYRef.current = e.touches[0].clientY
+      touchStartXRef.current = e.touches[0].clientX
     } else {
-      animate(sheetX, -actualVw, springConfig)
+      touchStartYRef.current = null
+      touchStartXRef.current = null
     }
-  }
+  }, [])
 
-  // 3. Lyrics Sheet Gestures (Swipe DOWN when at top -> Return to Player, preserves vertical lyrics scrolling)
-  const lyricsContainerRef = useRef<HTMLDivElement>(null)
-  const lyricsTouchRef = useRef<{
-    startX: number
-    startY: number
-    startTime: number
-    isClosing: boolean
-  }>({ startX: 0, startY: 0, startTime: 0, isClosing: false })
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartYRef.current === null || touchStartXRef.current === null) return
+    const endY = e.changedTouches[0].clientY
+    const endX = e.changedTouches[0].clientX
+    const dy = endY - touchStartYRef.current
+    const dx = Math.abs(endX - touchStartXRef.current)
 
-  const handleLyricsTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0]
-    lyricsTouchRef.current = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      startTime: Date.now(),
-      isClosing: false,
-    }
-  }
+    touchStartYRef.current = null
+    touchStartXRef.current = null
 
-  const handleLyricsTouchMove = (e: React.TouchEvent) => {
-    if (playerView !== "lyrics") return
-    const touch = e.touches[0]
-    const dx = touch.clientX - lyricsTouchRef.current.startX
-    const dy = touch.clientY - lyricsTouchRef.current.startY
-
-    const scrollTop = lyricsContainerRef.current?.scrollTop || 0
-
-    if (!lyricsTouchRef.current.isClosing) {
-      if (scrollTop <= 2 && dy > 10 && dy > Math.abs(dx)) {
-        lyricsTouchRef.current.isClosing = true
+    // If swiped DOWN significantly (dy > 35) and move was predominantly vertical
+    if (dy > 35 && dy > dx) {
+      const vEl = verticalScrollRef.current
+      if (!vEl || vEl.scrollTop <= 20) {
+        onExpandChange(false)
       }
     }
+  }, [onExpandChange])
 
-    if (lyricsTouchRef.current.isClosing) {
-      if (e.cancelable) e.preventDefault()
-      sheetY.set(Math.min(0, Math.max(-actualVh, -actualVh + dy)))
+  // ── Desktop Mouse Drag-to-Scroll (Without Hand Grab Cursor) ─────────────
+  const isDraggingRef = useRef(false)
+  const dragStartRef = useRef<{
+    x: number
+    y: number
+    scrollLeft: number
+    scrollTop: number
+  } | null>(null)
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Only handle primary mouse button (left click)
+    if (e.button !== 0) return
+
+    const target = e.target as HTMLElement
+    // Ignore interactive elements so buttons, sliders, inputs, links operate normally
+    if (target.closest('button, input, [role="slider"], .slider-thumb, a, [data-no-drag="true"]')) {
+      return
     }
-  }
 
-  const handleLyricsTouchEnd = (e: React.TouchEvent) => {
-    if (!lyricsTouchRef.current.isClosing) return
-    const touch = e.changedTouches[0]
-    const dy = touch.clientY - lyricsTouchRef.current.startY
-    const dt = Math.max(0.01, (Date.now() - lyricsTouchRef.current.startTime) / 1000)
-    const vy = dy / dt
+    const hEl = horizontalScrollRef.current
+    const vEl = verticalScrollRef.current
+    if (!hEl || !vEl) return
 
-    lyricsTouchRef.current.isClosing = false
+    isDraggingRef.current = true
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: hEl.scrollLeft,
+      scrollTop: vEl.scrollTop,
+    }
+  }, [])
 
-    if (dy > actualVh * 0.18 || vy > 350) {
-      onNavigateView("player")
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDraggingRef.current || !dragStartRef.current) return
+
+    const hEl = horizontalScrollRef.current
+    const vEl = verticalScrollRef.current
+    if (!hEl || !vEl) return
+
+    const dx = e.clientX - dragStartRef.current.x
+    const dy = e.clientY - dragStartRef.current.y
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      hEl.scrollLeft = dragStartRef.current.scrollLeft - dx
     } else {
-      animate(sheetY, -actualVh, springConfig)
+      vEl.scrollTop = dragStartRef.current.scrollTop - dy
     }
-  }
+  }, [])
 
-  // Desktop Mouse Wheel Navigation
-  const handleWheel = (e: React.WheelEvent) => {
+  const handlePointerUp = useCallback(() => {
+    isDraggingRef.current = false
+    dragStartRef.current = null
+  }, [])
+
+  // ── Desktop Mouse Wheel Swipe Handler ─────────────────────────────
+  const wheelCooldownRef = useRef(false)
+  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    // Ignore wheel events originating from sliders or inputs
+    const target = e.target as HTMLElement
+    if (target.closest('input, [role="slider"], .overflow-y-auto')) {
+      return
+    }
+
+    if (wheelCooldownRef.current) return
+
     const absX = Math.abs(e.deltaX)
     const absY = Math.abs(e.deltaY)
 
-    if (absX > absY && absX > 30) {
-      if (e.deltaX > 30 && playerView === "player") {
-        onNavigateView("queue")
-      } else if (e.deltaX < -30 && playerView === "queue") {
-        onNavigateView("player")
+    const setCooldown = () => {
+      wheelCooldownRef.current = true
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
+      cooldownTimerRef.current = setTimeout(() => {
+        wheelCooldownRef.current = false
+      }, 250)
+    }
+
+    const vEl = verticalScrollRef.current
+    const hEl = horizontalScrollRef.current
+    if (!vEl || !hEl) return
+
+    const isAtTop = vEl.scrollTop < 10
+    const isAtMainHorizontal = hEl.scrollLeft < 10
+    const isAtLyrics = vEl.scrollTop > vEl.clientHeight / 2
+    const isAtQueue = hEl.scrollLeft > hEl.clientWidth / 2
+
+    // Horizontal wheel swipe (Shift + Wheel or Horizontal Trackpad)
+    if (absX > absY && absX > 20) {
+      if (e.deltaX > 20 && isAtMainHorizontal && !isAtLyrics) {
+        openQueue()
+        setCooldown()
+      } else if (e.deltaX < -20 && isAtQueue) {
+        closeQueue()
+        setCooldown()
       }
-    } else if (absY > absX && absY > 30) {
-      if (e.deltaY > 30 && playerView === "player") {
-        onNavigateView("lyrics")
-      } else if (e.deltaY < -30 && playerView === "lyrics") {
-        onNavigateView("player")
+      return
+    }
+
+    // Vertical wheel swipe (Mouse Wheel or Vertical Trackpad)
+    if (absY > absX && absY > 20) {
+      if (isAtMainHorizontal && isAtTop) {
+        if (e.deltaY < -20) {
+          // Wheeling UP / Trackpad swipe DOWN on Main Player -> Close ExpandablePlayer!
+          if (!recentlyClosedSubsheetRef.current && !showLyricsRef.current) {
+            onExpandChange(false)
+            setCooldown()
+          }
+        } else if (e.deltaY > 20 && !isAtLyrics) {
+          // Wheeling DOWN at top of main player -> Open Lyrics!
+          openLyrics()
+          setCooldown()
+        }
+      } else if (isAtLyrics && e.deltaY < -20 && vEl.scrollTop <= 10) {
+        // Wheeling UP in Lyrics -> Close Lyrics!
+        closeLyrics()
+        setCooldown()
+      } else if (isAtQueue && e.deltaY < -20) {
+        // Wheeling UP in Queue -> Close Queue!
+        closeQueue()
+        setCooldown()
       }
     }
-  }
+  }, [openQueue, closeQueue, openLyrics, closeLyrics, onExpandChange])
 
-  // Escape key support
+  const handleBackdropClick = useCallback(() => {
+    onExpandChange(false)
+  }, [onExpandChange])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (playerView === "lyrics" || playerView === "queue") {
-          onNavigateView("player")
-        } else if (playerView === "player") {
-          onNavigateView("none")
+        if (showLyrics) {
+          closeLyrics();
+        } else if (showQueue) {
+          closeQueue();
+        } else {
+          onExpandChange(false);
         }
       }
     }
-    if (playerView !== "none") {
-      window.addEventListener("keydown", handleKeyDown)
+    if (isExpanded) {
+      window.addEventListener("keydown", handleKeyDown);
     }
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [playerView, onNavigateView])
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [isExpanded, onExpandChange, showLyrics, showQueue, closeLyrics, closeQueue])
+
+  useEffect(() => {
+    if (isExpanded) {
+      document.documentElement.style.overscrollBehavior = 'none';
+      document.body.style.overscrollBehavior = 'none';
+      let style = document.getElementById('prevent-pull-to-refresh');
+      if (!style) {
+        style = document.createElement('style');
+        style.id = 'prevent-pull-to-refresh';
+        style.textContent = `
+          body, html {
+            overscroll-behavior-y: none !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    } else {
+      document.documentElement.style.overscrollBehavior = '';
+      document.body.style.overscrollBehavior = '';
+      const style = document.getElementById('prevent-pull-to-refresh');
+      if (style) style.remove();
+    }
+    
+    return () => {
+      document.documentElement.style.overscrollBehavior = '';
+      document.body.style.overscrollBehavior = '';
+      const style = document.getElementById('prevent-pull-to-refresh');
+      if (style) style.remove();
+    }
+  }, [isExpanded])
 
   return (
     <motion.div
       style={{
-        y: effectivePlayerY,
+        scale: sheetScale,
+        originY: 1,
       }}
-      className="fixed inset-0 z-50 overflow-hidden bg-black/90 backdrop-blur-3xl touch-none flex flex-col"
-      onWheel={handleWheel}
+      className="h-full w-full relative overflow-hidden overscroll-none"
+      onClick={handleBackdropClick}
     >
-      {/* Background ambient colors */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+      {/* ── Ambient color extraction background with smooth crossfade ────────── */}
+      <motion.div style={{ opacity: backdropOpacity }} className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         <AnimatePresence mode="popLayout">
           <motion.div
             key={currentTrack?.id || "default-ambient"}
@@ -492,8 +574,9 @@ export function ExpandablePlayer({
             }}
           />
         </AnimatePresence>
-      </div>
+      </motion.div>
 
+      {/* Solid dark base overlay for maximum contrast */}
       <div className="absolute inset-0 z-0 expandable-player-bg bg-black/40 backdrop-blur-3xl" />
 
       {/* Visualizer */}
@@ -503,429 +586,447 @@ export function ExpandablePlayer({
         </div>
       )}
 
-      {/* ── Main Sliding Container ───────────────────────────────────── */}
-      <motion.div
-        style={{ x: sheetX }}
-        className="w-[200vw] h-full flex z-20"
+      {/* ── Scroll Snap Container (Horizontal: Main + Queue) ─────────────────────────────── */}
+      <div 
+        ref={horizontalScrollRef}
+        onScroll={handleHorizontalScroll}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        className="absolute inset-0 z-20 overflow-x-scroll snap-x snap-mandatory flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-behavior-x-contain pointer-events-auto select-none"
       >
-        {/* COLUMN 1: Main Player + Lyrics (Vertical Stack: 200vh) */}
-        <motion.div
-          style={{ y: sheetY }}
-          className="w-[100vw] h-[200vh] flex flex-col relative flex-shrink-0"
-        >
-          {/* PAGE 1.1: Main Player UI (100vh) */}
-          <div
-            className="w-full h-screen flex-shrink-0 relative flex flex-col z-20 glass-specular"
-            onTouchStart={handleMainTouchStart}
-            onTouchMove={handleMainTouchMove}
-            onTouchEnd={handleMainTouchEnd}
+        {/* SNAP PAGE 1: Main Player + Lyrics (Vertical Scroll) */}
+        <div className="w-full h-full flex-shrink-0 relative snap-start">
+          
+          <div 
+            ref={verticalScrollRef}
+            onScroll={handleVerticalScroll}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            className="absolute inset-0 overflow-y-scroll snap-y snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
+            {/* SNAP PAGE 1.1: Main Player UI */}
+            <div 
+              className="w-full h-full flex-shrink-0 relative snap-start flex flex-col z-20 glass-specular"
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              {/* ── Header ────────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
+          {/* Collapse button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost" size="icon"
+                onClick={() => onExpandChange(false)}
+                className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all active:scale-95 flex-shrink-0"
+                aria-label="Close player"
+              >
+                <ChevronDown size={22} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom"><p>Minimize</p></TooltipContent>
+          </Tooltip>
+
+          {/* Centered NOW PLAYING title (no icon, no border) */}
+          <div className="flex-1 flex items-center justify-center text-center">
+            <p className="text-xs md:text-sm font-semibold uppercase tracking-[0.2em] text-white/70 select-none">
+              NOW PLAYING
+            </p>
+          </div>
+
+          {/* Symmetrical placeholder */}
+          <div className="w-10 flex-shrink-0" />
+        </div>
+
+        {/* Mobile drag handle indicator */}
+        <div className="flex justify-center mb-2 lg:hidden group cursor-pointer" onClick={() => onExpandChange(false)}>
+          <div className="w-12 h-1.5 bg-white/20 rounded-full group-hover:w-16 group-hover:bg-white/40 transition-all duration-300" />
+        </div>
+
+        {/* ── Main content layout ───────────────────── */}
+        <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-5 md:px-8 lg:px-12 pb-safe overflow-y-auto lg:overflow-hidden">
+          {/* LEFT SIDE: Album Artwork */}
+          <div className="lg:flex-1 lg:flex lg:justify-end w-full">
+            <div className="flex flex-col items-center w-full">
+              <motion.div
+                initial={{ scale: 0.75, opacity: 0.6, y: 30 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.75, opacity: 0.6, y: 30 }}
+                transition={tweenConfig}
+                className="w-full flex justify-center"
+              >
+                <div
+                  className={[
+                    "relative overflow-hidden rounded-2xl shadow-2xl shadow-black/80 transition-all duration-300",
+                    !showVideo && "w-full max-w-[min(88vw,380px)] sm:max-w-[440px] aspect-square lg:w-[440px] lg:h-[440px]",
+                    showVideo && "w-full h-[35vh] sm:h-[45vh] lg:max-w-[800px] lg:aspect-video lg:h-auto",
+                  ].filter(Boolean).join(" ")}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <div className={`w-full h-full flex items-center justify-center bg-black ${showVideo ? 'block' : 'hidden'}`}>
+                      <div id="expanded-yt-video" className="w-full h-full" />
+                    </div>
+                    {!showVideo && (
+                      viewMode === 'vinyl' ? (
+                        <div className="w-full h-full flex items-center justify-center rounded-2xl bg-zinc-900/40">
+                          <VinylRecord isPlaying={isPlaying} coverImage={currentTrack?.thumbnail || undefined} />
+                        </div>
+                      ) : currentTrack?.thumbnail ? (
+                        <Image
+                          src={currentTrack.thumbnail}
+                          alt={currentTrack.title || "Album art"}
+                          fill
+                          className="object-cover rounded-2xl"
+                          priority
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-zinc-800/80 rounded-2xl flex items-center justify-center">
+                          <Music size={56} className="text-zinc-600" />
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+
+              <div className="h-4 lg:h-6" />
+            </div>
+          </div>
+
+          {/* ── RIGHT SIDE: Track info + controls ───────────────── */}
+          <div className="lg:flex-1 lg:max-w-md xl:max-w-lg">
+            {/* Track info */}
+            <motion.div
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="text-center lg:text-left mb-4"
+            >
+              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance tracking-tight">
+                {currentTrack?.title || "No Track Playing"}
+              </h1>
+              <p className="text-sm sm:text-base md:text-lg text-white/60 font-medium">
+                {currentTrack?.artist || "Unknown Artist"}
+              </p>
+            </motion.div>
+
+            {/* Action Buttons Row: Lyrics, Queue, Visualizer, Vinyl/Cover, Video */}
+            <motion.div
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+              className="w-full flex items-center justify-start sm:justify-center lg:justify-start gap-2 overflow-x-auto flex-nowrap mb-4 py-1 px-1 -mx-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+            >
+              {/* Lyrics Toggle */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost" size="icon"
-                    onClick={() => onNavigateView("none")}
-                    className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 transition-all active:scale-95 flex-shrink-0"
-                    aria-label="Close player"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => showLyrics ? closeLyrics() : openLyrics()}
+                    aria-label={showLyrics ? "Hide Lyrics" : "Show Lyrics"}
+                    className={`h-9 px-3.5 rounded-full transition-all gap-1.5 text-xs font-medium shrink-0 whitespace-nowrap ${
+                      showLyrics
+                        ? "text-primary bg-primary/20 border border-primary/40 shadow-lg shadow-primary/20"
+                        : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
+                    }`}
                   >
-                    <ChevronDown size={22} />
+                    <Type size={15} />
+                    <span>Lyrics</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom"><p>Minimize</p></TooltipContent>
+                <TooltipContent side="top"><p>{showLyrics ? "Hide Lyrics" : "Show Lyrics"}</p></TooltipContent>
               </Tooltip>
 
-              <div className="flex-1 flex items-center justify-center text-center">
-                <p className="text-xs md:text-sm font-semibold uppercase tracking-[0.2em] text-white/70 select-none">
-                  NOW PLAYING
-                </p>
-              </div>
-
-              <div className="w-10 flex-shrink-0" />
-            </div>
-
-            {/* Mobile drag handle indicator */}
-            <div className="flex justify-center mb-2 lg:hidden group cursor-pointer" onClick={() => onNavigateView("none")}>
-              <div className="w-12 h-1.5 bg-white/20 rounded-full group-hover:w-16 group-hover:bg-white/40 transition-all duration-300" />
-            </div>
-
-            {/* ── Main content layout ───────────────────── */}
-            <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-12 xl:gap-16 px-5 md:px-8 lg:px-12 pb-safe overflow-y-auto lg:overflow-hidden">
-              {/* LEFT SIDE: Album Artwork */}
-              <div className="lg:flex-1 lg:flex lg:justify-end w-full">
-                <div className="flex flex-col items-center w-full">
-                  <motion.div
-                    initial={{ scale: 0.75, opacity: 0.6, y: 30 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0.75, opacity: 0.6, y: 30 }}
-                    transition={tweenConfig}
-                    className="w-full flex justify-center"
+              {/* Queue Toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => showQueue ? closeQueue() : openQueue()}
+                    aria-label={showQueue ? "Hide Queue" : "Show Queue"}
+                    className={`h-9 px-3.5 rounded-full transition-all gap-1.5 text-xs font-medium shrink-0 whitespace-nowrap relative ${
+                      showQueue
+                        ? "text-primary bg-primary/20 border border-primary/40 shadow-lg shadow-primary/20"
+                        : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
+                    }`}
                   >
-                    <div
-                      className={[
-                        "relative overflow-hidden rounded-2xl shadow-2xl shadow-black/80 transition-all duration-300",
-                        !showVideo && "w-full max-w-[min(88vw,380px)] sm:max-w-[440px] aspect-square lg:w-[440px] lg:h-[440px]",
-                        showVideo && "w-full h-[35vh] sm:h-[45vh] lg:max-w-[800px] lg:aspect-video lg:h-auto",
-                      ].filter(Boolean).join(" ")}
+                    <ListMusic size={15} />
+                    <span>Queue</span>
+                    {queue.length > 0 && (
+                      <span className="ml-0.5 bg-primary text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-1 flex items-center justify-center">
+                        {queue.length}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top"><p>{showQueue ? "Hide Queue" : "Show Queue"}</p></TooltipContent>
+              </Tooltip>
+
+              {/* Visualizer Toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowVisualizer((v) => !v)}
+                    aria-label={showVisualizer ? "Hide visualizer" : "Show visualizer"}
+                    className={`h-9 w-9 rounded-full transition-all shrink-0 ${
+                      showVisualizer
+                        ? "text-primary bg-primary/20 border border-primary/40"
+                        : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
+                    }`}
+                  >
+                    <AudioLinesIcon size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top"><p>{showVisualizer ? "Hide Visualizer" : "Show Visualizer"}</p></TooltipContent>
+              </Tooltip>
+
+              {/* Vinyl/Cover view toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setViewMode(prev => prev === 'vinyl' ? 'cover' : 'vinyl')}
+                    aria-label={viewMode === 'vinyl' ? "Switch to cover view" : "Switch to vinyl view"}
+                    className={`h-9 w-9 rounded-full transition-all shrink-0 ${
+                      viewMode === 'vinyl'
+                        ? "text-primary bg-primary/20 border border-primary/40"
+                        : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
+                    }`}
+                  >
+                    {viewMode === 'vinyl' ? <ImageIcon size={16} /> : <Disc size={16} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>{viewMode === 'vinyl' ? "Switch to Cover" : "Switch to Vinyl"}</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* YouTube video toggle */}
+              {playbackSource === "youtube" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowVideo((v) => !v)}
+                      disabled={!currentTrack}
+                      aria-label={showVideo ? "Hide video" : "Show video"}
+                      className={`h-9 w-9 rounded-full transition-all shrink-0 ${
+                        showVideo
+                          ? "text-primary bg-primary/20 border border-primary/40"
+                          : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
+                      }`}
                     >
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                        <div className={`w-full h-full flex items-center justify-center bg-black ${showVideo ? 'block' : 'hidden'}`}>
-                          <div id="expanded-yt-video" className="w-full h-full" />
-                        </div>
-                        {!showVideo && (
-                          viewMode === 'vinyl' ? (
-                            <div className="w-full h-full flex items-center justify-center rounded-2xl bg-zinc-900/40">
-                              <VinylRecord isPlaying={isPlaying} coverImage={currentTrack?.thumbnail || undefined} />
-                            </div>
-                          ) : currentTrack?.thumbnail ? (
-                            <Image
-                              src={currentTrack.thumbnail}
-                              alt={currentTrack.title || "Album art"}
-                              fill
-                              className="object-cover rounded-2xl"
-                              priority
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-zinc-800/80 rounded-2xl flex items-center justify-center">
-                              <Music size={56} className="text-zinc-600" />
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
+                      {showVideo ? <VideoOff size={16} /> : <Video size={16} />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top"><p>{showVideo ? "Hide Video" : "Show Video"}</p></TooltipContent>
+                </Tooltip>
+              )}
+            </motion.div>
 
-                  <div className="h-4 lg:h-6" />
+            <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
+
+            {/* Controls */}
+            <motion.div
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+              className="w-full"
+            >
+              <div className="flex flex-col items-center w-full gap-5">
+                {/* Progress bar */}
+                <div className="flex items-center gap-3 w-full max-w-2xl mx-auto">
+                  <span className="text-xs font-medium text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
+                  <div className="flex-1" onPointerDown={(e) => e.stopPropagation()}>
+                    <Slider 
+                      value={[currentTime]} 
+                      max={duration > 0 ? duration : 1} 
+                      step={0.1}
+                      onValueChange={onSeek} 
+                      disabled={!currentTrack || duration === 0} 
+                      className="[&_.slider-thumb]:bg-primary [&_.slider-thumb]:border-2 [&_.slider-thumb]:border-white"
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-white/60 w-10">{formatTime(duration)}</span>
                 </div>
-              </div>
 
-              {/* ── RIGHT SIDE: Track info + controls ───────────────── */}
-              <div className="lg:flex-1 lg:max-w-md xl:max-w-lg">
-                {/* Track info */}
-                <motion.div
-                  initial={{ y: 10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.4, delay: 0.1 }}
-                  className="text-center lg:text-left mb-4"
-                >
-                  <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-1.5 line-clamp-2 text-balance tracking-tight">
-                    {currentTrack?.title || "No Track Playing"}
-                  </h1>
-                  <p className="text-sm sm:text-base md:text-lg text-white/60 font-medium">
-                    {currentTrack?.artist || "Unknown Artist"}
-                  </p>
-                </motion.div>
-
-                {/* Action Buttons Row: Lyrics, Queue, Visualizer, Vinyl/Cover, Video */}
-                <motion.div
-                  initial={{ y: 10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.4, delay: 0.15 }}
-                  className="w-full flex items-center justify-start sm:justify-center lg:justify-start gap-2 overflow-x-auto flex-nowrap mb-4 py-1 px-1 -mx-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-                >
-                  {/* Lyrics Toggle */}
+                {/* Control buttons */}
+                <div className="flex items-center justify-center gap-4">
+                  {/* Shuffle */}
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => playerView === "lyrics" ? onNavigateView("player") : onNavigateView("lyrics")}
-                        aria-label={playerView === "lyrics" ? "Hide Lyrics" : "Show Lyrics"}
-                        className={`h-9 px-3.5 rounded-full transition-all gap-1.5 text-xs font-medium shrink-0 whitespace-nowrap ${
-                          playerView === "lyrics"
-                            ? "text-primary bg-primary/20 border border-primary/40 shadow-lg shadow-primary/20"
-                            : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={onToggleShuffle} 
+                        disabled={!currentTrack}
+                        className={`h-12 w-12 rounded-full transition-all ${
+                          shuffle 
+                            ? "text-primary bg-primary/20 border border-primary/30" 
+                            : "text-white/70 hover:text-white hover:bg-white/10"
                         }`}
                       >
-                        <Type size={15} />
-                        <span>Lyrics</span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top"><p>{playerView === "lyrics" ? "Hide Lyrics" : "Show Lyrics"}</p></TooltipContent>
-                  </Tooltip>
-
-                  {/* Queue Toggle */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => playerView === "queue" ? onNavigateView("player") : onNavigateView("queue")}
-                        aria-label={playerView === "queue" ? "Hide Queue" : "Show Queue"}
-                        className={`h-9 px-3.5 rounded-full transition-all gap-1.5 text-xs font-medium shrink-0 whitespace-nowrap relative ${
-                          playerView === "queue"
-                            ? "text-primary bg-primary/20 border border-primary/40 shadow-lg shadow-primary/20"
-                            : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
-                        }`}
-                      >
-                        <ListMusic size={15} />
-                        <span>Queue</span>
-                        {queue.length > 0 && (
-                          <span className="ml-0.5 bg-primary text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-1 flex items-center justify-center">
-                            {queue.length}
-                          </span>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top"><p>{playerView === "queue" ? "Hide Queue" : "Show Queue"}</p></TooltipContent>
-                  </Tooltip>
-
-                  {/* Visualizer Toggle */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setShowVisualizer((v) => !v)}
-                        aria-label={showVisualizer ? "Hide visualizer" : "Show visualizer"}
-                        className={`h-9 w-9 rounded-full transition-all shrink-0 ${
-                          showVisualizer
-                            ? "text-primary bg-primary/20 border border-primary/40"
-                            : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
-                        }`}
-                      >
-                        <AudioLinesIcon size={16} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top"><p>{showVisualizer ? "Hide Visualizer" : "Show Visualizer"}</p></TooltipContent>
-                  </Tooltip>
-
-                  {/* Vinyl/Cover view toggle */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setViewMode(prev => prev === 'vinyl' ? 'cover' : 'vinyl')}
-                        aria-label={viewMode === 'vinyl' ? "Switch to cover view" : "Switch to vinyl view"}
-                        className={`h-9 w-9 rounded-full transition-all shrink-0 ${
-                          viewMode === 'vinyl'
-                            ? "text-primary bg-primary/20 border border-primary/40"
-                            : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
-                        }`}
-                      >
-                        {viewMode === 'vinyl' ? <ImageIcon size={16} /> : <Disc size={16} />}
+                        <Shuffle size={22} />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      <p>{viewMode === 'vinyl' ? "Switch to Cover" : "Switch to Vinyl"}</p>
+                      <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
                     </TooltipContent>
                   </Tooltip>
 
-                  {/* YouTube video toggle */}
-                  {playbackSource === "youtube" && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setShowVideo((v) => !v)}
-                          disabled={!currentTrack}
-                          aria-label={showVideo ? "Hide video" : "Show video"}
-                          className={`h-9 w-9 rounded-full transition-all shrink-0 ${
-                            showVideo
-                              ? "text-primary bg-primary/20 border border-primary/40"
-                              : "text-white/80 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10"
-                          }`}
-                        >
-                          {showVideo ? <VideoOff size={16} /> : <Video size={16} />}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top"><p>{showVideo ? "Hide Video" : "Show Video"}</p></TooltipContent>
-                    </Tooltip>
-                  )}
-                </motion.div>
+                  {/* Previous */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={onPrevious} 
+                        disabled={!currentTrack}
+                        className="h-12 w-12 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-90"
+                      >
+                        <SkipBack size={26} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Previous</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-                <div className="hidden lg:block h-px bg-white/10 w-full mb-6" />
+                  {/* Play/Pause */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 active:scale-95 hover:bg-primary hover:text-white transition-all shadow-xl shadow-primary/25 ring-4 ring-white/10"
+                        onClick={onPlayPause} 
+                        disabled={!currentTrack}
+                      >
+                        {isPlaying ? 
+                          <Pause fill="currentColor" size={28} className="stroke-[1.5]" /> : 
+                          <Play fill="currentColor" size={28} className="stroke-[1.5] ml-0.5" />
+                        }
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>{isPlaying ? "Pause" : "Play"}</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-                {/* Controls */}
-                <motion.div
-                  initial={{ y: 10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.4, delay: 0.2 }}
-                  className="w-full"
-                >
-                  <div className="flex flex-col items-center w-full gap-5">
-                    {/* Progress bar */}
-                    <div className="flex items-center gap-3 w-full max-w-2xl mx-auto">
-                      <span className="text-xs font-medium text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
-                      <div className="flex-1" onPointerDown={(e) => e.stopPropagation()}>
-                        <Slider 
-                          value={[currentTime]} 
-                          max={duration > 0 ? duration : 1} 
-                          step={0.1}
-                          onValueChange={onSeek} 
-                          disabled={!currentTrack || duration === 0} 
-                          className="[&_.slider-thumb]:bg-primary [&_.slider-thumb]:border-2 [&_.slider-thumb]:border-white"
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-white/60 w-10">{formatTime(duration)}</span>
-                    </div>
+                  {/* Next */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={onNext} 
+                        disabled={!currentTrack}
+                        className="h-12 w-12 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-90"
+                      >
+                        <SkipForward size={26} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Next</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-                    {/* Control buttons */}
-                    <div className="flex items-center justify-center gap-4">
-                      {/* Shuffle */}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            onClick={onToggleShuffle} 
-                            disabled={!currentTrack}
-                            className={`h-12 w-12 rounded-full transition-all ${
-                              shuffle 
-                                ? "text-primary bg-primary/20 border border-primary/30" 
-                                : "text-white/70 hover:text-white hover:bg-white/10"
-                            }`}
-                          >
-                            <Shuffle size={22} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p>{shuffle ? "Shuffle On" : "Shuffle Off"}</p>
-                        </TooltipContent>
-                      </Tooltip>
-
-                      {/* Previous */}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            onClick={onPrevious} 
-                            disabled={!currentTrack}
-                            className="h-12 w-12 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-90"
-                          >
-                            <SkipBack size={26} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p>Previous</p>
-                        </TooltipContent>
-                      </Tooltip>
-
-                      {/* Play/Pause */}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            size="icon" 
-                            className="bg-white text-black rounded-full h-16 w-16 hover:scale-105 active:scale-95 hover:bg-primary hover:text-white transition-all shadow-xl shadow-primary/25 ring-4 ring-white/10"
-                            onClick={onPlayPause} 
-                            disabled={!currentTrack}
-                          >
-                            {isPlaying ? 
-                              <Pause fill="currentColor" size={28} className="stroke-[1.5]" /> : 
-                              <Play fill="currentColor" size={28} className="stroke-[1.5] ml-0.5" />
-                            }
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p>{isPlaying ? "Pause" : "Play"}</p>
-                        </TooltipContent>
-                      </Tooltip>
-
-                      {/* Next */}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            onClick={onNext} 
-                            disabled={!currentTrack}
-                            className="h-12 w-12 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-90"
-                          >
-                            <SkipForward size={26} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p>Next</p>
-                        </TooltipContent>
-                      </Tooltip>
-
-                      {/* Repeat */}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            onClick={onToggleRepeat} 
-                            disabled={!currentTrack}
-                            className={`h-12 w-12 rounded-full transition-all ${
-                              repeat !== "off" 
-                                ? "text-primary bg-primary/20 border border-primary/30" 
-                                : "text-white/70 hover:text-white hover:bg-white/10"
-                            }`}
-                          >
-                            {repeat === "one" ? <Repeat1 size={22} /> : <Repeat size={22} />}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p>{getRepeatLabel()}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </div>
-                </motion.div>
+                  {/* Repeat */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={onToggleRepeat} 
+                        disabled={!currentTrack}
+                        className={`h-12 w-12 rounded-full relative transition-all ${
+                          repeat !== "off" 
+                            ? "text-primary bg-primary/20 border border-primary/30" 
+                            : "text-white/70 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {repeat === "one" ? <Repeat1 size={22} /> : <Repeat size={22} />}
+                        {repeat !== "off" && (
+                          <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>{getRepeatLabel()}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
-            </div>
-          </div>
-
-          {/* PAGE 1.2: Lyrics UI (100vh) */}
-          <div
-            className="w-full h-screen flex-shrink-0 relative sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
-            onTouchStart={handleLyricsTouchStart}
-            onTouchMove={handleLyricsTouchMove}
-            onTouchEnd={handleLyricsTouchEnd}
-          >
-            <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onNavigateView("player")}
-                className="text-white/70 hover:text-white rounded-full"
-                aria-label="Close Lyrics"
-              >
-                <ChevronDown size={24} />
-              </Button>
-              <div className="w-12 h-1.5 bg-white/30 rounded-full cursor-pointer" onClick={() => onNavigateView("player")} />
-              <div className="text-xs font-semibold text-white/80 uppercase tracking-wider">Lyrics</div>
-              <div className="w-10" />
-            </div>
-            <div ref={lyricsContainerRef} className="flex-1 w-full max-w-5xl mx-auto overflow-y-auto relative p-6">
-              <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* COLUMN 2: Queue UI (100vw, 100vh) */}
-        <div
-          className="w-[100vw] h-screen flex-shrink-0 relative sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
-          onTouchStart={handleQueueTouchStart}
-          onTouchMove={handleQueueTouchMove}
-          onTouchEnd={handleQueueTouchEnd}
-        >
-          <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3 border-b border-white/10">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onNavigateView("player")}
-              className="text-white/70 hover:text-white rounded-full"
-              aria-label="Close Queue"
-            >
-              <ChevronRight size={24} />
-            </Button>
-            <div className="w-12 h-1.5 bg-white/30 rounded-full cursor-pointer" onClick={() => onNavigateView("player")} />
-            <div className="text-xs font-semibold text-white/80 uppercase tracking-wider">Up Next</div>
-            <div className="w-10" />
-          </div>
-
-          <div className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto">
-            <QueueSheet onClose={() => onNavigateView("player")} />
+            </motion.div>
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+
+      {/* SNAP PAGE 1.2: Lyrics UI */}
+      <div 
+        className="w-full h-full flex-shrink-0 relative snap-start sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={closeLyrics}
+            className="text-white/70 hover:text-white rounded-full"
+            aria-label="Close Lyrics"
+          >
+            <ChevronDown size={24} />
+          </Button>
+          <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+          <div className="w-10" />
+        </div>
+        <div className="flex-1 w-full max-w-5xl mx-auto overflow-hidden relative">
+          <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* SNAP PAGE 2: Queue */}
+  <div 
+    className="w-full h-full flex-shrink-0 relative snap-start sheet-surface bg-black/90 backdrop-blur-3xl flex flex-col pt-4"
+    onClick={(e) => e.stopPropagation()}
+  >
+    <div className="flex-shrink-0 flex items-center justify-between px-6 pb-3">
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={closeQueue}
+        className="text-white/70 hover:text-white rounded-full"
+        aria-label="Close Queue"
+      >
+        <ChevronRight size={24} />
+      </Button>
+      <div className="flex items-center gap-2">
+        <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+      </div>
+      <div className="w-10" />
+    </div>
+
+    <div 
+      className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <QueueSheet onClose={closeQueue} />
+    </div>
+  </div>
+</div>
+</motion.div>
   )
 }
+
