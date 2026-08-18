@@ -373,7 +373,7 @@ export function ExpandablePlayer({
         scale: sheetScale,
         originY: 1,
       }}
-      className="h-full w-full relative overflow-hidden overscroll-none"
+      className="h-full w-full relative"
       onClick={handleBackdropClick}
     >
       {/* ── Ambient color extraction background with smooth crossfade ────────── */}
