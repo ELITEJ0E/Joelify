@@ -205,20 +205,6 @@ export function PlayerControls() {
   }, []);
 
   // ─── Touch Swipe UP on Mini Player Bar ─────────────────────────────────
-  const miniTouchStartYRef = useRef<number | null>(null)
-
-  const handleMiniTouchStart = useCallback((e: React.TouchEvent) => {
-    miniTouchStartYRef.current = e.touches[0].clientY
-  }, [])
-
-  const handleMiniTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (miniTouchStartYRef.current === null) return
-    const dy = miniTouchStartYRef.current - e.changedTouches[0].clientY
-    miniTouchStartYRef.current = null
-    if (dy > 30) {
-      openExpandedPlayer()
-    }
-  }, [openExpandedPlayer])
 
   const trackEndHandledRef = useRef(false)
   const isSeekingRef = useRef(false)
@@ -530,13 +516,8 @@ export function PlayerControls() {
     if (absX > absY && absX >= 6) {
       hasMovedRef.current = true
       trackX.set(info.offset.x)
-    } else if (absY > absX && absY >= 6 && info.offset.y < 0) {
-      hasMovedRef.current = true
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = Math.min(vh, -info.offset.y)
-      }
     }
-  }, [trackX, vh])
+  }, [trackX])
 
   const handlePanEnd = useCallback((_: any, info: PanInfo) => {
     const absX = Math.abs(info.offset.x)
@@ -571,10 +552,6 @@ export function PlayerControls() {
       } else {
         animate(trackX, 0, springConfig)
       }
-    } else if (absY > absX && (info.offset.y < -50 || info.velocity.y < -250)) {
-      openExpandedPlayer()
-    } else if (absY > absX && info.offset.y < 0) {
-      closeExpandedPlayer()
     } else {
       animate(trackX, 0, springConfig)
     }
@@ -582,7 +559,7 @@ export function PlayerControls() {
     setTimeout(() => {
       hasMovedRef.current = false
     }, 60)
-  }, [trackX, springConfig, shouldReduceMotion, handleNext, handlePrevious, openExpandedPlayer, closeExpandedPlayer])
+  }, [trackX, springConfig, shouldReduceMotion, handleNext, handlePrevious])
 
   const handleBarClick = useCallback(() => {
     if (hasMovedRef.current) return
@@ -1100,8 +1077,6 @@ export function PlayerControls() {
           {/* Mobile minimal mini player (<md) */}
           <div 
             className="md:hidden flex items-center justify-between gap-3 h-12 px-1 w-full"
-            onTouchStart={handleMiniTouchStart}
-            onTouchEnd={handleMiniTouchEnd}
           >
             <motion.div
               style={{ x: trackX }}
@@ -1454,7 +1429,6 @@ export function PlayerControls() {
             isExpanded={isExpandedPlayer}
             scrollProgress={scrollProgress}
             vh={vh}
-            scrollContainerRef={scrollContainerRef}
             onExpandChange={(expanded) => {
               if (expanded) openExpandedPlayer();
               else closeExpandedPlayer();

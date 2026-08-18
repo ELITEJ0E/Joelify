@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { motion, useMotionValue, useTransform, type PanInfo, type MotionValue, AnimatePresence, animate, useReducedMotion } from "framer-motion"
+import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion"
 import { 
   ChevronDown, ChevronUp, ChevronRight, Music, AudioLinesIcon, Video, VideoOff,
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
@@ -24,7 +24,6 @@ interface ExpandablePlayerProps {
   onExpandChange: (expanded: boolean) => void
   scrollProgress?: number
   vh?: number
-  scrollContainerRef?: React.RefObject<HTMLDivElement | null>
   currentTime: number
   isPlaying: boolean
   duration: number
@@ -54,7 +53,6 @@ export function ExpandablePlayer({
   onExpandChange,
   scrollProgress = 0,
   vh,
-  scrollContainerRef,
   currentTime,
   isPlaying,
   duration,
@@ -213,21 +211,9 @@ export function ExpandablePlayer({
     }
   }, [showVideo, playbackSource, destroyVideoPlayer])
 
-  // ── Swipe & Trackpad gesture handling for lyrics, queue & player ─────────────
-  const wheelAccumulatorX = useRef<number>(0)
+  // ── Scroll Snap container refs ───────────────────────────────────────────────
   const verticalScrollRef = useRef<HTMLDivElement>(null)
   const horizontalScrollRef = useRef<HTMLDivElement>(null)
-
-  const recentlyClosedSubsheetRef = useRef(false)
-  const subsheetTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const markSubsheetClosed = useCallback(() => {
-    recentlyClosedSubsheetRef.current = true
-    if (subsheetTimerRef.current) clearTimeout(subsheetTimerRef.current)
-    subsheetTimerRef.current = setTimeout(() => {
-      recentlyClosedSubsheetRef.current = false
-    }, 600)
-  }, [])
 
   const openLyrics = useCallback(() => {
     if (verticalScrollRef.current) {
@@ -239,14 +225,13 @@ export function ExpandablePlayer({
   }, [actualVh])
 
   const closeLyrics = useCallback(() => {
-    markSubsheetClosed()
     if (verticalScrollRef.current) {
       verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
     }
     if (typeof window !== "undefined" && window.history.state?.view === "lyrics") {
       window.history.back()
     }
-  }, [markSubsheetClosed])
+  }, [])
 
   const openQueue = useCallback(() => {
     if (horizontalScrollRef.current) {
@@ -258,14 +243,13 @@ export function ExpandablePlayer({
   }, [])
 
   const closeQueue = useCallback(() => {
-    markSubsheetClosed()
     if (horizontalScrollRef.current) {
       horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
     }
     if (typeof window !== "undefined" && window.history.state?.view === "queue") {
       window.history.back()
     }
-  }, [markSubsheetClosed])
+  }, [])
 
   const handleVerticalScroll = useCallback(() => {
     const el = verticalScrollRef.current
@@ -328,173 +312,6 @@ export function ExpandablePlayer({
     window.addEventListener("popstate", handlePopState)
     return () => window.removeEventListener("popstate", handlePopState)
   }, [onExpandChange])
-
-  // ── Mobile Touch Swipe Down to Close Expandable Player ────────────────────
-  const touchStartYRef = useRef<number | null>(null)
-  const touchStartXRef = useRef<number | null>(null)
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const target = e.target as HTMLElement
-    // Ignore direct touches on interactive sliders, buttons, inputs, links
-    if (target.closest('button, input, [role="slider"], .slider-thumb, a')) {
-      touchStartYRef.current = null
-      touchStartXRef.current = null
-      return
-    }
-
-    const vEl = verticalScrollRef.current
-    if (!vEl || vEl.scrollTop <= 20) {
-      touchStartYRef.current = e.touches[0].clientY
-      touchStartXRef.current = e.touches[0].clientX
-    } else {
-      touchStartYRef.current = null
-      touchStartXRef.current = null
-    }
-  }, [])
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (touchStartYRef.current === null || touchStartXRef.current === null) return
-    const endY = e.changedTouches[0].clientY
-    const endX = e.changedTouches[0].clientX
-    const dy = endY - touchStartYRef.current
-    const dx = Math.abs(endX - touchStartXRef.current)
-
-    touchStartYRef.current = null
-    touchStartXRef.current = null
-
-    // If swiped DOWN significantly (dy > 35) and move was predominantly vertical
-    if (dy > 35 && dy > dx) {
-      const vEl = verticalScrollRef.current
-      if (!vEl || vEl.scrollTop <= 20) {
-        onExpandChange(false)
-      }
-    }
-  }, [onExpandChange])
-
-  // ── Desktop Mouse Drag-to-Scroll (Without Hand Grab Cursor) ─────────────
-  const isDraggingRef = useRef(false)
-  const dragStartRef = useRef<{
-    x: number
-    y: number
-    scrollLeft: number
-    scrollTop: number
-  } | null>(null)
-
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Only handle primary mouse button (left click)
-    if (e.button !== 0) return
-
-    const target = e.target as HTMLElement
-    // Ignore interactive elements so buttons, sliders, inputs, links operate normally
-    if (target.closest('button, input, [role="slider"], .slider-thumb, a, [data-no-drag="true"]')) {
-      return
-    }
-
-    const hEl = horizontalScrollRef.current
-    const vEl = verticalScrollRef.current
-    if (!hEl || !vEl) return
-
-    isDraggingRef.current = true
-    dragStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      scrollLeft: hEl.scrollLeft,
-      scrollTop: vEl.scrollTop,
-    }
-  }, [])
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDraggingRef.current || !dragStartRef.current) return
-
-    const hEl = horizontalScrollRef.current
-    const vEl = verticalScrollRef.current
-    if (!hEl || !vEl) return
-
-    const dx = e.clientX - dragStartRef.current.x
-    const dy = e.clientY - dragStartRef.current.y
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-      hEl.scrollLeft = dragStartRef.current.scrollLeft - dx
-    } else {
-      vEl.scrollTop = dragStartRef.current.scrollTop - dy
-    }
-  }, [])
-
-  const handlePointerUp = useCallback(() => {
-    isDraggingRef.current = false
-    dragStartRef.current = null
-  }, [])
-
-  // ── Desktop Mouse Wheel Swipe Handler ─────────────────────────────
-  const wheelCooldownRef = useRef(false)
-  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    // Ignore wheel events originating from sliders or inputs
-    const target = e.target as HTMLElement
-    if (target.closest('input, [role="slider"], .overflow-y-auto')) {
-      return
-    }
-
-    if (wheelCooldownRef.current) return
-
-    const absX = Math.abs(e.deltaX)
-    const absY = Math.abs(e.deltaY)
-
-    const setCooldown = () => {
-      wheelCooldownRef.current = true
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
-      cooldownTimerRef.current = setTimeout(() => {
-        wheelCooldownRef.current = false
-      }, 250)
-    }
-
-    const vEl = verticalScrollRef.current
-    const hEl = horizontalScrollRef.current
-    if (!vEl || !hEl) return
-
-    const isAtTop = vEl.scrollTop < 10
-    const isAtMainHorizontal = hEl.scrollLeft < 10
-    const isAtLyrics = vEl.scrollTop > vEl.clientHeight / 2
-    const isAtQueue = hEl.scrollLeft > hEl.clientWidth / 2
-
-    // Horizontal wheel swipe (Shift + Wheel or Horizontal Trackpad)
-    if (absX > absY && absX > 20) {
-      if (e.deltaX > 20 && isAtMainHorizontal && !isAtLyrics) {
-        openQueue()
-        setCooldown()
-      } else if (e.deltaX < -20 && isAtQueue) {
-        closeQueue()
-        setCooldown()
-      }
-      return
-    }
-
-    // Vertical wheel swipe (Mouse Wheel or Vertical Trackpad)
-    if (absY > absX && absY > 20) {
-      if (isAtMainHorizontal && isAtTop) {
-        if (e.deltaY < -20) {
-          // Wheeling UP / Trackpad swipe DOWN on Main Player -> Close ExpandablePlayer!
-          if (!recentlyClosedSubsheetRef.current && !showLyricsRef.current) {
-            onExpandChange(false)
-            setCooldown()
-          }
-        } else if (e.deltaY > 20 && !isAtLyrics) {
-          // Wheeling DOWN at top of main player -> Open Lyrics!
-          openLyrics()
-          setCooldown()
-        }
-      } else if (isAtLyrics && e.deltaY < -20 && vEl.scrollTop <= 10) {
-        // Wheeling UP in Lyrics -> Close Lyrics!
-        closeLyrics()
-        setCooldown()
-      } else if (isAtQueue && e.deltaY < -20) {
-        // Wheeling UP in Queue -> Close Queue!
-        closeQueue()
-        setCooldown()
-      }
-    }
-  }, [openQueue, closeQueue, openLyrics, closeLyrics, onExpandChange])
 
   const handleBackdropClick = useCallback(() => {
     onExpandChange(false)
@@ -590,11 +407,11 @@ export function ExpandablePlayer({
       <div 
         ref={horizontalScrollRef}
         onScroll={handleHorizontalScroll}
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        
+        
+        
+        
+        
         className="absolute inset-0 z-20 overflow-x-scroll snap-x snap-mandatory flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-behavior-x-contain pointer-events-auto select-none"
       >
         {/* SNAP PAGE 1: Main Player + Lyrics (Vertical Scroll) */}
@@ -603,16 +420,16 @@ export function ExpandablePlayer({
           <div 
             ref={verticalScrollRef}
             onScroll={handleVerticalScroll}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
+            
+            
             className="absolute inset-0 overflow-y-scroll snap-y snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {/* SNAP PAGE 1.1: Main Player UI */}
             <div 
               className="w-full h-full flex-shrink-0 relative snap-start flex flex-col z-20 glass-specular"
               onClick={(e) => e.stopPropagation()}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
+              
+              
             >
               {/* ── Header ────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 flex-shrink-0">
