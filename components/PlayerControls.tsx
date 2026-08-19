@@ -996,7 +996,7 @@ export function PlayerControls() {
         }`}
       >
         {/* Section 1: Collapsed mini-bar snap section */}
-        <div className="snap-start min-h-screen w-full flex flex-col justify-end pb-[50px] lg:pb-0 pointer-events-none px-2 sm:px-4 lg:px-0">
+        <div className="relative snap-start min-h-screen w-full flex flex-col justify-end pb-[50px] lg:pb-0 pointer-events-none px-2 sm:px-4 lg:px-0">
           <YouTubePlayer
             onPlayerReady={handleYouTubePlayerReady}
             onStateChange={handleYouTubeStateChange}

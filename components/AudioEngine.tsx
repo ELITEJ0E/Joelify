@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useApp } from "@/contexts/AppContext"
+import { useAudioAnalysis } from "@/contexts/AudioAnalysisContext"
 import { RealTimeBpmAnalyzer } from "realtime-bpm-analyzer"
 
 const FREQUENCY_BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
@@ -21,7 +22,8 @@ export function AudioEngine({
   onDurationReady,
   onTimeUpdate,
 }: AudioEngineProps) {
-  const { currentTrack, audioSettings, setAudioContext, setAnalyserNode, setCurrentBPM, setBeatPulse, playbackSource } = useApp()
+  const { currentTrack, audioSettings, playbackSource } = useApp()
+  const { setAudioContext, setAnalyserNode, setCurrentBPM, setBeatPulse } = useAudioAnalysis()
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const contextRef = useRef<AudioContext | null>(null)
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)

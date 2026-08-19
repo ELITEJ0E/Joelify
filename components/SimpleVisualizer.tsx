@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { useApp } from "@/contexts/AppContext"
+import { useAudioAnalysis } from "@/contexts/AudioAnalysisContext"
 
 interface SimpleVisualizerProps {
   isPlaying: boolean
@@ -16,7 +17,8 @@ export function SimpleVisualizer({
   volume = 1,
   bpm = 128 // Default BPM for electronic music
 }: SimpleVisualizerProps) {
-  const { analyserNode, audioSettings } = useApp()
+  const { audioSettings } = useApp()
+  const { analyserNode } = useAudioAnalysis()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const barsRef = useRef<number[]>([])

@@ -359,8 +359,8 @@ function YouTubeIframePlayer({
     <div
       className={
         videoMode
-          ? "w-full max-w-5xl aspect-video mx-auto bg-black rounded-xl md:rounded-2xl overflow-hidden shadow-2xl border border-white/15 relative z-30 pointer-events-auto mb-2 max-h-[calc(100vh-140px)] flex items-center justify-center transition-all duration-300"
-          : "fixed -left-[9999px] top-0 w-[320px] h-[180px] opacity-[0.001] pointer-events-none -z-50 overflow-hidden"
+          ? "absolute bottom-[116px] lg:bottom-[76px] left-0 right-0 mx-auto w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-5xl aspect-video max-h-[calc(100vh-140px)] bg-black rounded-xl md:rounded-2xl overflow-hidden shadow-2xl border border-white/15 z-30 pointer-events-auto opacity-100 scale-100 flex items-center justify-center transition-all duration-300 ease-in-out"
+          : "absolute bottom-0 left-0 w-[320px] h-[180px] bg-black rounded-xl md:rounded-2xl overflow-hidden shadow-none border border-transparent -z-50 pointer-events-none opacity-[0.001] scale-95 flex items-center justify-center transition-all duration-300 ease-in-out"
       }
     >
       <div ref={containerRef} className="w-full h-full flex items-center justify-center" style={{ width: "100%", height: "100%", aspectRatio: "16/9" }} />

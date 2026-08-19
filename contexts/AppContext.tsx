@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react"
 import { type AppState, type Playlist, type Track, loadState, saveState, createDefaultPlaylist } from "@/lib/storage"
 import { FALLBACK_JOELS_SONGS } from "@/lib/constants"
 import { auth, db } from "@/lib/firebase"
@@ -56,14 +56,6 @@ interface AppContextType extends AppState {
   setAudioSettings: (settings: AppContextType["audioSettings"]) => void
   audioElement: HTMLAudioElement | null
   setAudioElement: (element: HTMLAudioElement | null) => void
-  audioContext: AudioContext | null
-  setAudioContext: (context: AudioContext | null) => void
-  analyserNode: AnalyserNode | null
-  setAnalyserNode: (node: AnalyserNode | null) => void
-  currentBPM: number
-  setCurrentBPM: (bpm: number) => void
-  beatPulse: number
-  setBeatPulse: (pulse: number) => void
   joelsSongs: Track[]
   setJoelsSongs: (songs: Track[]) => void
   user: User | null
@@ -142,10 +134,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     realAudioEngine: true,
   })
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null)
-  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
-  const [currentBPM, setCurrentBPM] = useState<number>(0)
-  const [beatPulse, setBeatPulse] = useState<number>(0)
   const [joelsSongs, setJoelsSongs] = useState<Track[]>([...FALLBACK_JOELS_SONGS].reverse())
   const [user, setUser] = useState<User | null>(null)
 
@@ -667,67 +655,111 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [isInitialized]);
 
+  const value = useMemo(
+    () => ({
+      currentTrack,
+      currentPlaylistId,
+      playlists,
+      likedSongs,
+      queue,
+      playbackPosition,
+      volume,
+      shuffle,
+      repeat,
+      theme,
+      videoMode,
+      setCurrentTrack: handleSetCurrentTrack,
+      setCurrentPlaylistId,
+      setPlaylists,
+      addPlaylist,
+      deletePlaylist,
+      renamePlaylist,
+      updatePlaylistDescription,
+      updatePlaylistCover,
+      addTrackToPlaylist,
+      removeTrackFromPlaylist,
+      reorderPlaylistTracks,
+      setQueue,
+      addToQueue,
+      removeFromQueue,
+      setPlaybackPosition,
+      setVolume,
+      toggleShuffle,
+      toggleRepeat,
+      setTheme,
+      toggleVideoMode,
+      toggleLikedSong,
+      isTrackLiked,
+      setLikedSongs,
+      recentlyPlayed,
+      addRecentlyPlayed,
+      customTheme,
+      setCustomTheme,
+      playbackSource,
+      setPlaybackSource,
+      audioSettings,
+      setAudioSettings,
+      audioElement,
+      setAudioElement,
+      joelsSongs,
+      setJoelsSongs,
+      user,
+      isInitialized,
+    }),
+    [
+      currentTrack,
+      currentPlaylistId,
+      playlists,
+      likedSongs,
+      queue,
+      playbackPosition,
+      volume,
+      shuffle,
+      repeat,
+      theme,
+      videoMode,
+      handleSetCurrentTrack,
+      setCurrentPlaylistId,
+      setPlaylists,
+      addPlaylist,
+      deletePlaylist,
+      renamePlaylist,
+      updatePlaylistDescription,
+      updatePlaylistCover,
+      addTrackToPlaylist,
+      removeTrackFromPlaylist,
+      reorderPlaylistTracks,
+      setQueue,
+      addToQueue,
+      removeFromQueue,
+      setPlaybackPosition,
+      setVolume,
+      toggleShuffle,
+      toggleRepeat,
+      setTheme,
+      toggleVideoMode,
+      toggleLikedSong,
+      isTrackLiked,
+      setLikedSongs,
+      recentlyPlayed,
+      addRecentlyPlayed,
+      customTheme,
+      setCustomTheme,
+      playbackSource,
+      setPlaybackSource,
+      audioSettings,
+      setAudioSettings,
+      audioElement,
+      setAudioElement,
+      joelsSongs,
+      setJoelsSongs,
+      user,
+      isInitialized,
+    ]
+  )
+
   return (
-    <AppContext.Provider
-      value={{
-        currentTrack,
-        currentPlaylistId,
-        playlists,
-        likedSongs,
-        queue,
-        playbackPosition,
-        volume,
-        shuffle,
-        repeat,
-        theme,
-        videoMode,
-        setCurrentTrack: handleSetCurrentTrack,
-        setCurrentPlaylistId,
-        setPlaylists,
-        addPlaylist,
-        deletePlaylist,
-        renamePlaylist,
-        updatePlaylistDescription,
-        updatePlaylistCover,
-        addTrackToPlaylist,
-        removeTrackFromPlaylist,
-        reorderPlaylistTracks,
-        setQueue,
-        addToQueue,
-        removeFromQueue,
-        setPlaybackPosition,
-        setVolume,
-        toggleShuffle,
-        toggleRepeat,
-        setTheme,
-        toggleVideoMode,
-        toggleLikedSong,
-        isTrackLiked,
-        setLikedSongs,
-        recentlyPlayed,
-        addRecentlyPlayed,
-        customTheme,
-        setCustomTheme,
-        playbackSource,
-        setPlaybackSource,
-        audioSettings,
-        setAudioSettings,
-        audioElement,
-        setAudioElement,
-        audioContext,
-        setAudioContext,
-        analyserNode,
-        setAnalyserNode,
-        currentBPM,
-        setCurrentBPM,
-        beatPulse,
-        setBeatPulse,
-        joelsSongs,
-        setJoelsSongs,
-        user,
-        isInitialized
-      }}
-    >
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   )

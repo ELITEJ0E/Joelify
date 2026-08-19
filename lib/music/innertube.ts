@@ -10,7 +10,40 @@ let innertubePromise: Promise<any> | null = null
 async function getInnertube() {
   if (!innertubePromise) {
     innertubePromise = (async () => {
-      const { Innertube, UniversalCache } = await import("youtubei.js")
+      const { Innertube, UniversalCache, Parser, Log, Helpers } = await import("youtubei.js")
+
+      // Suppress harmless internal YouTube badge parsing warnings
+      if (Log?.setLevel && Log?.Level) {
+        Log.setLevel(Log.Level.ERROR)
+      }
+
+      // Register TextBadge runtime parser to handle recent YouTube Music badge updates
+      if (Parser?.addRuntimeParser && Helpers?.YTNode) {
+        class TextBadge extends Helpers.YTNode {
+          static type = "TextBadge"
+          label?: string
+          style?: string
+          text?: any
+          constructor(data: any) {
+            super()
+            if (data?.label) this.label = data.label
+            if (data?.style) this.style = data.style
+            if (data?.text) this.text = data.text
+            Object.assign(this, data)
+          }
+        }
+        Parser.addRuntimeParser("TextBadge", TextBadge)
+      }
+
+      // Prevent uncaught class introspection errors from breaking search
+      if (Parser?.setParserErrorHandler) {
+        Parser.setParserErrorHandler(({ classname, error_type }: any) => {
+          if (error_type === "class_not_found" || error_type === "class_changed") {
+            return
+          }
+        })
+      }
+
       return Innertube.create({
         retrieve_player: false,
         cache: new UniversalCache(false),

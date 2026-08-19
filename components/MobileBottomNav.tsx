@@ -1,6 +1,7 @@
 "use client"
 
-import { Home, Search, TrendingUp, Library, Sparkles } from "lucide-react"
+import { Home, Search, LineChart, Library, Sparkles } from "lucide-react"
+import { BottomNavBar, type NavItem } from "@/components/ui/bottom-nav-bar"
 
 interface MobileBottomNavProps {
   currentView: string
@@ -8,41 +9,54 @@ interface MobileBottomNavProps {
 }
 
 export function MobileBottomNav({ currentView, onNavigate }: MobileBottomNavProps) {
-  const tabs = [
+  const navItems: NavItem[] = [
     { id: "home", label: "Home", icon: Home },
     { id: "search", label: "Search", icon: Search },
-    { id: "charts", label: "Charts", icon: TrendingUp },
+    { id: "charts", label: "Charts", icon: LineChart },
     { id: "library", label: "Library", icon: Library },
     { id: "joels", label: "Joel's", icon: Sparkles },
-  ] as const
+  ]
+
+  // Map currentView to corresponding tab index
+  const getActiveIndex = () => {
+    switch (currentView) {
+      case "home":
+        return 0
+      case "search":
+      case "explore":
+        return 1
+      case "charts":
+        return 2
+      case "library":
+      case "playlist":
+      case "liked":
+      case "downloaded":
+        return 3
+      case "joels":
+        return 4
+      default:
+        return -1
+    }
+  }
+
+  const activeIndex = getActiveIndex()
 
   return (
-    <nav className="lg:hidden shrink-0 w-full z-50 bg-black/95 backdrop-blur-2xl border-t border-white/10 px-2 py-2 sticky bottom-0 shadow-2xl">
-      <div className="flex justify-around items-center max-w-md mx-auto">
-        {tabs.map((tab) => {
-          const Icon = tab.icon
-          const isActive = currentView === tab.id
-
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onNavigate(tab.id as any)}
-              className={`transition-all duration-300 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-full ${
-                isActive
-                  ? "bg-primary/20 text-primary border border-primary/30 font-semibold shadow-md shadow-primary/10"
-                  : "text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              <Icon size={20} className={isActive ? "text-primary" : ""} />
-              {isActive && (
-                <span className="text-xs font-semibold whitespace-nowrap tracking-tight">
-                  {tab.label}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+    <nav
+      className="lg:hidden shrink-0 w-full z-50 bg-black/90 dark:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-1.5 flex items-center justify-center shadow-2xl"
+      aria-label="Mobile Navigation Bar"
+    >
+      <BottomNavBar
+        items={navItems}
+        activeIndex={activeIndex}
+        onItemChange={(_, item) => {
+          if (item.id) {
+            onNavigate(item.id as any)
+          }
+        }}
+        className="w-full max-w-lg justify-around sm:justify-center border-white/10 bg-zinc-900/90 dark:bg-zinc-900/90"
+      />
     </nav>
   )
 }
+
