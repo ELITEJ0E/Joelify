@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Menu, Target, MoreVertical, Play, Plus, Globe, Sparkles, ChevronDown } from "lucide-react"
+import { Target, MoreVertical, Play, Plus, Globe, Sparkles, ChevronDown } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
@@ -134,16 +134,6 @@ export function ChartsView({ onNavigate, onOpenSidebar }: ChartsViewProps) {
         {/* HEADER ROW */}
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-3">
-            {onOpenSidebar && (
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onOpenSidebar}
-                className="text-gray-300 hover:text-white hover:bg-white/10 shrink-0 md:hidden"
-              >
-                <Menu size={22} />
-              </Button>
-            )}
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-2xl">{currentRegion.flag}</span>

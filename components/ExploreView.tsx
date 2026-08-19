@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Menu, Search, Play, ChevronDown, Plus, MoreVertical, ArrowLeft } from "lucide-react"
+import { Search, Play, ChevronDown, Plus, MoreVertical, ArrowLeft } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
@@ -155,18 +155,8 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
   return (
     <div className="flex-1 bg-gradient-to-b from-black via-zinc-950 to-black text-foreground p-4 md:p-8 overflow-y-auto pb-24">
       <div className="max-w-5xl mx-auto space-y-6">
-        {/* HEADER: HAMBURGER + SEARCH BAR */}
+        {/* HEADER: SEARCH BAR */}
         <div className="flex items-center gap-3">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={onOpenSidebar}
-            className="text-gray-300 hover:text-white hover:bg-white/10 shrink-0"
-            aria-label="Open navigation menu"
-          >
-            <Menu size={24} />
-          </Button>
-
           <form onSubmit={handleSearchSubmit} className="flex-1 relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <Input
