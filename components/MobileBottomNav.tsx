@@ -43,7 +43,7 @@ export function MobileBottomNav({ currentView, onNavigate }: MobileBottomNavProp
 
   return (
     <nav
-      className="lg:hidden shrink-0 w-full z-50 bg-black/90 dark:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-1.5 flex items-center justify-center shadow-2xl"
+      className="mobile-bottom-nav-container lg:hidden shrink-0 w-full z-50 bg-black/90 dark:bg-black/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-1.5 flex items-center justify-center shadow-2xl"
       aria-label="Mobile Navigation Bar"
     >
       <BottomNavBar
@@ -54,7 +54,7 @@ export function MobileBottomNav({ currentView, onNavigate }: MobileBottomNavProp
             onNavigate(item.id as any)
           }
         }}
-        className="w-full max-w-lg justify-around sm:justify-center border-white/10 bg-zinc-900/90 dark:bg-zinc-900/90"
+        className="mobile-bottom-nav w-full max-w-lg justify-around sm:justify-center border-white/10 bg-zinc-900/90 dark:bg-zinc-900/90"
       />
     </nav>
   )

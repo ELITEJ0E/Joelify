@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Palette, Check } from "lucide-react"
+import { Palette, Check, Music, Droplets } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -103,7 +103,7 @@ export function ThemeSettings() {
             className="flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer hover:bg-white/[0.08]"
           >
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded border border-white/20 bg-zinc-900 shrink-0" />
+              <Music size={16} className="text-zinc-400 shrink-0" />
               <span className="text-xs text-white/90">Joelify (Default)</span>
             </div>
             {surfaceStyle === "joelify" && <Check size={14} className="text-primary" />}
@@ -114,7 +114,7 @@ export function ThemeSettings() {
             className="flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer hover:bg-white/[0.08]"
           >
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded border border-white/30 bg-white/10 backdrop-blur-sm shrink-0" />
+              <Droplets size={16} className="text-blue-300 shrink-0" />
               <span className="text-xs text-white/90">Liquid Glass</span>
             </div>
             {surfaceStyle === "liquid-glass" && <Check size={14} className="text-primary" />}

@@ -94,7 +94,7 @@ export default function Home() {
   return (
     <>
       <div className="flex flex-col h-[100dvh] bg-gradient-to-br from-black via-primary/30 to-black animate-gradient-move text-foreground overflow-hidden">
-        <header className="lg:hidden bg-black/80 backdrop-blur-xl text-white p-4 border-b border-white/[0.07] flex items-center justify-between z-40 sticky top-0">
+        <header className="mobile-top-navbar lg:hidden bg-black/80 backdrop-blur-xl text-white p-4 border-b border-white/[0.07] flex items-center justify-between z-40 sticky top-0">
           <div className="flex items-center gap-3">
             <Button
               size="icon"

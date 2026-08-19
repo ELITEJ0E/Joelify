@@ -178,8 +178,8 @@ export function LyricsDisplay({ currentTime, isPlaying, duration, onSeek }: Lyri
   }
 
   return (
-    <div className="flex flex-col h-full w-full relative overflow-hidden bg-background">
-      <div className="absolute inset-0 z-0 animate-gradient-move bg-gradient-to-br from-background via-secondary/30 to-background opacity-50"></div>
+    <div className="lyrics-display-container flex flex-col h-full w-full relative overflow-hidden bg-background">
+      <div className="lyrics-bg-gradient absolute inset-0 z-0 animate-gradient-move bg-gradient-to-br from-background via-secondary/30 to-background opacity-50"></div>
       
       <div className="fixed top-[18px] right-12 z-[60] flex items-center gap-2">
         <Button 

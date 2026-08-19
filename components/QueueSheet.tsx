@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useApp } from "@/contexts/AppContext"
 import { GripVertical, X } from "lucide-react"
@@ -16,24 +15,6 @@ interface QueueSheetProps {
 export function QueueSheet({ onClose }: QueueSheetProps) {
   const { queue, setQueue, removeFromQueue, currentTrack } = useApp()
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const touchStartXRef = useState<{ x: number; y: number } | null>(null)[0]
-  const startPosRef = useState<{ x: number; y: number }>({ x: 0, y: 0 })[0]
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    startPosRef.x = e.touches[0].clientX
-    startPosRef.y = e.touches[0].clientY
-  }
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const dx = e.changedTouches[0].clientX - startPosRef.x
-    const dy = e.changedTouches[0].clientY - startPosRef.y
-    // Swiped right or swiped down to close QueueSheet
-    if ((dx > 35 && Math.abs(dx) > Math.abs(dy)) || (dy > 35 && Math.abs(dy) > Math.abs(dx))) {
-      if (onClose) {
-        onClose()
-      }
-    }
-  }
 
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
@@ -57,11 +38,7 @@ export function QueueSheet({ onClose }: QueueSheetProps) {
   }
 
   return (
-    <div 
-      className="flex flex-col h-full touch-pan-x touch-pan-y"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="flex flex-col h-full">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-muted-foreground mb-2">Now Playing</h3>
         {currentTrack ? (
@@ -83,13 +60,13 @@ export function QueueSheet({ onClose }: QueueSheetProps) {
         )}
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
         <h3 className="text-sm font-semibold text-muted-foreground mb-2">Next in Queue ({queue.length})</h3>
         {queue.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Queue is empty</p>
         ) : (
           <ScrollArea className="h-full">
-            <div className="space-y-1 pr-4">
+            <div className="space-y-1 pr-4 pb-20">
               {queue.map((track, index) => (
                 <div
                   key={`${track.id}-${index}`}
@@ -97,13 +74,18 @@ export function QueueSheet({ onClose }: QueueSheetProps) {
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDragEnd={handleDragEnd}
+                  onPointerDown={(e) => {
+                    // Prevent drag gestures from propagating when interacting with queue items
+                    // This allows HTML5 drag and drop and normal scrolling without dragging the whole sheet down
+                    e.stopPropagation()
+                  }}
                   className={`flex items-center gap-3 p-2 rounded-lg hover:bg-primary/15 group cursor-move transition-colors ${
                     draggedIndex === index ? "opacity-50" : ""
                   }`}
                 >
                   <GripVertical
                     size={16}
-                    className="text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0"
+                    className="text-muted-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 flex-shrink-0"
                   />
                   <Image
                     src={track.thumbnail || "/placeholder.svg"}
@@ -119,8 +101,11 @@ export function QueueSheet({ onClose }: QueueSheetProps) {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => removeFromQueue(index)}
-                    className="h-8 w-8 opacity-0 group-hover:opacity-100 flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFromQueue(index);
+                    }}
+                    className="h-8 w-8 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 flex-shrink-0"
                   >
                     <X size={16} />
                   </Button>

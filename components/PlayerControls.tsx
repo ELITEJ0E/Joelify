@@ -1477,7 +1477,6 @@ export function PlayerControls() {
 
           <div 
             className="flex-1 w-full max-w-2xl mx-auto overflow-hidden p-6 cursor-auto"
-            onPointerDown={(e) => e.stopPropagation()}
           >
             <QueueSheet onClose={() => setQueueOpen(false)} />
           </div>
