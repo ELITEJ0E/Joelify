@@ -21,7 +21,7 @@ import { extractAmbientColors, type AmbientColors } from "@/lib/ambientColor"
 
 interface ExpandablePlayerProps {
   isExpanded: boolean
-  onExpandChange: (expanded: boolean) => void
+  onExpandChange: (expanded: boolean, popHistory?: boolean) => void
   scrollProgress?: number
   vh?: number
   currentTime: number
@@ -267,12 +267,21 @@ export function ExpandablePlayer({
   const verticalScrollRef = useRef<HTMLDivElement>(null)
   const horizontalScrollRef = useRef<HTMLDivElement>(null)
 
+  const showLyricsRef = useRef(false)
+  const showQueueRef = useRef(false)
+
+  useEffect(() => {
+    showLyricsRef.current = showLyrics
+    showQueueRef.current = showQueue
+  }, [showLyrics, showQueue])
+
   const openLyrics = useCallback(() => {
     if (verticalScrollRef.current) {
       verticalScrollRef.current.scrollTo({ top: actualVh, behavior: "smooth" })
     }
-    if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-      window.history.pushState({ view: "lyrics" }, "")
+    setShowLyrics(true)
+    if (typeof window !== "undefined" && window.history.state?.overlay !== "lyrics") {
+      window.history.pushState({ modal: true, overlay: "lyrics", view: "lyrics" }, "")
     }
   }, [actualVh])
 
@@ -280,7 +289,8 @@ export function ExpandablePlayer({
     if (verticalScrollRef.current) {
       verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
     }
-    if (typeof window !== "undefined" && window.history.state?.view === "lyrics") {
+    setShowLyrics(false)
+    if (typeof window !== "undefined" && (window.history.state?.overlay === "lyrics" || window.history.state?.view === "lyrics")) {
       window.history.back()
     }
   }, [])
@@ -289,8 +299,9 @@ export function ExpandablePlayer({
     if (horizontalScrollRef.current) {
       horizontalScrollRef.current.scrollTo({ left: window.innerWidth, behavior: "smooth" })
     }
-    if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
-      window.history.pushState({ view: "queue" }, "")
+    setShowQueue(true)
+    if (typeof window !== "undefined" && window.history.state?.overlay !== "queue") {
+      window.history.pushState({ modal: true, overlay: "queue", view: "queue" }, "")
     }
   }, [])
 
@@ -298,7 +309,8 @@ export function ExpandablePlayer({
     if (horizontalScrollRef.current) {
       horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
     }
-    if (typeof window !== "undefined" && window.history.state?.view === "queue") {
+    setShowQueue(false)
+    if (typeof window !== "undefined" && (window.history.state?.overlay === "queue" || window.history.state?.view === "queue")) {
       window.history.back()
     }
   }, [])
@@ -309,8 +321,15 @@ export function ExpandablePlayer({
     const isShowing = el.scrollTop > el.clientHeight / 2
     if (isShowing !== showLyricsRef.current) {
       setShowLyrics(isShowing)
-      if (isShowing && typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-        window.history.pushState({ view: "lyrics" }, "")
+      if (isShowing) {
+        if (typeof window !== "undefined" && window.history.state?.overlay !== "lyrics") {
+          window.history.pushState({ modal: true, overlay: "lyrics", view: "lyrics" }, "")
+        }
+      } else {
+        // User swiped back up to main player: sync history state if needed
+        if (typeof window !== "undefined" && (window.history.state?.overlay === "lyrics" || window.history.state?.view === "lyrics")) {
+          window.history.back()
+        }
       }
     }
   }, [])
@@ -321,51 +340,25 @@ export function ExpandablePlayer({
     const isShowing = el.scrollLeft > el.clientWidth / 2
     if (isShowing !== showQueueRef.current) {
       setShowQueue(isShowing)
-      if (isShowing && typeof window !== "undefined" && window.history.state?.view !== "queue") {
-        window.history.pushState({ view: "queue" }, "")
+      if (isShowing) {
+        if (typeof window !== "undefined" && window.history.state?.overlay !== "queue") {
+          window.history.pushState({ modal: true, overlay: "queue", view: "queue" }, "")
+        }
+      } else {
+        // User swiped back left to main player: sync history state if needed
+        if (typeof window !== "undefined" && (window.history.state?.overlay === "queue" || window.history.state?.view === "queue")) {
+          window.history.back()
+        }
       }
     }
   }, [])
-
-  const showLyricsRef = useRef(false)
-  const showQueueRef = useRef(false)
-
-  useEffect(() => {
-    showLyricsRef.current = showLyrics;
-    showQueueRef.current = showQueue;
-  }, [showLyrics, showQueue]);
-
-  // ── Push History State for ExpandablePlayer, Lyrics, and Queue ────────────
-  useEffect(() => {
-    if (isExpanded) {
-      if (typeof window !== "undefined" && window.history.state?.view !== "expandable" && window.history.state?.view !== "lyrics" && window.history.state?.view !== "queue") {
-        window.history.pushState({ view: "expandable" }, "");
-      }
-    }
-  }, [isExpanded])
-
-  useEffect(() => {
-    if (isExpanded && showLyrics) {
-      if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-        window.history.pushState({ view: "lyrics" }, "");
-      }
-    }
-  }, [isExpanded, showLyrics])
-
-  useEffect(() => {
-    if (isExpanded && showQueue) {
-      if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
-        window.history.pushState({ view: "queue" }, "");
-      }
-    }
-  }, [isExpanded, showQueue])
 
   // ── Hardware Back Button / PopState Handler ──────────────────────────────
   useEffect(() => {
     if (!isExpanded) return
 
     const handlePopState = (e: PopStateEvent) => {
-      // 1. If Lyrics is currently showing, close Lyrics first
+      // 1. If Lyrics is currently showing, close Lyrics and stay in ExpandablePlayer
       if (showLyricsRef.current) {
         if (verticalScrollRef.current) {
           verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
@@ -374,7 +367,7 @@ export function ExpandablePlayer({
         return
       }
 
-      // 2. If Queue is currently showing, close Queue first
+      // 2. If Queue is currently showing, close Queue and stay in ExpandablePlayer
       if (showQueueRef.current) {
         if (horizontalScrollRef.current) {
           horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
@@ -383,8 +376,8 @@ export function ExpandablePlayer({
         return
       }
 
-      // 3. Otherwise, close ExpandablePlayer
-      onExpandChange(false)
+      // 3. Otherwise, collapse ExpandablePlayer without double-popping history
+      onExpandChange(false, false)
     }
 
     window.addEventListener("popstate", handlePopState)
@@ -392,28 +385,35 @@ export function ExpandablePlayer({
   }, [isExpanded, onExpandChange])
 
   const handleBackdropClick = useCallback(() => {
-    onExpandChange(false)
+    onExpandChange(false, true)
   }, [onExpandChange])
 
+  // ── Desktop Escape Key Handler ──────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (showLyrics) {
-          closeLyrics();
-        } else if (showQueue) {
-          closeQueue();
-        } else {
-          onExpandChange(false);
+        if (showLyricsRef.current) {
+          e.preventDefault()
+          e.stopPropagation()
+          closeLyrics()
+        } else if (showQueueRef.current) {
+          e.preventDefault()
+          e.stopPropagation()
+          closeQueue()
+        } else if (isExpanded) {
+          e.preventDefault()
+          e.stopPropagation()
+          onExpandChange(false, true)
         }
       }
     }
     if (isExpanded) {
-      window.addEventListener("keydown", handleKeyDown);
+      window.addEventListener("keydown", handleKeyDown, true)
     }
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true)
     }
-  }, [isExpanded, onExpandChange, showLyrics, showQueue, closeLyrics, closeQueue])
+  }, [isExpanded, onExpandChange, closeLyrics, closeQueue])
 
   useEffect(() => {
     if (isExpanded) {

@@ -28,7 +28,16 @@ export default function Home() {
     window.history.replaceState({ view: "home" }, "")
 
     const handlePopState = (event: PopStateEvent) => {
-      if (event.state?.modal) {
+      // If the pop event is related to a modal or player overlay (player, expandable, lyrics, queue), do not change the underlying main view!
+      if (
+        event.state?.modal ||
+        event.state?.playerView ||
+        event.state?.playerOverlay ||
+        event.state?.view === "expandable" ||
+        event.state?.view === "lyrics" ||
+        event.state?.view === "queue" ||
+        event.state?.view === "player"
+      ) {
         return
       }
 
