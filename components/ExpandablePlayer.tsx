@@ -271,8 +271,9 @@ export function ExpandablePlayer({
     if (verticalScrollRef.current) {
       verticalScrollRef.current.scrollTo({ top: actualVh, behavior: "smooth" })
     }
-    if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-      window.history.pushState({ view: "lyrics" }, "")
+    setShowLyrics(true)
+    if (typeof window !== "undefined" && window.history.state?.view !== "expandable-lyrics") {
+      window.history.pushState({ view: "expandable-lyrics" }, "")
     }
   }, [actualVh])
 
@@ -280,7 +281,8 @@ export function ExpandablePlayer({
     if (verticalScrollRef.current) {
       verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
     }
-    if (typeof window !== "undefined" && window.history.state?.view === "lyrics") {
+    setShowLyrics(false)
+    if (typeof window !== "undefined" && window.history.state?.view === "expandable-lyrics") {
       window.history.back()
     }
   }, [])
@@ -289,8 +291,9 @@ export function ExpandablePlayer({
     if (horizontalScrollRef.current) {
       horizontalScrollRef.current.scrollTo({ left: window.innerWidth, behavior: "smooth" })
     }
-    if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
-      window.history.pushState({ view: "queue" }, "")
+    setShowQueue(true)
+    if (typeof window !== "undefined" && window.history.state?.view !== "expandable-queue") {
+      window.history.pushState({ view: "expandable-queue" }, "")
     }
   }, [])
 
@@ -298,7 +301,8 @@ export function ExpandablePlayer({
     if (horizontalScrollRef.current) {
       horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
     }
-    if (typeof window !== "undefined" && window.history.state?.view === "queue") {
+    setShowQueue(false)
+    if (typeof window !== "undefined" && window.history.state?.view === "expandable-queue") {
       window.history.back()
     }
   }, [])
@@ -309,8 +313,14 @@ export function ExpandablePlayer({
     const isShowing = el.scrollTop > el.clientHeight / 2
     if (isShowing !== showLyricsRef.current) {
       setShowLyrics(isShowing)
-      if (isShowing && typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-        window.history.pushState({ view: "lyrics" }, "")
+      if (isShowing) {
+        if (typeof window !== "undefined" && window.history.state?.view !== "expandable-lyrics") {
+          window.history.pushState({ view: "expandable-lyrics" }, "")
+        }
+      } else {
+        if (typeof window !== "undefined" && window.history.state?.view === "expandable-lyrics") {
+          window.history.back()
+        }
       }
     }
   }, [])
@@ -321,8 +331,14 @@ export function ExpandablePlayer({
     const isShowing = el.scrollLeft > el.clientWidth / 2
     if (isShowing !== showQueueRef.current) {
       setShowQueue(isShowing)
-      if (isShowing && typeof window !== "undefined" && window.history.state?.view !== "queue") {
-        window.history.pushState({ view: "queue" }, "")
+      if (isShowing) {
+        if (typeof window !== "undefined" && window.history.state?.view !== "expandable-queue") {
+          window.history.pushState({ view: "expandable-queue" }, "")
+        }
+      } else {
+        if (typeof window !== "undefined" && window.history.state?.view === "expandable-queue") {
+          window.history.back()
+        }
       }
     }
   }, [])
@@ -335,37 +351,14 @@ export function ExpandablePlayer({
     showQueueRef.current = showQueue;
   }, [showLyrics, showQueue]);
 
-  // ── Push History State for ExpandablePlayer, Lyrics, and Queue ────────────
-  useEffect(() => {
-    if (isExpanded) {
-      if (typeof window !== "undefined" && window.history.state?.view !== "expandable" && window.history.state?.view !== "lyrics" && window.history.state?.view !== "queue") {
-        window.history.pushState({ view: "expandable" }, "");
-      }
-    }
-  }, [isExpanded])
-
-  useEffect(() => {
-    if (isExpanded && showLyrics) {
-      if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-        window.history.pushState({ view: "lyrics" }, "");
-      }
-    }
-  }, [isExpanded, showLyrics])
-
-  useEffect(() => {
-    if (isExpanded && showQueue) {
-      if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
-        window.history.pushState({ view: "queue" }, "");
-      }
-    }
-  }, [isExpanded, showQueue])
-
   // ── Hardware Back Button / PopState Handler ──────────────────────────────
   useEffect(() => {
     if (!isExpanded) return
 
     const handlePopState = (e: PopStateEvent) => {
-      // 1. If Lyrics is currently showing, close Lyrics first
+      const currentStateView = e.state?.view
+
+      // 1. If Lyrics is currently showing, slide/scroll back to ExpandablePlayer main view
       if (showLyricsRef.current) {
         if (verticalScrollRef.current) {
           verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
@@ -374,7 +367,7 @@ export function ExpandablePlayer({
         return
       }
 
-      // 2. If Queue is currently showing, close Queue first
+      // 2. If Queue is currently showing, slide/scroll back to ExpandablePlayer main view
       if (showQueueRef.current) {
         if (horizontalScrollRef.current) {
           horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
@@ -383,7 +376,20 @@ export function ExpandablePlayer({
         return
       }
 
-      // 3. Otherwise, close ExpandablePlayer
+      // 3. If popped to expandable main view, ensure sheets are closed and stay open
+      if (currentStateView === "expandable") {
+        if (verticalScrollRef.current) {
+          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
+        }
+        if (horizontalScrollRef.current) {
+          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
+        }
+        setShowLyrics(false)
+        setShowQueue(false)
+        return
+      }
+
+      // 4. Otherwise, user is going back from ExpandablePlayer to background view
       onExpandChange(false)
     }
 

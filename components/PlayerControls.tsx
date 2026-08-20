@@ -134,13 +134,13 @@ export function PlayerControls() {
 
     const view = event.state?.view;
 
-    if (view === "queue") {
+    if (view === "queue" || view === "mini-queue") {
       setIsQueueOpen(true);
       setIsLyricsOpen(false);
-    } else if (view === "lyrics") {
+    } else if (view === "lyrics" || view === "mini-lyrics") {
       setIsLyricsOpen(true);
       setIsQueueOpen(false);
-    } else if (view === "expandable") {
+    } else if (view === "expandable" || view === "expandable-lyrics" || view === "expandable-queue") {
       setIsExpandedPlayer(true);
       setIsLyricsOpen(false);
       setIsQueueOpen(false);
@@ -162,9 +162,11 @@ export function PlayerControls() {
 
   const openExpandedPlayer = useCallback(() => {
     setIsExpandedPlayer(true);
+    setIsLyricsOpen(false);
+    setIsQueueOpen(false);
     const h = window.innerHeight || 800;
     scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
-    if (typeof window !== "undefined" && window.history.state?.view !== "expandable") {
+    if (typeof window !== "undefined" && !window.history.state?.view?.startsWith("expandable")) {
       window.history.pushState({ view: "expandable" }, "");
     }
   }, []);
@@ -173,7 +175,7 @@ export function PlayerControls() {
     if (isExpandedPlayer) {
       setIsExpandedPlayer(false);
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-      if (typeof window !== "undefined" && (window.history.state?.view === "expandable" || window.history.state?.view === "lyrics" || window.history.state?.view === "queue")) {
+      if (typeof window !== "undefined" && (window.history.state?.view === "expandable" || window.history.state?.view === "expandable-lyrics" || window.history.state?.view === "expandable-queue" || window.history.state?.view === "lyrics" || window.history.state?.view === "queue")) {
         window.history.back();
       }
     }
@@ -191,12 +193,12 @@ export function PlayerControls() {
   const setLyricsOpen = useCallback((open: boolean) => {
     if (open) {
       setIsLyricsOpen(true);
-      if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
-        window.history.pushState({ view: "lyrics" }, "");
+      if (typeof window !== "undefined" && window.history.state?.view !== "mini-lyrics" && window.history.state?.view !== "lyrics") {
+        window.history.pushState({ view: "mini-lyrics" }, "");
       }
     } else {
       setIsLyricsOpen(false);
-      if (typeof window !== "undefined" && window.history.state?.view === "lyrics") {
+      if (typeof window !== "undefined" && (window.history.state?.view === "mini-lyrics" || window.history.state?.view === "lyrics")) {
         window.history.back();
       }
     }
@@ -205,12 +207,12 @@ export function PlayerControls() {
   const setQueueOpen = useCallback((open: boolean) => {
     if (open) {
       setIsQueueOpen(true);
-      if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
-        window.history.pushState({ view: "queue" }, "");
+      if (typeof window !== "undefined" && window.history.state?.view !== "mini-queue" && window.history.state?.view !== "queue") {
+        window.history.pushState({ view: "mini-queue" }, "");
       }
     } else {
       setIsQueueOpen(false);
-      if (typeof window !== "undefined" && window.history.state?.view === "queue") {
+      if (typeof window !== "undefined" && (window.history.state?.view === "mini-queue" || window.history.state?.view === "queue")) {
         window.history.back();
       }
     }
