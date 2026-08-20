@@ -20,12 +20,13 @@ interface TrackImageProps {
 
 export const TrackImage = memo(function TrackImage({ src, alt = "", width, height, fill, className, referrerPolicy = "no-referrer", priority, unoptimized, objectFit = "cover" }: TrackImageProps) {
   const isVideo = src?.toLowerCase().includes(".mp4") || src?.includes("video_upload")
-  const url = src || "/placeholder.svg"
-  
+  const [hasError, setHasError] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
 
+  const effectiveSrc = hasError || !src ? "/placeholder.svg" : src
+
   // Extract Suno clip ID for a seamless high-res static poster image
-  const uuidMatch = url.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/)
+  const uuidMatch = typeof effectiveSrc === "string" ? effectiveSrc.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/) : null
   const posterUrl = uuidMatch ? `https://cdn2.suno.ai/image_${uuidMatch[0]}.jpeg` : undefined
 
   return (
@@ -45,7 +46,7 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
           {isVideo ? (
             <video
-              src={url}
+              src={effectiveSrc}
               autoPlay
               loop
               muted
@@ -55,13 +56,14 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
             />
           ) : (
             <Image
-              src={url}
+              src={effectiveSrc}
               alt=""
               fill
               aria-hidden="true"
               className="object-cover blur-2xl scale-110 opacity-40"
               unoptimized={unoptimized}
               referrerPolicy={referrerPolicy}
+              onError={() => setHasError(true)}
             />
           )}
         </div>
@@ -69,8 +71,8 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
 
       {isVideo ? (
         <video
-          key={url}
-          src={url}
+          key={effectiveSrc}
+          src={effectiveSrc}
           poster={posterUrl}
           autoPlay
           loop
@@ -80,6 +82,10 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
           disablePictureInPicture
           disableRemotePlayback
           onLoadedData={() => setIsLoaded(true)}
+          onError={() => {
+            setHasError(true)
+            setIsLoaded(true)
+          }}
           style={{
             transform: 'translate3d(0, 0, 0)',
             backfaceVisibility: 'hidden',
@@ -94,12 +100,16 @@ export const TrackImage = memo(function TrackImage({ src, alt = "", width, heigh
         />
       ) : (
         <Image
-          key={url}
-          src={url}
+          key={effectiveSrc}
+          src={effectiveSrc}
           alt={alt}
           fill
           sizes={fill ? "100vw" : `${width || 40}px`}
           onLoad={() => setIsLoaded(true)}
+          onError={() => {
+            setHasError(true)
+            setIsLoaded(true)
+          }}
           priority={priority}
           unoptimized={unoptimized}
           className={cn(

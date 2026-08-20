@@ -21,6 +21,9 @@ import {
   Flame,
   ArrowRight,
   TrendingUp,
+  Compass,
+  ArrowLeft,
+  X,
 } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import type {
@@ -75,6 +78,18 @@ const GENRES = [
   { name: "Indie", color: "from-teal-600 to-slate-900" },
 ]
 
+interface SavedSearchViewState {
+  query: string
+  lastQuery: string
+  activeFilter: FilterChip
+  searchResponse: MusicSearchResponse | null
+  continuation: string | null
+  regionCode: string
+}
+
+// Module-level preserved state across page / tab switches
+let savedSearchViewState: SavedSearchViewState | null = null
+
 function toTrack(result: SearchResult) {
   return {
     id: result.videoId ?? result.id,
@@ -95,10 +110,21 @@ interface SearchViewProps {
 }
 
 export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: SearchViewProps) {
-  const [query, setQuery] = useState(initialQuery)
-  const [activeFilter, setActiveFilter] = useState<FilterChip>("all")
-  const [searchResponse, setSearchResponse] = useState<MusicSearchResponse | null>(null)
-  const [continuation, setContinuation] = useState<string | null>(null)
+  const [query, setQuery] = useState(() => {
+    if (initialQuery) return initialQuery
+    return savedSearchViewState?.query || ""
+  })
+  const [activeFilter, setActiveFilter] = useState<FilterChip>(() => {
+    return savedSearchViewState?.activeFilter || "all"
+  })
+  const [searchResponse, setSearchResponse] = useState<MusicSearchResponse | null>(() => {
+    if (initialQuery && initialQuery !== savedSearchViewState?.lastQuery) return null
+    return savedSearchViewState?.searchResponse || null
+  })
+  const [continuation, setContinuation] = useState<string | null>(() => {
+    if (initialQuery && initialQuery !== savedSearchViewState?.lastQuery) return null
+    return savedSearchViewState?.continuation || null
+  })
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number>(-1)
@@ -106,10 +132,15 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
-  const [lastQuery, setLastQuery] = useState("")
+  const [lastQuery, setLastQuery] = useState(() => {
+    if (initialQuery) return initialQuery
+    return savedSearchViewState?.lastQuery || ""
+  })
 
   // Explore State
-  const [regionCode, setRegionCode] = useState("MY")
+  const [regionCode, setRegionCode] = useState(() => {
+    return savedSearchViewState?.regionCode || "MY"
+  })
   const [heroVideos, setHeroVideos] = useState<VideoItem[]>([])
   const [trendingVideos, setTrendingVideos] = useState<VideoItem[]>([])
   const [exploreLoading, setExploreLoading] = useState(true)
@@ -121,6 +152,8 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
   const suggestAbortRef = useRef<AbortController | null>(null)
   const suggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchBoxRef = useRef<HTMLDivElement>(null)
+  const lastQueryRef = useRef(lastQuery)
+  lastQueryRef.current = lastQuery
 
   const {
     playlists,
@@ -133,17 +166,139 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
     setPlaybackSource,
   } = useApp()
 
+  // Keep preserved module cache synchronized
+  useEffect(() => {
+    savedSearchViewState = {
+      query,
+      lastQuery,
+      activeFilter,
+      searchResponse,
+      continuation,
+      regionCode,
+    }
+  }, [query, lastQuery, activeFilter, searchResponse, continuation, regionCode])
+
+  // Clear search and return smoothly to Explore view
+  const clearToExplore = useCallback((pushHistory = true) => {
+    searchAbortRef.current?.abort()
+    setQuery("")
+    setLastQuery("")
+    setSearchResponse(null)
+    setContinuation(null)
+    setActiveFilter("all")
+    setError(null)
+    setShowSuggestions(false)
+    setSuggestions([])
+    setSelectedGenre(null)
+    savedSearchViewState = {
+      query: "",
+      lastQuery: "",
+      activeFilter: "all",
+      searchResponse: null,
+      continuation: null,
+      regionCode,
+    }
+    if (pushHistory && typeof window !== "undefined") {
+      if (window.history.state?.query || window.history.state?.subview === "results") {
+        window.history.pushState({ view: "search" }, "")
+      }
+    }
+  }, [regionCode])
+
+  const runSearch = useCallback(async (rawQuery: string, pushHistory = true) => {
+    const trimmed = rawQuery.trim()
+    if (!trimmed) return
+
+    let searchQuery = trimmed
+    const urlPattern = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+    const match = trimmed.match(urlPattern)
+    if (match) searchQuery = match[1]
+
+    setShowSuggestions(false)
+    setSuggestions([])
+    setLastQuery(trimmed)
+    setQuery(trimmed)
+    setIsLoading(true)
+    setError(null)
+    setActiveFilter("all")
+    setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
+
+    if (pushHistory && typeof window !== "undefined") {
+      const currentState = window.history.state
+      if (currentState?.query !== trimmed || currentState?.subview !== "results") {
+        window.history.pushState({ view: "search", query: trimmed, subview: "results" }, "")
+      }
+    }
+
+    searchAbortRef.current?.abort()
+    const controller = new AbortController()
+    searchAbortRef.current = controller
+
+    try {
+      const cacheKey = `music_search_v2_${searchQuery.toLowerCase()}`
+      const cached = getCachedData<CachedSearch>(cacheKey, sessionStorage)
+
+      if (cached) {
+        setSearchResponse(cached.response)
+        setContinuation(cached.response.continuation ?? null)
+      } else {
+        const res = await fetch(`/api/music/search?q=${encodeURIComponent(searchQuery)}`, { signal: controller.signal })
+        const data: MusicSearchResponse = await res.json()
+        if (controller.signal.aborted) return
+
+        if (data.error && (!data.results || data.results.length === 0)) {
+          setError(data.error)
+          setSearchResponse(null)
+          setContinuation(null)
+        } else {
+          setSearchResponse(data)
+          setContinuation(data.continuation ?? null)
+          setCachedData(cacheKey, { response: data }, sessionStorage)
+        }
+      }
+      setIsLoading(false)
+    } catch (err: any) {
+      if (err?.name === "AbortError") return
+      console.error("[SearchView] Search failed:", err)
+      setIsLoading(false)
+      setError("Failed to fetch search results.")
+    }
+  }, [])
+
+  // Handle popstate for browser/mobile Back button in SearchView
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modal) return
+
+      const state = event.state
+      if (state?.view === "search" || state?.view === "explore") {
+        if (state.query) {
+          if (state.query !== lastQueryRef.current) {
+            setQuery(state.query)
+            runSearch(state.query, false)
+          }
+        } else {
+          // If popped state has no query or is base explore, return to explore
+          clearToExplore(false)
+        }
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [runSearch, clearToExplore])
+
   // Fetch Explore Feed on load & region change
   useEffect(() => {
     fetchExploreData(regionCode)
   }, [regionCode])
 
   useEffect(() => {
-    if (initialQuery && initialQuery !== lastQuery) {
+    if (initialQuery && initialQuery !== lastQueryRef.current) {
       setQuery(initialQuery)
-      runSearch(initialQuery)
+      runSearch(initialQuery, true)
     }
-  }, [initialQuery])
+  }, [initialQuery, runSearch])
 
   const fetchExploreData = async (region: string) => {
     const cacheKey = `explore_data_${region}`
@@ -172,29 +327,8 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
   }
 
   const handleSelectGenre = async (genreName: string) => {
-    setSelectedGenre(genreName)
-    setGenreLoading(true)
-
-    const cacheKey = `genre_${genreName}_${regionCode}`
-    const cached = getCachedData<VideoItem[]>(cacheKey)
-    if (cached) {
-      setGenreVideos(cached)
-      setGenreLoading(false)
-      return
-    }
-
-    try {
-      const res = await fetch(`/api/explore?genre=${encodeURIComponent(genreName)}&regionCode=${encodeURIComponent(regionCode)}`)
-      if (res.ok) {
-        const data = await res.json()
-        setGenreVideos(data.videos || [])
-        setCachedData(cacheKey, data.videos || [])
-      }
-    } catch (err) {
-      console.error("[SearchView] Genre fetch error:", err)
-    } finally {
-      setGenreLoading(false)
-    }
+    setQuery(genreName)
+    runSearch(genreName, true)
   }
 
   // Debounced search suggestions
@@ -260,58 +394,6 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
       setSelectedIndex(-1)
     }
   }
-
-  const runSearch = useCallback(async (rawQuery: string) => {
-    const trimmed = rawQuery.trim()
-    if (!trimmed) return
-
-    let searchQuery = trimmed
-    const urlPattern = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
-    const match = trimmed.match(urlPattern)
-    if (match) searchQuery = match[1]
-
-    setShowSuggestions(false)
-    setSuggestions([])
-    setLastQuery(trimmed)
-    setIsLoading(true)
-    setError(null)
-    setActiveFilter("all")
-    setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)])
-
-    searchAbortRef.current?.abort()
-    const controller = new AbortController()
-    searchAbortRef.current = controller
-
-    try {
-      const cacheKey = `music_search_v2_${searchQuery.toLowerCase()}`
-      const cached = getCachedData<CachedSearch>(cacheKey, sessionStorage)
-
-      if (cached) {
-        setSearchResponse(cached.response)
-        setContinuation(cached.response.continuation ?? null)
-      } else {
-        const res = await fetch(`/api/music/search?q=${encodeURIComponent(searchQuery)}`, { signal: controller.signal })
-        const data: MusicSearchResponse = await res.json()
-        if (controller.signal.aborted) return
-
-        if (data.error && (!data.results || data.results.length === 0)) {
-          setError(data.error)
-          setSearchResponse(null)
-          setContinuation(null)
-        } else {
-          setSearchResponse(data)
-          setContinuation(data.continuation ?? null)
-          setCachedData(cacheKey, { response: data }, sessionStorage)
-        }
-      }
-      setIsLoading(false)
-    } catch (err: any) {
-      if (err?.name === "AbortError") return
-      console.error("[SearchView] Search failed:", err)
-      setIsLoading(false)
-      setError("Failed to fetch search results.")
-    }
-  }, [])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -403,7 +485,7 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
 
   const handleBrowseArtist = (artistName: string) => {
     setQuery(artistName)
-    runSearch(artistName)
+    runSearch(artistName, true)
   }
 
   const currentRegion = getRegion(regionCode)
@@ -425,7 +507,7 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
     <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] via-zinc-950/80 to-black text-foreground p-4 md:p-8 overflow-y-auto pb-32">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* TOP SEARCH HEADER */}
-        <div className="pt-2 flex items-center gap-3">
+        <div className="pt-2 flex items-center gap-2 sm:gap-3">
           <form onSubmit={handleSearch} className="flex-1 relative" ref={searchBoxRef}>
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
             <Input
@@ -441,6 +523,16 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
               className="pl-10 pr-10 h-12 rounded-2xl bg-zinc-900/90 border-white/10 text-white placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-primary shadow-lg"
               autoComplete="off"
             />
+            {query.length > 0 && (
+              <button
+                type="button"
+                onClick={() => clearToExplore(true)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/10 z-10 transition-colors"
+                title="Clear search and return to explore"
+              >
+                <X size={16} />
+              </button>
+            )}
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden py-1">
                 {suggestions.map((s, index) => (
@@ -471,11 +563,11 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="rounded-2xl border-white/15 bg-zinc-900/90 text-white text-xs font-semibold hover:bg-zinc-800 flex items-center gap-2 h-12 px-3.5 shrink-0 shadow-sm"
+                className="rounded-2xl border-white/15 bg-zinc-900/90 text-white text-xs font-semibold hover:bg-zinc-800 flex items-center gap-2 h-12 px-3 sm:px-3.5 shrink-0 shadow-sm cursor-pointer"
               >
                 <span>{currentRegion.flag}</span>
-                <span className="hidden sm:inline">{currentRegion.name}</span>
-                <span className="sm:hidden">{currentRegion.code}</span>
+                <span className="hidden md:inline">{currentRegion.name}</span>
+                <span className="md:hidden">{currentRegion.code}</span>
                 <ChevronDown size={14} className="text-gray-400" />
               </Button>
             </DropdownMenuTrigger>
@@ -535,33 +627,45 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
           </DropdownMenu>
         </div>
 
-        {/* FILTER CHIPS (Visible when search results exist) */}
+        {/* FILTER CHIPS (Visible when search results exist) WITH EXPLORE BUTTON LEANING RIGHT */}
         {!isLoading && hasResults && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {[
-              { id: "all", label: "All" },
-              { id: "songs", label: "Songs", count: shelves.songs?.items.length },
-              { id: "albums", label: "Albums", count: shelves.albums?.items.length },
-              { id: "artists", label: "Artists", count: shelves.artists?.items.length },
-              { id: "videos", label: "Videos", count: shelves.videos?.items.length },
-              { id: "playlists", label: "Playlists", count: shelves.playlists?.items.length },
-            ].map((chip) => {
-              if (chip.id !== "all" && !chip.count) return null
-              const isSelected = activeFilter === chip.id
-              return (
-                <button
-                  key={chip.id}
-                  onClick={() => setActiveFilter(chip.id as FilterChip)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 ${
-                    isSelected
-                      ? "bg-white text-black shadow-md scale-105"
-                      : "bg-zinc-900/90 text-gray-300 border border-white/10 hover:bg-zinc-800 hover:text-white"
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              )
-            })}
+          <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1 no-scrollbar">
+            <div className="flex items-center gap-2 shrink-0">
+              {[
+                { id: "all", label: "All" },
+                { id: "songs", label: "Songs", count: shelves.songs?.items.length },
+                { id: "albums", label: "Albums", count: shelves.albums?.items.length },
+                { id: "artists", label: "Artists", count: shelves.artists?.items.length },
+                { id: "videos", label: "Videos", count: shelves.videos?.items.length },
+                { id: "playlists", label: "Playlists", count: shelves.playlists?.items.length },
+              ].map((chip) => {
+                if (chip.id !== "all" && !chip.count) return null
+                const isSelected = activeFilter === chip.id
+                return (
+                  <button
+                    key={chip.id}
+                    onClick={() => setActiveFilter(chip.id as FilterChip)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                      isSelected
+                        ? "bg-white text-black shadow-md scale-105"
+                        : "bg-zinc-900/90 text-gray-300 border border-white/10 hover:bg-zinc-800 hover:text-white"
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Explore Button leaning to the right */}
+            <button
+              onClick={() => clearToExplore(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-300 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 px-3.5 py-1.5 rounded-full border border-white/10 shrink-0 ml-auto transition-all cursor-pointer shadow-sm hover:border-primary/40 active:scale-95 group"
+              title="Return to Explore & Genres"
+            >
+              <Compass size={14} className="text-primary group-hover:rotate-45 transition-transform duration-300" />
+              <span>Explore</span>
+            </button>
           </div>
         )}
 
@@ -836,7 +940,7 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
                     <PlaylistCard
                       key={playlist.playlistId || playlist.id || idx}
                       playlist={playlist}
-                      onBrowse={() => runSearch(playlist.title)}
+                      onBrowse={() => runSearch(playlist.title, true)}
                     />
                   ))}
                 </div>
@@ -861,8 +965,7 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
                   <button
                     key={g.name}
                     onClick={() => {
-                      setQuery(g.name)
-                      runSearch(g.name)
+                      handleSelectGenre(g.name)
                     }}
                     className={`shrink-0 w-32 sm:w-36 md:flex-1 md:w-auto h-16 rounded-xl p-3 text-left font-bold text-sm text-white bg-gradient-to-br ${g.color} shadow-md hover:scale-105 active:scale-95 transition-all flex flex-col justify-between select-none cursor-pointer`}
                   >

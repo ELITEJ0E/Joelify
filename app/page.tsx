@@ -28,11 +28,19 @@ export default function Home() {
     window.history.replaceState({ view: "home" }, "")
 
     const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modal) {
+        return
+      }
+
       if (event.state?.view) {
         setCurrentView(event.state.view)
         if (event.state.albumId) setSelectedAlbumId(event.state.albumId)
-        if (event.state.query) setSearchQuery(event.state.query)
-      } else if (!event.state?.modal) {
+        if (event.state.query !== undefined) {
+          setSearchQuery(event.state.query)
+        } else if (event.state.view === "search" && !event.state.query) {
+          setSearchQuery("")
+        }
+      } else {
         // If we go back and there's no specific state, default to home
         setCurrentView("home")
       }
@@ -50,10 +58,17 @@ export default function Home() {
       return
     }
 
-    if (view === "search" && params?.query) {
-      setSearchQuery(params.query)
-      setCurrentView("search")
-      window.history.pushState({ view: "search", query: params.query }, "")
+    if (view === "search") {
+      if (params?.query) {
+        setSearchQuery(params.query)
+        setCurrentView("search")
+        window.history.pushState({ view: "search", query: params.query }, "")
+      } else {
+        setCurrentView("search")
+        if (currentView !== "search") {
+          window.history.pushState({ view: "search" }, "")
+        }
+      }
       return
     }
 
