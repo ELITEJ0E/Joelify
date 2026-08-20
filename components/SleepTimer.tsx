@@ -15,6 +15,7 @@ interface SleepTimerProps {
 
 export const SleepTimer = React.forwardRef<HTMLButtonElement, SleepTimerProps>(
   ({ onTimerEnd, isPlaying }, ref) => {
+    const [open, setOpen] = useState(false)
     const [isActive, setIsActive] = useState(false)
     const [duration, setDuration] = useState(30) // in minutes
     const [timeRemaining, setTimeRemaining] = useState(0) // in seconds
@@ -22,6 +23,28 @@ export const SleepTimer = React.forwardRef<HTMLButtonElement, SleepTimerProps>(
     const [stopAtTrackEnd, setStopAtTrackEnd] = useState(false)
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+    useEffect(() => {
+      if (open) {
+        if (typeof window !== "undefined" && window.history.state?.modal !== "sleep-timer") {
+          window.history.pushState({ modal: "sleep-timer" }, "")
+        }
+        const handlePopState = () => setOpen(false)
+        window.addEventListener("popstate", handlePopState)
+        return () => window.removeEventListener("popstate", handlePopState)
+      }
+    }, [open])
+
+    const handleOpenChange = (isOpen: boolean) => {
+      if (isOpen) {
+        setOpen(true)
+      } else {
+        setOpen(false)
+        if (typeof window !== "undefined" && window.history.state?.modal === "sleep-timer") {
+          window.history.back()
+        }
+      }
+    }
 
     useEffect(() => {
       if (!isActive) return
@@ -91,7 +114,7 @@ export const SleepTimer = React.forwardRef<HTMLButtonElement, SleepTimerProps>(
     }
 
     return (
-      <Sheet>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>
           <Button ref={ref} variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-primary/15 relative">
             <Moon size={20} />

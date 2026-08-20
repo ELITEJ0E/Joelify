@@ -10,7 +10,15 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      { protocol: "https", hostname: "i.ytimg.com" },
+      { protocol: "https", hostname: "yt3.ggpht.com" },
+      { protocol: "https", hostname: "img.youtube.com" },
+      { protocol: "https", hostname: "cdn1.suno.ai" },
+      { protocol: "https", hostname: "cdn2.suno.ai" },
+      { protocol: "https", hostname: "studio-api.suno.ai" },
+      { protocol: "https", hostname: "suno.com" },
+    ],
   },
 };
 

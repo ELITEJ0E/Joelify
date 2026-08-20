@@ -11,12 +11,13 @@ import { KaraokeLyricsView } from "./KaraokeLyricsView"
 
 interface LyricsDisplayProps {
   currentTime: number
+  currentTimeMotion?: import('framer-motion').MotionValue<number>
   isPlaying: boolean
   duration?: number
   onSeek?: (value: number[]) => void
 }
 
-export function LyricsDisplay({ currentTime, isPlaying, duration, onSeek }: LyricsDisplayProps) {
+export function LyricsDisplay({ currentTime, currentTimeMotion, isPlaying, duration, onSeek }: LyricsDisplayProps) {
   const { currentTrack } = useApp()
   const { activeLyrics, isLoading, error } = useActiveLyrics()
 
@@ -49,39 +50,52 @@ export function LyricsDisplay({ currentTime, isPlaying, duration, onSeek }: Lyri
   useEffect(() => {
     if (!activeLyrics || activeLyrics.length === 0) return
     if (!isAutoScroll) return // Do not sync with audio if auto-scroll is off
-
-    // Unsynced Fallback: Interpolate based on current time and track duration
-    if (isUnsynced) {
-      if (duration && duration > 0) {
-        let pct = currentTime / duration;
-        if (pct < 0) pct = 0;
-        if (pct > 1) pct = 1;
-        const newIndex = Math.floor(pct * activeLyrics.length);
-        const clampedIndex = isNaN(newIndex) ? 0 : Math.min(Math.max(0, newIndex), activeLyrics.length - 1);
-        if (clampedIndex !== currentLineIndex) {
-          setCurrentLineIndex(clampedIndex);
+    
+    // Create an update function we can call on frame/motion change
+    const updateIndex = (timeVal: number) => {
+      // Unsynced Fallback: Interpolate based on current time and track duration
+      if (isUnsynced) {
+        if (duration && duration > 0) {
+          let pct = timeVal / duration;
+          if (pct < 0) pct = 0;
+          if (pct > 1) pct = 1;
+          const newIndex = Math.floor(pct * activeLyrics.length);
+          const clampedIndex = isNaN(newIndex) ? 0 : Math.min(Math.max(0, newIndex), activeLyrics.length - 1);
+          setCurrentLineIndex((prev) => clampedIndex !== prev ? clampedIndex : prev);
+        } else {
+          setCurrentLineIndex((prev) => prev !== 0 ? 0 : prev);
         }
-      } else if (currentLineIndex !== 0) {
-        setCurrentLineIndex(0);
+        return;
       }
-      return;
-    }
-
-    // Synced Lyrics: find the last valid line whose time is <= currentTime
-    let newIndex = -1;
-    for (let i = 0; i < activeLyrics.length; i++) {
-        const t = activeLyrics[i].time;
-        if (typeof t === 'number' && !isNaN(t) && t >= 0 && currentTime >= t) {
-            newIndex = i;
+  
+      // Synced Lyrics: find the last valid line whose time is <= timeVal
+      let newIndex = -1;
+      for (let i = 0; i < activeLyrics.length; i++) {
+          const t = activeLyrics[i].time;
+          if (typeof t === 'number' && !isNaN(t) && t >= 0 && timeVal >= t) {
+              newIndex = i;
+          }
+      }
+      
+      setCurrentLineIndex((prev) => {
+        if (newIndex >= 0 && newIndex < activeLyrics.length && newIndex !== prev) {
+          return newIndex;
+        } else if (newIndex === -1 && prev !== 0) {
+          return 0;
         }
-    }
+        return prev;
+      });
+    };
 
-    if (newIndex >= 0 && newIndex < activeLyrics.length && newIndex !== currentLineIndex) {
-      setCurrentLineIndex(newIndex);
-    } else if (newIndex === -1 && currentLineIndex !== 0) {
-      setCurrentLineIndex(0);
+    // If we have a motion value, subscribe to it for high-frequency updates
+    if (currentTimeMotion) {
+      const unsubscribe = currentTimeMotion.on("change", updateIndex);
+      return unsubscribe;
+    } else {
+      // Fallback to prop
+      updateIndex(currentTime);
     }
-  }, [currentTime, duration, activeLyrics, currentLineIndex, isAutoScroll, isUnsynced])
+  }, [currentTime, currentTimeMotion, duration, activeLyrics, isAutoScroll, isUnsynced])
 
   useEffect(() => {
     if (isAutoScroll) return;

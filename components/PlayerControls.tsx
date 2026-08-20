@@ -39,6 +39,9 @@ export function PlayerControls() {
   const sunoAudioRef = useRef<HTMLAudioElement | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
+  const currentTimeMotion = useMotionValue(0)
+  const currentTimeRef = useRef(0)
+  const lastReactTimeRef = useRef(0)
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
   const [isReady, setIsReady] = useState(false)
@@ -106,9 +109,29 @@ export function PlayerControls() {
     }
   }, [scrollProgressMV])
 
+  const isQueueOpenRef = useRef(false);
+  const isLyricsOpenRef = useRef(false);
+
+  useEffect(() => {
+    isQueueOpenRef.current = isQueueOpen;
+    isLyricsOpenRef.current = isLyricsOpen;
+  }, [isQueueOpen, isLyricsOpen]);
+
   // ─── Popstate / Hardware Back Button Navigation ───────────────────────
 
   const handlePopState = useCallback((event: PopStateEvent) => {
+    // If Queue sheet overlay in collapsed mode is open, close it first
+    if (isQueueOpenRef.current) {
+      setIsQueueOpen(false);
+      return;
+    }
+
+    // If Lyrics sheet overlay in collapsed mode is open, close it first
+    if (isLyricsOpenRef.current) {
+      setIsLyricsOpen(false);
+      return;
+    }
+
     const view = event.state?.view;
 
     if (view === "queue") {
@@ -637,11 +660,16 @@ export function PlayerControls() {
 
   const handleYouTubeTimeUpdate = useCallback((ct: number, d: number) => {
     if (!isSeekingRef.current && playbackSource === "youtube") {
-      setCurrentTime(ct)
-      setPlaybackPosition(ct)
+      currentTimeRef.current = ct;
+      currentTimeMotion.set(ct);
+      if (Math.abs(ct - lastReactTimeRef.current) >= 1.0) {
+        lastReactTimeRef.current = ct;
+        setCurrentTime(ct)
+        setPlaybackPosition(ct)
+      }
       setDuration((prev) => Math.abs(prev - d) > 1 ? d : prev)
     }
-  }, [setPlaybackPosition, playbackSource])
+  }, [setPlaybackPosition, playbackSource, currentTimeMotion])
 
   // ─── effects ─────────────────────────────────────────────────────────────────
 
@@ -873,8 +901,14 @@ export function PlayerControls() {
       const audio = sunoAudioRef.current;
       const onTimeUpdate = () => {
         if (!isSeekingRef.current) {
-          setCurrentTime(audio.currentTime);
-          setPlaybackPosition(audio.currentTime);
+          const ct = audio.currentTime;
+          currentTimeRef.current = ct;
+          currentTimeMotion.set(ct);
+          if (Math.abs(ct - lastReactTimeRef.current) >= 1.0) {
+            lastReactTimeRef.current = ct;
+            setCurrentTime(ct);
+            setPlaybackPosition(ct);
+          }
         }
       };
       const onLoadedMetadata = () => {
@@ -957,6 +991,10 @@ export function PlayerControls() {
   const getRepeatLabel = () =>
     repeat === "one" ? "Repeat One" : repeat === "all" ? "Repeat All" : "Repeat Off"
 
+  const progressWidth = useTransform(currentTimeMotion, (time) => {
+    return duration > 0 ? `${Math.min(100, Math.max(0, (time / duration) * 100))}%` : "0%"
+  })
+
   // ─── mini player ─────────────────────────────────────────────────────────────
 
   if (isMiniPlayer) {
@@ -1034,15 +1072,13 @@ export function PlayerControls() {
             {/* Base track */}
             <div className="w-full h-[2.5px] group-hover/seeker:h-[6px] bg-white/15 overflow-hidden transition-all duration-150 relative">
               {/* Progress fill */}
-              <div
+              <motion.div
                 className="h-full bg-primary relative transition-[width] duration-75 ease-linear"
-                style={{
-                  width: duration > 0 ? `${Math.min(100, Math.max(0, (currentTime / duration) * 100))}%` : "0%",
-                }}
+                style={{ width: progressWidth }}
               >
                 {/* Glow Thumb on hover */}
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md opacity-0 group-hover/seeker:opacity-100 transition-opacity" />
-              </div>
+              </motion.div>
 
               {/* Hover preview marker */}
               {hoverPercent !== null && (
@@ -1424,6 +1460,7 @@ export function PlayerControls() {
               else closeExpandedPlayer();
             }}
             currentTime={currentTime}
+            currentTimeMotion={currentTimeMotion}
             isPlaying={isPlaying}
             duration={duration}
             volume={volume}

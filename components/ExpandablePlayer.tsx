@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, memo } from "react"
 import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion"
 import { 
   ChevronDown, ChevronUp, ChevronRight, Music, AudioLinesIcon, Video, VideoOff,
@@ -25,6 +25,7 @@ interface ExpandablePlayerProps {
   scrollProgress?: number
   vh?: number
   currentTime: number
+  currentTimeMotion?: import('framer-motion').MotionValue<number>
   isPlaying: boolean
   duration: number
   volume?: number
@@ -48,12 +49,57 @@ function isValidYouTubeId(id: string | undefined | null): boolean {
 
 const tweenConfig = { type: "tween" as const, duration: 0.22, ease: [0.32, 0.72, 0, 1] as const }
 
+// Add right above ExpandablePlayer function declaration
+const MotionProgressBar = memo(({ 
+  currentTimeMotion, 
+  initialCurrentTime, 
+  duration, 
+  onSeek, 
+  formatTime,
+  disabled
+}: {
+  currentTimeMotion?: import('framer-motion').MotionValue<number>,
+  initialCurrentTime: number,
+  duration: number,
+  onSeek: (value: number[]) => void,
+  formatTime: (time: number) => string,
+  disabled?: boolean
+}) => {
+  const [time, setTime] = useState(initialCurrentTime)
+
+  useEffect(() => {
+    if (!currentTimeMotion) return
+    const unsubscribe = currentTimeMotion.on("change", (latest) => {
+      setTime(latest)
+    })
+    return unsubscribe
+  }, [currentTimeMotion])
+
+  return (
+    <div className="flex items-center gap-3 w-full max-w-2xl mx-auto">
+      <span className="text-xs font-medium text-white/60 w-10 text-right">{formatTime(time)}</span>
+      <div className="flex-1" onPointerDown={(e) => e.stopPropagation()}>
+        <Slider 
+          value={[time]} 
+          max={duration > 0 ? duration : 1} 
+          step={0.1} 
+          onValueChange={onSeek} 
+          disabled={disabled}
+          className="cursor-pointer [&_.slider-thumb]:bg-primary [&_.slider-thumb]:border-2 [&_.slider-thumb]:border-white"
+        />
+      </div>
+      <span className="text-xs font-medium text-white/60 w-10">{formatTime(duration)}</span>
+    </div>
+  )
+})
+
 export function ExpandablePlayer({
   isExpanded,
   onExpandChange,
   scrollProgress = 0,
   vh,
   currentTime,
+  currentTimeMotion,
   isPlaying,
   duration,
   volume = 1,
@@ -126,13 +172,9 @@ export function ExpandablePlayer({
     })
   }, [onVideoActiveChange])
 
-  // ── Destroy video player and reset state on close ─────────────────────────
+  // ── Destroy video player on close (states are remembered) ───────────────
   useEffect(() => {
     if (!isExpanded) {
-      setShowVisualizer(false)
-      setShowVideo(false)
-      setShowLyrics(false)
-      setShowQueue(false)
       destroyVideoPlayer()
     }
   }, [isExpanded, destroyVideoPlayer])
@@ -293,31 +335,61 @@ export function ExpandablePlayer({
     showQueueRef.current = showQueue;
   }, [showLyrics, showQueue]);
 
+  // ── Push History State for ExpandablePlayer, Lyrics, and Queue ────────────
+  useEffect(() => {
+    if (isExpanded) {
+      if (typeof window !== "undefined" && window.history.state?.view !== "expandable" && window.history.state?.view !== "lyrics" && window.history.state?.view !== "queue") {
+        window.history.pushState({ view: "expandable" }, "");
+      }
+    }
+  }, [isExpanded])
+
+  useEffect(() => {
+    if (isExpanded && showLyrics) {
+      if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
+        window.history.pushState({ view: "lyrics" }, "");
+      }
+    }
+  }, [isExpanded, showLyrics])
+
+  useEffect(() => {
+    if (isExpanded && showQueue) {
+      if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
+        window.history.pushState({ view: "queue" }, "");
+      }
+    }
+  }, [isExpanded, showQueue])
+
   // ── Hardware Back Button / PopState Handler ──────────────────────────────
   useEffect(() => {
+    if (!isExpanded) return
+
     const handlePopState = (e: PopStateEvent) => {
-      const view = e.state?.view
-      if (view === "expandable") {
-        if (showLyricsRef.current && verticalScrollRef.current) {
+      // 1. If Lyrics is currently showing, close Lyrics first
+      if (showLyricsRef.current) {
+        if (verticalScrollRef.current) {
           verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
         }
-        if (showQueueRef.current && horizontalScrollRef.current) {
-          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
-        }
-      } else if (!view || view === "base") {
-        if (showLyricsRef.current && verticalScrollRef.current) {
-          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
-        }
-        if (showQueueRef.current && horizontalScrollRef.current) {
-          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
-        }
-        onExpandChange(false)
+        setShowLyrics(false)
+        return
       }
+
+      // 2. If Queue is currently showing, close Queue first
+      if (showQueueRef.current) {
+        if (horizontalScrollRef.current) {
+          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
+        }
+        setShowQueue(false)
+        return
+      }
+
+      // 3. Otherwise, close ExpandablePlayer
+      onExpandChange(false)
     }
 
     window.addEventListener("popstate", handlePopState)
     return () => window.removeEventListener("popstate", handlePopState)
-  }, [onExpandChange])
+  }, [isExpanded, onExpandChange])
 
   const handleBackdropClick = useCallback(() => {
     onExpandChange(false)
@@ -669,20 +741,14 @@ export function ExpandablePlayer({
             >
               <div className="flex flex-col items-center w-full gap-5">
                 {/* Progress bar */}
-                <div className="flex items-center gap-3 w-full max-w-2xl mx-auto">
-                  <span className="text-xs font-medium text-white/60 w-10 text-right">{formatTime(currentTime)}</span>
-                  <div className="flex-1" onPointerDown={(e) => e.stopPropagation()}>
-                    <Slider 
-                      value={[currentTime]} 
-                      max={duration > 0 ? duration : 1} 
-                      step={0.1}
-                      onValueChange={onSeek} 
-                      disabled={!currentTrack || duration === 0} 
-                      className="[&_.slider-thumb]:bg-primary [&_.slider-thumb]:border-2 [&_.slider-thumb]:border-white"
-                    />
-                  </div>
-                  <span className="text-xs font-medium text-white/60 w-10">{formatTime(duration)}</span>
-                </div>
+                <MotionProgressBar
+                  currentTimeMotion={currentTimeMotion}
+                  initialCurrentTime={currentTime}
+                  duration={duration}
+                  onSeek={onSeek}
+                  formatTime={formatTime}
+                  disabled={!currentTrack || duration === 0}
+                />
 
                 {/* Control buttons */}
                 <div className="flex items-center justify-center gap-4">
@@ -814,7 +880,7 @@ export function ExpandablePlayer({
           <div className="w-10" />
         </div>
         <div className="flex-1 w-full max-w-5xl mx-auto overflow-hidden relative">
-          <LyricsDisplay currentTime={currentTime} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
+          <LyricsDisplay currentTime={currentTime} currentTimeMotion={currentTimeMotion} duration={duration} isPlaying={isPlaying} onSeek={onSeek} />
         </div>
       </div>
     </div>
