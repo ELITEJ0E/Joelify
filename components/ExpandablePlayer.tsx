@@ -266,52 +266,77 @@ export function ExpandablePlayer({
   // ── Scroll Snap container refs ───────────────────────────────────────────────
   const verticalScrollRef = useRef<HTMLDivElement>(null)
   const horizontalScrollRef = useRef<HTMLDivElement>(null)
+  const isProgrammaticScrollRef = useRef(false)
+  const showLyricsRef = useRef(false)
+  const showQueueRef = useRef(false)
 
   const openLyrics = useCallback(() => {
-    if (verticalScrollRef.current) {
-      verticalScrollRef.current.scrollTo({ top: actualVh, behavior: "smooth" })
-    }
+    showLyricsRef.current = true
     setShowLyrics(true)
     if (typeof window !== "undefined" && window.history.state?.modal !== "expandable-lyrics") {
       window.history.pushState({ modal: "expandable-lyrics" }, "")
     }
+    if (verticalScrollRef.current) {
+      isProgrammaticScrollRef.current = true
+      verticalScrollRef.current.scrollTo({ top: actualVh, behavior: "smooth" })
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false
+      }, 400)
+    }
   }, [actualVh])
 
   const closeLyrics = useCallback(() => {
-    if (verticalScrollRef.current) {
-      verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
-    }
+    showLyricsRef.current = false
     setShowLyrics(false)
     if (typeof window !== "undefined" && window.history.state?.modal === "expandable-lyrics") {
       window.history.back()
     }
+    if (verticalScrollRef.current) {
+      isProgrammaticScrollRef.current = true
+      verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false
+      }, 400)
+    }
   }, [])
 
   const openQueue = useCallback(() => {
-    if (horizontalScrollRef.current) {
-      horizontalScrollRef.current.scrollTo({ left: window.innerWidth, behavior: "smooth" })
-    }
+    showQueueRef.current = true
     setShowQueue(true)
     if (typeof window !== "undefined" && window.history.state?.modal !== "expandable-queue") {
       window.history.pushState({ modal: "expandable-queue" }, "")
     }
+    if (horizontalScrollRef.current) {
+      isProgrammaticScrollRef.current = true
+      horizontalScrollRef.current.scrollTo({ left: window.innerWidth, behavior: "smooth" })
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false
+      }, 400)
+    }
   }, [])
 
   const closeQueue = useCallback(() => {
-    if (horizontalScrollRef.current) {
-      horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
-    }
+    showQueueRef.current = false
     setShowQueue(false)
     if (typeof window !== "undefined" && window.history.state?.modal === "expandable-queue") {
       window.history.back()
     }
+    if (horizontalScrollRef.current) {
+      isProgrammaticScrollRef.current = true
+      horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false
+      }, 400)
+    }
   }, [])
 
   const handleVerticalScroll = useCallback(() => {
+    if (isProgrammaticScrollRef.current) return
     const el = verticalScrollRef.current
     if (!el) return
     const isShowing = el.scrollTop > el.clientHeight / 2
     if (isShowing !== showLyricsRef.current) {
+      showLyricsRef.current = isShowing
       setShowLyrics(isShowing)
       if (isShowing) {
         if (typeof window !== "undefined" && window.history.state?.modal !== "expandable-lyrics") {
@@ -326,10 +351,12 @@ export function ExpandablePlayer({
   }, [])
 
   const handleHorizontalScroll = useCallback(() => {
+    if (isProgrammaticScrollRef.current) return
     const el = horizontalScrollRef.current
     if (!el) return
     const isShowing = el.scrollLeft > el.clientWidth / 2
     if (isShowing !== showQueueRef.current) {
+      showQueueRef.current = isShowing
       setShowQueue(isShowing)
       if (isShowing) {
         if (typeof window !== "undefined" && window.history.state?.modal !== "expandable-queue") {
@@ -342,9 +369,6 @@ export function ExpandablePlayer({
       }
     }
   }, [])
-
-  const showLyricsRef = useRef(false)
-  const showQueueRef = useRef(false)
 
   useEffect(() => {
     showLyricsRef.current = showLyrics;
@@ -360,32 +384,52 @@ export function ExpandablePlayer({
 
       // 1. If Lyrics is currently showing, slide/scroll back to ExpandablePlayer main view
       if (showLyricsRef.current) {
-        if (verticalScrollRef.current) {
-          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
-        }
+        showLyricsRef.current = false
         setShowLyrics(false)
+        if (verticalScrollRef.current) {
+          isProgrammaticScrollRef.current = true
+          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false
+          }, 400)
+        }
         return
       }
 
       // 2. If Queue is currently showing, slide/scroll back to ExpandablePlayer main view
       if (showQueueRef.current) {
-        if (horizontalScrollRef.current) {
-          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
-        }
+        showQueueRef.current = false
         setShowQueue(false)
+        if (horizontalScrollRef.current) {
+          isProgrammaticScrollRef.current = true
+          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false
+          }, 400)
+        }
         return
       }
 
       // 3. If popped to expandable main view, ensure sheets are closed and stay open
       if (modal === "expandable-player") {
-        if (verticalScrollRef.current) {
-          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
-        }
-        if (horizontalScrollRef.current) {
-          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
-        }
+        showLyricsRef.current = false
+        showQueueRef.current = false
         setShowLyrics(false)
         setShowQueue(false)
+        if (verticalScrollRef.current) {
+          isProgrammaticScrollRef.current = true
+          verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false
+          }, 400)
+        }
+        if (horizontalScrollRef.current) {
+          isProgrammaticScrollRef.current = true
+          horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false
+          }, 400)
+        }
         return
       }
 

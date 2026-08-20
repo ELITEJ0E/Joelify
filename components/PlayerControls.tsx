@@ -79,6 +79,11 @@ export function PlayerControls() {
   }, [])
 
   // ─── Scroll-Snap Container Listener ─────────────────────────────────────
+  const isProgrammaticScrollRef = useRef(false);
+  const isExpandedPlayerRef = useRef(false);
+  const isQueueOpenRef = useRef(false);
+  const isLyricsOpenRef = useRef(false);
+
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
@@ -92,10 +97,22 @@ export function PlayerControls() {
         const progress = Math.min(1, Math.max(0, scrollTop / h))
         scrollProgressMV.set(progress)
 
+        if (isProgrammaticScrollRef.current) return
+
         const isExpanded = scrollTop >= h / 2
         if (isExpanded !== isExpandedRef.current) {
           isExpandedRef.current = isExpanded
+          isExpandedPlayerRef.current = isExpanded
           setIsExpandedPlayer(isExpanded)
+          if (isExpanded) {
+            if (typeof window !== "undefined" && !window.history.state?.modal?.startsWith("expandable")) {
+              window.history.pushState({ modal: "expandable-player" }, "")
+            }
+          } else {
+            if (typeof window !== "undefined" && window.history.state?.modal?.startsWith("expandable")) {
+              window.history.back()
+            }
+          }
         }
       })
     }
@@ -108,10 +125,6 @@ export function PlayerControls() {
       container.removeEventListener("scroll", handleScroll)
     }
   }, [scrollProgressMV])
-
-  const isExpandedPlayerRef = useRef(false);
-  const isQueueOpenRef = useRef(false);
-  const isLyricsOpenRef = useRef(false);
 
   useEffect(() => {
     isExpandedPlayerRef.current = isExpandedPlayer;
@@ -150,20 +163,32 @@ export function PlayerControls() {
 
     // 4. Popped to expandable player states (ExpandablePlayer component manages sub-sheets)
     if (modal === "expandable-player" || modal === "expandable-lyrics" || modal === "expandable-queue") {
+      isExpandedRef.current = true;
+      isExpandedPlayerRef.current = true;
       setIsExpandedPlayer(true);
       setIsLyricsOpen(false);
       setIsQueueOpen(false);
       const h = window.innerHeight || 800;
+      isProgrammaticScrollRef.current = true;
       scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 400);
       return;
     }
 
     // 5. If we were in expandable player and popped out to page level:
     if (isExpandedPlayerRef.current) {
+      isExpandedRef.current = false;
+      isExpandedPlayerRef.current = false;
       setIsExpandedPlayer(false);
       setIsLyricsOpen(false);
       setIsQueueOpen(false);
+      isProgrammaticScrollRef.current = true;
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 400);
     }
   }, []);
 
@@ -173,20 +198,32 @@ export function PlayerControls() {
   }, [handlePopState]);
 
   const openExpandedPlayer = useCallback(() => {
+    isExpandedRef.current = true;
+    isExpandedPlayerRef.current = true;
     setIsExpandedPlayer(true);
     setIsLyricsOpen(false);
     setIsQueueOpen(false);
     const h = window.innerHeight || 800;
+    isProgrammaticScrollRef.current = true;
     scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
+    setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 400);
     if (typeof window !== "undefined" && !window.history.state?.modal?.startsWith("expandable")) {
       window.history.pushState({ modal: "expandable-player" }, "");
     }
   }, []);
 
   const closeExpandedPlayer = useCallback(() => {
-    if (isExpandedPlayer) {
+    if (isExpandedPlayerRef.current) {
+      isExpandedRef.current = false;
+      isExpandedPlayerRef.current = false;
       setIsExpandedPlayer(false);
+      isProgrammaticScrollRef.current = true;
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 400);
       if (typeof window !== "undefined" && (
         window.history.state?.modal === "expandable-player" ||
         window.history.state?.modal === "expandable-lyrics" ||
@@ -195,7 +232,7 @@ export function PlayerControls() {
         window.history.back();
       }
     }
-  }, [isExpandedPlayer]);
+  }, []);
 
   const closeMiniPlayer = useCallback(() => {
     if (isMiniPlayer) {
