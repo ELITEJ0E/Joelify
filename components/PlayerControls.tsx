@@ -132,15 +132,15 @@ export function PlayerControls() {
       return;
     }
 
-    const overlay = event.state?.overlay || event.state?.playerOverlay || event.state?.view;
+    const view = event.state?.view;
 
-    if (overlay === "queue") {
+    if (view === "queue") {
       setIsQueueOpen(true);
       setIsLyricsOpen(false);
-    } else if (overlay === "lyrics") {
+    } else if (view === "lyrics") {
       setIsLyricsOpen(true);
       setIsQueueOpen(false);
-    } else if (overlay === "expandable") {
+    } else if (view === "expandable") {
       setIsExpandedPlayer(true);
       setIsLyricsOpen(false);
       setIsQueueOpen(false);
@@ -164,21 +164,20 @@ export function PlayerControls() {
     setIsExpandedPlayer(true);
     const h = window.innerHeight || 800;
     scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
-    if (typeof window !== "undefined" && window.history.state?.overlay !== "expandable") {
-      window.history.pushState({ modal: true, overlay: "expandable", view: "expandable" }, "");
+    if (typeof window !== "undefined" && window.history.state?.view !== "expandable") {
+      window.history.pushState({ view: "expandable" }, "");
     }
   }, []);
 
-  const closeExpandedPlayer = useCallback((popHistory: boolean = true) => {
-    setIsExpandedPlayer(false);
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    if (popHistory && typeof window !== "undefined") {
-      const state = window.history.state;
-      if (state?.modal || state?.overlay === "expandable" || state?.view === "expandable") {
+  const closeExpandedPlayer = useCallback(() => {
+    if (isExpandedPlayer) {
+      setIsExpandedPlayer(false);
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      if (typeof window !== "undefined" && (window.history.state?.view === "expandable" || window.history.state?.view === "lyrics" || window.history.state?.view === "queue")) {
         window.history.back();
       }
     }
-  }, []);
+  }, [isExpandedPlayer]);
 
   const closeMiniPlayer = useCallback(() => {
     if (isMiniPlayer) {
@@ -192,12 +191,12 @@ export function PlayerControls() {
   const setLyricsOpen = useCallback((open: boolean) => {
     if (open) {
       setIsLyricsOpen(true);
-      if (typeof window !== "undefined" && window.history.state?.overlay !== "lyrics") {
-        window.history.pushState({ modal: true, overlay: "lyrics", view: "lyrics" }, "");
+      if (typeof window !== "undefined" && window.history.state?.view !== "lyrics") {
+        window.history.pushState({ view: "lyrics" }, "");
       }
     } else {
       setIsLyricsOpen(false);
-      if (typeof window !== "undefined" && (window.history.state?.overlay === "lyrics" || window.history.state?.view === "lyrics")) {
+      if (typeof window !== "undefined" && window.history.state?.view === "lyrics") {
         window.history.back();
       }
     }
@@ -206,12 +205,12 @@ export function PlayerControls() {
   const setQueueOpen = useCallback((open: boolean) => {
     if (open) {
       setIsQueueOpen(true);
-      if (typeof window !== "undefined" && window.history.state?.overlay !== "queue") {
-        window.history.pushState({ modal: true, overlay: "queue", view: "queue" }, "");
+      if (typeof window !== "undefined" && window.history.state?.view !== "queue") {
+        window.history.pushState({ view: "queue" }, "");
       }
     } else {
       setIsQueueOpen(false);
-      if (typeof window !== "undefined" && (window.history.state?.overlay === "queue" || window.history.state?.view === "queue")) {
+      if (typeof window !== "undefined" && window.history.state?.view === "queue") {
         window.history.back();
       }
     }
@@ -963,18 +962,6 @@ export function PlayerControls() {
         case "v": e.preventDefault(); setBarVideoMode((v) => !v); break
         case "l": e.preventDefault(); setLyricsOpen(!isLyricsOpen); break
         case "q": e.preventDefault(); setQueueOpen(!isQueueOpen); break
-        case "escape":
-          if (isLyricsOpen) {
-            e.preventDefault()
-            setLyricsOpen(false)
-          } else if (isQueueOpen) {
-            e.preventDefault()
-            setQueueOpen(false)
-          } else if (isExpandedPlayer) {
-            e.preventDefault()
-            closeExpandedPlayer(true)
-          }
-          break
       }
     }
     
@@ -983,7 +970,7 @@ export function PlayerControls() {
         window.removeEventListener("keydown", handleKeyDown)
     }
   }, [handlePlayPause, handleSeekForward, handleSeekBackward, handleNext, handlePrevious,
-    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat, playbackSource, isLyricsOpen, isQueueOpen, isExpandedPlayer, setLyricsOpen, setQueueOpen, closeExpandedPlayer])
+    volume, handleVolumeChange, toggleMute, toggleShuffle, toggleRepeat, playbackSource, isLyricsOpen, isQueueOpen])
 
   const handleSleepTimerEnd = useCallback(() => {
     if (playbackSource === "youtube" && youtubePlayer) {
@@ -1468,9 +1455,9 @@ export function PlayerControls() {
             isExpanded={isExpandedPlayer}
             scrollProgress={isExpandedPlayer ? 1 : 0}
             vh={vh}
-            onExpandChange={(expanded, popHistory) => {
+            onExpandChange={(expanded) => {
               if (expanded) openExpandedPlayer();
-              else closeExpandedPlayer(popHistory);
+              else closeExpandedPlayer();
             }}
             currentTime={currentTime}
             currentTimeMotion={currentTimeMotion}

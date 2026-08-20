@@ -46,7 +46,7 @@ export function MainContent({ view, albumId, searchQuery, onNavigate, onOpenSide
   }
 
   if (view === "playlist") {
-    return <PlaylistView />
+    return <PlaylistView onNavigate={onNavigate} onOpenSidebar={onOpenSidebar} />
   }
 
   if (view === "liked") {
