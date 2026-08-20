@@ -109,46 +109,58 @@ export function PlayerControls() {
     }
   }, [scrollProgressMV])
 
+  const isExpandedPlayerRef = useRef(false);
   const isQueueOpenRef = useRef(false);
   const isLyricsOpenRef = useRef(false);
 
   useEffect(() => {
+    isExpandedPlayerRef.current = isExpandedPlayer;
     isQueueOpenRef.current = isQueueOpen;
     isLyricsOpenRef.current = isLyricsOpen;
-  }, [isQueueOpen, isLyricsOpen]);
+  }, [isExpandedPlayer, isQueueOpen, isLyricsOpen]);
 
   // ─── Popstate / Hardware Back Button Navigation ───────────────────────
 
   const handlePopState = useCallback((event: PopStateEvent) => {
-    // If Queue sheet overlay in collapsed mode is open, close it first
+    const modal = event.state?.modal;
+
+    // 1. If Queue sheet overlay in collapsed mode is open, close it first
     if (isQueueOpenRef.current) {
       setIsQueueOpen(false);
       return;
     }
 
-    // If Lyrics sheet overlay in collapsed mode is open, close it first
+    // 2. If Lyrics sheet overlay in collapsed mode is open, close it first
     if (isLyricsOpenRef.current) {
       setIsLyricsOpen(false);
       return;
     }
 
-    const view = event.state?.view;
-
-    if (view === "queue" || view === "mini-queue") {
+    // 3. Popped to a mini player sheet
+    if (modal === "mini-queue") {
       setIsQueueOpen(true);
       setIsLyricsOpen(false);
-    } else if (view === "lyrics" || view === "mini-lyrics") {
+      return;
+    }
+    if (modal === "mini-lyrics") {
       setIsLyricsOpen(true);
       setIsQueueOpen(false);
-    } else if (view === "expandable" || view === "expandable-lyrics" || view === "expandable-queue") {
+      return;
+    }
+
+    // 4. Popped to expandable player states (ExpandablePlayer component manages sub-sheets)
+    if (modal === "expandable-player" || modal === "expandable-lyrics" || modal === "expandable-queue") {
       setIsExpandedPlayer(true);
       setIsLyricsOpen(false);
       setIsQueueOpen(false);
       const h = window.innerHeight || 800;
       scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
-    } else {
+      return;
+    }
+
+    // 5. If we were in expandable player and popped out to page level:
+    if (isExpandedPlayerRef.current) {
       setIsExpandedPlayer(false);
-      setIsMiniPlayer(false);
       setIsLyricsOpen(false);
       setIsQueueOpen(false);
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -166,8 +178,8 @@ export function PlayerControls() {
     setIsQueueOpen(false);
     const h = window.innerHeight || 800;
     scrollContainerRef.current?.scrollTo({ top: h, behavior: "smooth" });
-    if (typeof window !== "undefined" && !window.history.state?.view?.startsWith("expandable")) {
-      window.history.pushState({ view: "expandable" }, "");
+    if (typeof window !== "undefined" && !window.history.state?.modal?.startsWith("expandable")) {
+      window.history.pushState({ modal: "expandable-player" }, "");
     }
   }, []);
 
@@ -175,7 +187,11 @@ export function PlayerControls() {
     if (isExpandedPlayer) {
       setIsExpandedPlayer(false);
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-      if (typeof window !== "undefined" && (window.history.state?.view === "expandable" || window.history.state?.view === "expandable-lyrics" || window.history.state?.view === "expandable-queue" || window.history.state?.view === "lyrics" || window.history.state?.view === "queue")) {
+      if (typeof window !== "undefined" && (
+        window.history.state?.modal === "expandable-player" ||
+        window.history.state?.modal === "expandable-lyrics" ||
+        window.history.state?.modal === "expandable-queue"
+      )) {
         window.history.back();
       }
     }
@@ -184,7 +200,7 @@ export function PlayerControls() {
   const closeMiniPlayer = useCallback(() => {
     if (isMiniPlayer) {
       setIsMiniPlayer(false);
-      if (typeof window !== "undefined" && window.history.state?.view) {
+      if (typeof window !== "undefined" && window.history.state?.modal) {
         window.history.back();
       }
     }
@@ -193,12 +209,12 @@ export function PlayerControls() {
   const setLyricsOpen = useCallback((open: boolean) => {
     if (open) {
       setIsLyricsOpen(true);
-      if (typeof window !== "undefined" && window.history.state?.view !== "mini-lyrics" && window.history.state?.view !== "lyrics") {
-        window.history.pushState({ view: "mini-lyrics" }, "");
+      if (typeof window !== "undefined" && window.history.state?.modal !== "mini-lyrics") {
+        window.history.pushState({ modal: "mini-lyrics" }, "");
       }
     } else {
       setIsLyricsOpen(false);
-      if (typeof window !== "undefined" && (window.history.state?.view === "mini-lyrics" || window.history.state?.view === "lyrics")) {
+      if (typeof window !== "undefined" && window.history.state?.modal === "mini-lyrics") {
         window.history.back();
       }
     }
@@ -207,12 +223,12 @@ export function PlayerControls() {
   const setQueueOpen = useCallback((open: boolean) => {
     if (open) {
       setIsQueueOpen(true);
-      if (typeof window !== "undefined" && window.history.state?.view !== "mini-queue" && window.history.state?.view !== "queue") {
-        window.history.pushState({ view: "mini-queue" }, "");
+      if (typeof window !== "undefined" && window.history.state?.modal !== "mini-queue") {
+        window.history.pushState({ modal: "mini-queue" }, "");
       }
     } else {
       setIsQueueOpen(false);
-      if (typeof window !== "undefined" && (window.history.state?.view === "mini-queue" || window.history.state?.view === "queue")) {
+      if (typeof window !== "undefined" && window.history.state?.modal === "mini-queue") {
         window.history.back();
       }
     }

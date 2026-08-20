@@ -28,11 +28,17 @@ export default function Home() {
     window.history.replaceState({ view: "home" }, "")
 
     const handlePopState = (event: PopStateEvent) => {
-      if (event.state?.modal) {
+      if (event.state?.modal || event.state?.sheet || event.state?.player) {
         return
       }
 
-      if (event.state?.view) {
+      const validViews = [
+        "home", "search", "library", "liked", "playlist",
+        "album", "charts", "statistics", "downloaded",
+        "joelsmusic", "explore"
+      ]
+
+      if (event.state?.view && validViews.includes(event.state.view)) {
         setCurrentView(event.state.view)
         if (event.state.albumId) setSelectedAlbumId(event.state.albumId)
         if (event.state.query !== undefined) {
@@ -40,7 +46,7 @@ export default function Home() {
         } else if (event.state.view === "search" && !event.state.query) {
           setSearchQuery("")
         }
-      } else {
+      } else if (!event.state || (!event.state.modal && !event.state.player && !event.state.view)) {
         // If we go back and there's no specific state, default to home
         setCurrentView("home")
       }

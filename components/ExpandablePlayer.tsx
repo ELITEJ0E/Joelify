@@ -272,8 +272,8 @@ export function ExpandablePlayer({
       verticalScrollRef.current.scrollTo({ top: actualVh, behavior: "smooth" })
     }
     setShowLyrics(true)
-    if (typeof window !== "undefined" && window.history.state?.view !== "expandable-lyrics") {
-      window.history.pushState({ view: "expandable-lyrics" }, "")
+    if (typeof window !== "undefined" && window.history.state?.modal !== "expandable-lyrics") {
+      window.history.pushState({ modal: "expandable-lyrics" }, "")
     }
   }, [actualVh])
 
@@ -282,7 +282,7 @@ export function ExpandablePlayer({
       verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
     }
     setShowLyrics(false)
-    if (typeof window !== "undefined" && window.history.state?.view === "expandable-lyrics") {
+    if (typeof window !== "undefined" && window.history.state?.modal === "expandable-lyrics") {
       window.history.back()
     }
   }, [])
@@ -292,8 +292,8 @@ export function ExpandablePlayer({
       horizontalScrollRef.current.scrollTo({ left: window.innerWidth, behavior: "smooth" })
     }
     setShowQueue(true)
-    if (typeof window !== "undefined" && window.history.state?.view !== "expandable-queue") {
-      window.history.pushState({ view: "expandable-queue" }, "")
+    if (typeof window !== "undefined" && window.history.state?.modal !== "expandable-queue") {
+      window.history.pushState({ modal: "expandable-queue" }, "")
     }
   }, [])
 
@@ -302,7 +302,7 @@ export function ExpandablePlayer({
       horizontalScrollRef.current.scrollTo({ left: 0, behavior: "smooth" })
     }
     setShowQueue(false)
-    if (typeof window !== "undefined" && window.history.state?.view === "expandable-queue") {
+    if (typeof window !== "undefined" && window.history.state?.modal === "expandable-queue") {
       window.history.back()
     }
   }, [])
@@ -314,11 +314,11 @@ export function ExpandablePlayer({
     if (isShowing !== showLyricsRef.current) {
       setShowLyrics(isShowing)
       if (isShowing) {
-        if (typeof window !== "undefined" && window.history.state?.view !== "expandable-lyrics") {
-          window.history.pushState({ view: "expandable-lyrics" }, "")
+        if (typeof window !== "undefined" && window.history.state?.modal !== "expandable-lyrics") {
+          window.history.pushState({ modal: "expandable-lyrics" }, "")
         }
       } else {
-        if (typeof window !== "undefined" && window.history.state?.view === "expandable-lyrics") {
+        if (typeof window !== "undefined" && window.history.state?.modal === "expandable-lyrics") {
           window.history.back()
         }
       }
@@ -332,11 +332,11 @@ export function ExpandablePlayer({
     if (isShowing !== showQueueRef.current) {
       setShowQueue(isShowing)
       if (isShowing) {
-        if (typeof window !== "undefined" && window.history.state?.view !== "expandable-queue") {
-          window.history.pushState({ view: "expandable-queue" }, "")
+        if (typeof window !== "undefined" && window.history.state?.modal !== "expandable-queue") {
+          window.history.pushState({ modal: "expandable-queue" }, "")
         }
       } else {
-        if (typeof window !== "undefined" && window.history.state?.view === "expandable-queue") {
+        if (typeof window !== "undefined" && window.history.state?.modal === "expandable-queue") {
           window.history.back()
         }
       }
@@ -356,7 +356,7 @@ export function ExpandablePlayer({
     if (!isExpanded) return
 
     const handlePopState = (e: PopStateEvent) => {
-      const currentStateView = e.state?.view
+      const modal = e.state?.modal
 
       // 1. If Lyrics is currently showing, slide/scroll back to ExpandablePlayer main view
       if (showLyricsRef.current) {
@@ -377,7 +377,7 @@ export function ExpandablePlayer({
       }
 
       // 3. If popped to expandable main view, ensure sheets are closed and stay open
-      if (currentStateView === "expandable") {
+      if (modal === "expandable-player") {
         if (verticalScrollRef.current) {
           verticalScrollRef.current.scrollTo({ top: 0, behavior: "smooth" })
         }
