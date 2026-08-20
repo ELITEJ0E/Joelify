@@ -16,11 +16,11 @@ const shortcuts = [
   {
     category: "Playback",
     items: [
-      { key: "Space", action: "Play / Pause" },
+      { key: "F8 / Space", action: "Play / Pause" },
+      { key: "F9 / N", action: "Next track" },
+      { key: "F7 / P", action: "Previous track" },
       { key: "→", action: "Seek forward 5s" },
       { key: "←", action: "Seek backward 5s" },
-      { key: "N", action: "Next track" },
-      { key: "P", action: "Previous track" },
     ],
   },
   {

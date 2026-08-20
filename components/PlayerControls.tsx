@@ -965,16 +965,43 @@ export function PlayerControls() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return
-      switch (e.key.toLowerCase()) {
-        case " ": e.preventDefault(); handlePlayPause(); break
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable ||
+        (target.closest && (target.closest("input") || target.closest("textarea") || target.closest("[contenteditable='true']")))
+      ) return
+
+      const key = e.key?.toLowerCase() || ""
+      const code = e.code?.toLowerCase() || ""
+
+      // Previous song: F7, MediaTrackPrevious, or 'p'
+      if (key === "f7" || code === "f7" || key === "mediatrackprevious" || key === "p") {
+        e.preventDefault()
+        handlePrevious()
+        return
+      }
+
+      // Play / Pause: F8, MediaPlayPause, MediaPlay, MediaPause, or Space
+      if (key === "f8" || code === "f8" || key === "mediaplaypause" || key === "mediaplay" || key === "mediapause" || key === " ") {
+        e.preventDefault()
+        handlePlayPause()
+        return
+      }
+
+      // Next song: F9, MediaTrackNext, or 'n'
+      if (key === "f9" || code === "f9" || key === "mediatracknext" || key === "n") {
+        e.preventDefault()
+        handleNext()
+        return
+      }
+
+      switch (key) {
         case "arrowright": e.preventDefault(); handleSeekForward(); break
         case "arrowleft": e.preventDefault(); handleSeekBackward(); break
         case "arrowup": e.preventDefault(); handleVolumeChange([Math.min(100, volume + 5)]); break
         case "arrowdown": e.preventDefault(); handleVolumeChange([Math.max(0, volume - 5)]); break
         case "m": e.preventDefault(); toggleMute(); break
-        case "n": e.preventDefault(); handleNext(); break
-        case "p": e.preventDefault(); handlePrevious(); break
         case "s": e.preventDefault(); toggleShuffle(); break
         case "r": e.preventDefault(); toggleRepeat(); break
         case "v": e.preventDefault(); setBarVideoMode((v) => !v); break
