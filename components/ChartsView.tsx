@@ -129,7 +129,7 @@ export function ChartsView({ onNavigate, onOpenSidebar }: ChartsViewProps) {
   }
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.08)] via-black to-black text-foreground p-4 md:p-8 overflow-y-auto pb-28">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.08)] via-black to-black text-foreground p-4 md:p-8 overflow-y-auto pb-44 md:pb-52">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* HEADER ROW */}
         <div className="flex items-center justify-between pt-1">
@@ -374,6 +374,9 @@ export function ChartsView({ onNavigate, onOpenSidebar }: ChartsViewProps) {
             })}
           </div>
         )}
+
+        {/* Bottom scroll spacing clearance */}
+        <div className="h-12 md:h-16 w-full shrink-0" aria-hidden="true" />
       </div>
     </div>
   )

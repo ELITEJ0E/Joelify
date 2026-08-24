@@ -153,7 +153,7 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
   }
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-black via-zinc-950 to-black text-foreground p-4 md:p-8 overflow-y-auto pb-24">
+    <div className="flex-1 bg-gradient-to-b from-black via-zinc-950 to-black text-foreground p-4 md:p-8 overflow-y-auto pb-44 md:pb-52">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* HEADER: SEARCH BAR */}
         <div className="flex items-center gap-3">
@@ -431,6 +431,9 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
                 ))}
               </div>
             </section>
+
+            {/* Bottom scroll spacing clearance */}
+            <div className="h-12 md:h-16 w-full shrink-0" aria-hidden="true" />
           </>
         )}
       </div>

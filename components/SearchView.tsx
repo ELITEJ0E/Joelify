@@ -504,7 +504,7 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
   const showPlaylists = (activeFilter === "all" || activeFilter === "playlists") && shelves.playlists && shelves.playlists.items.length > 0
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] via-zinc-950/80 to-black text-foreground p-4 md:p-8 overflow-y-auto pb-32">
+    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] via-zinc-950/80 to-black text-foreground p-4 md:p-8 overflow-y-auto pb-44 md:pb-52">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* TOP SEARCH HEADER */}
         <div className="pt-2 flex items-center gap-2 sm:gap-3">
@@ -1040,6 +1040,9 @@ export function SearchView({ onNavigate, onOpenSidebar, initialQuery = "" }: Sea
 
             {/* DISCOVER MORE / FEATURED CONTENT */}
             <DiscoverMore onNavigate={onNavigate} />
+
+            {/* Bottom scroll spacing clearance */}
+            <div className="h-12 md:h-16 w-full shrink-0" aria-hidden="true" />
           </div>
         )}
       </div>
