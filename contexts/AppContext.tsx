@@ -1,11 +1,12 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useMemo, useRef, type ReactNode } from "react"
 import { type AppState, type Playlist, type Track, loadState, saveState, createDefaultPlaylist } from "@/lib/storage"
 import { FALLBACK_JOELS_SONGS } from "@/lib/constants"
 import { auth, db } from "@/lib/firebase"
 import { onAuthStateChanged, User } from "firebase/auth"
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore"
+import { toast } from "sonner"
 
 interface RecentlyPlayed {
   type: "track" | "playlist"
@@ -18,7 +19,7 @@ type PlaybackSource = "youtube" | "suno" | "local"
 interface AppContextType extends AppState {
   setCurrentTrack: (track: Track | null) => void
   setCurrentPlaylistId: (id: string | null) => void
-  setPlaylists: (playlists: Playlist[]) => void
+  setPlaylists: React.Dispatch<React.SetStateAction<Playlist[]>>
   addPlaylist: (name: string, description?: string, coverImage?: string) => void
   deletePlaylist: (id: string) => void
   renamePlaylist: (id: string, name: string) => void
@@ -27,7 +28,7 @@ interface AppContextType extends AppState {
   addTrackToPlaylist: (playlistId: string, track: Track) => void
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => void
   reorderPlaylistTracks: (playlistId: string, tracks: Track[]) => void
-  setQueue: (track: Track[]) => void
+  setQueue: React.Dispatch<React.SetStateAction<Track[]>>
   addToQueue: (track: Track) => void
   removeFromQueue: (index: number) => void
   setPlaybackPosition: (position: number) => void
@@ -38,7 +39,7 @@ interface AppContextType extends AppState {
   toggleVideoMode: () => void
   toggleLikedSong: (track: Track) => void
   isTrackLiked: (trackId: string) => boolean
-  setLikedSongs: (songs: Track[]) => void
+  setLikedSongs: React.Dispatch<React.SetStateAction<Track[]>>
   recentlyPlayed: RecentlyPlayed[]
   addRecentlyPlayed: (item: { type: "track" | "playlist"; id: string }) => void
   setCustomTheme: (colors: { primary: string; accent: string }) => void
@@ -137,6 +138,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [joelsSongs, setJoelsSongs] = useState<Track[]>([...FALLBACK_JOELS_SONGS].reverse())
   const [user, setUser] = useState<User | null>(null)
 
+  // Track timestamp of latest local user mutation
+  const lastLocalMutationTime = useRef<number>(Date.now())
+  const initialLoadCompletedRef = useRef<boolean>(false)
+
+  // Helper function to persist state directly to Firestore
+  const saveStateToFirebase = async (uid: string, stateToSave: any, currentUser: User | null) => {
+    try {
+      const now = Date.now()
+      const docRef = doc(db, "users", uid)
+
+      const dataToSave = {
+        uid: uid,
+        email: currentUser?.email || "",
+        displayName: currentUser?.displayName || "",
+        photoURL: currentUser?.photoURL || "",
+        appState: JSON.stringify(stateToSave),
+        updatedAt: now,
+      }
+
+      await setDoc(docRef, dataToSave, { merge: true })
+    } catch (error: any) {
+      console.error("Firestore Save Error:", error)
+    }
+  }
+
   // Listen for Firebase Auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -148,7 +174,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Load state from localStorage or Firebase on mount/login
   useEffect(() => {
     const loadData = async () => {
-      let stored: Partial<AppState> = {}
+      // If already initialized and user logs in, sync local changes up without clobbering in-memory state
+      if (initialLoadCompletedRef.current) {
+        if (user) {
+          const localStored = loadState() as Partial<AppState> & { lastModified?: number }
+          if (localStored && localStored.playlists !== undefined) {
+            saveStateToFirebase(user.uid, localStored, user)
+          }
+        }
+        return
+      }
+
+      let stored: Partial<AppState> & { lastModified?: number } = {}
+      const localStored = loadState() as Partial<AppState> & { lastModified?: number }
+      const localLastModified = localStored?.lastModified || 0
       
       if (user) {
         try {
@@ -156,18 +195,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const docSnap = await getDoc(docRef)
           if (docSnap.exists()) {
             const data = docSnap.data()
-            if (data.appState) {
-              stored = JSON.parse(data.appState)
+            const cloudUpdatedAt = data.updatedAt || 0
+            
+            // If local storage has edits (user created/deleted playlists), prioritize local and sync to cloud!
+            if (localLastModified >= cloudUpdatedAt && localStored.playlists !== undefined) {
+              stored = localStored
+              saveStateToFirebase(user.uid, localStored, user)
+            } else if (data.appState) {
+              try {
+                stored = JSON.parse(data.appState)
+              } catch {
+                stored = localStored
+              }
+            } else {
+              stored = localStored
             }
           } else {
-            stored = loadState() // Fallback to local storage if no cloud data
+            stored = localStored
+            // Initialize cloud document with local state
+            saveStateToFirebase(user.uid, localStored, user)
           }
         } catch (error) {
           console.error("Failed to load from Firebase:", error)
-          stored = loadState()
+          stored = localStored
         }
       } else {
-        stored = loadState()
+        stored = localStored
       }
 
       if (stored.currentTrack) {
@@ -175,11 +228,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentTrack(mergeTrackWithFallback(stored.currentTrack, fallback));
       }
       if (stored.currentPlaylistId) setCurrentPlaylistId(stored.currentPlaylistId)
-      if (stored.playlists && stored.playlists.length > 0) {
+      
+      // If stored.playlists is explicitly defined (even as an empty array []), respect it!
+      if (stored.playlists !== undefined && Array.isArray(stored.playlists)) {
         setPlaylists(stored.playlists)
+      } else if (localStored.playlists !== undefined && Array.isArray(localStored.playlists)) {
+        setPlaylists(localStored.playlists)
       } else {
+        // First run ever with no prior saved data
         setPlaylists([createDefaultPlaylist()])
       }
+
       if (stored.likedSongs) setLikedSongs(stored.likedSongs)
       if (stored.queue) setQueue(stored.queue)
       if (stored.playbackPosition !== undefined) setPlaybackPosition(stored.playbackPosition)
@@ -232,59 +291,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       setJoelsSongs(joelSongsToLoad);
 
+      initialLoadCompletedRef.current = true
       setIsInitialized(true)
     }
 
     loadData()
   }, [user])
 
-  // Listen for real-time updates from Firebase
-  useEffect(() => {
-    if (!user || !isInitialized) return
-
-    const docRef = doc(db, "users", user.uid)
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        if (data.appState) {
-          try {
-            const stored = JSON.parse(data.appState)
-            // Only update if the data is different to avoid infinite loops
-            // For simplicity, we just update playlists and liked songs from cloud
-            if (stored.playlists) setPlaylists(stored.playlists)
-            if (stored.likedSongs) setLikedSongs(stored.likedSongs)
-          } catch (e) {
-            console.error("Error parsing cloud state", e)
-          }
-        }
+    // Cache joelsSongs to storage only when actual song list content changes
+    const joelsSongsKeyRef = useRef<string>("")
+    useEffect(() => {
+      if (!isInitialized) return
+      const signature = joelsSongs.map(s => s.id).join(",")
+      if (signature !== joelsSongsKeyRef.current) {
+        joelsSongsKeyRef.current = signature
+        localStorage.setItem('joels_custom_songs', JSON.stringify(joelsSongs))
       }
-    }, (error) => {
-      console.error("Firestore Error: ", JSON.stringify({
-        error: error.message,
-        operationType: "get",
-        path: `users/${user.uid}`
-      }))
-    })
+    }, [joelsSongs, isInitialized])
 
-    return () => unsubscribe()
-  }, [user, isInitialized])
+    // Save state to localStorage whenever it changes (excluding frequent playbackPosition to prevent UI thread lag during audio playback)
+    const playbackPositionRef = useRef(playbackPosition)
+    playbackPositionRef.current = playbackPosition
 
-  useEffect(() => {
-    if (!isInitialized) return
-    localStorage.setItem('joels_custom_songs', JSON.stringify(joelsSongs))
-  }, [joelsSongs, isInitialized])
+    useEffect(() => {
+      if (!isInitialized) return
 
-  // Save state to localStorage whenever it changes
-  useEffect(() => {
-    if (!isInitialized) return
+      const now = Date.now()
+      lastLocalMutationTime.current = now
 
-    const stateToSave = {
+      const stateToSave = {
+        currentTrack,
+        currentPlaylistId,
+        playlists,
+        likedSongs,
+        queue,
+        playbackPosition: playbackPositionRef.current,
+        volume,
+        shuffle,
+        repeat,
+        theme,
+        videoMode,
+        customTheme,
+        playbackSource,
+        audioSettings,
+        lastModified: now,
+      }
+
+      saveState(stateToSave)
+    }, [
       currentTrack,
       currentPlaylistId,
       playlists,
       likedSongs,
       queue,
-      playbackPosition,
       volume,
       shuffle,
       repeat,
@@ -293,39 +352,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
       customTheme,
       playbackSource,
       audioSettings,
-    }
+      isInitialized
+    ])
 
-    saveState(stateToSave)
-  }, [
-    currentTrack,
-    currentPlaylistId,
-    playlists,
-    likedSongs,
-    queue,
-    playbackPosition,
-    volume,
-    shuffle,
-    repeat,
-    theme,
-    videoMode,
-    customTheme,
-    playbackSource,
-    audioSettings,
-    isInitialized
-  ])
+    // Periodic / onUnload save for playback position only
+    useEffect(() => {
+      if (!isInitialized) return
+      const interval = setInterval(() => {
+        if (playbackPositionRef.current > 0) {
+          const current = loadState()
+          current.playbackPosition = playbackPositionRef.current
+          saveState(current)
+        }
+      }, 10000)
 
-  // Save state to Firebase whenever it changes (debounced and excluding frequent updates)
+      const handleBeforeUnload = () => {
+        if (playbackPositionRef.current > 0) {
+          const current = loadState()
+          current.playbackPosition = playbackPositionRef.current
+          saveState(current)
+        }
+      }
+      window.addEventListener("beforeunload", handleBeforeUnload)
+
+      return () => {
+        clearInterval(interval)
+        window.removeEventListener("beforeunload", handleBeforeUnload)
+      }
+    }, [isInitialized])
+
+  // Save state to Firebase whenever it changes (debounced and excluding frequent playback updates)
   useEffect(() => {
     if (!isInitialized || !user) return
 
+    const now = Date.now()
     const stateToSave = {
       currentTrack,
       currentPlaylistId,
       playlists,
       likedSongs,
       queue,
-      // We exclude playbackPosition from frequent Firebase sync to save quota.
-      // It will still be saved whenever other properties change.
       playbackPosition, 
       volume,
       shuffle,
@@ -335,50 +401,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       customTheme,
       playbackSource,
       audioSettings,
+      lastModified: now,
     }
 
     const saveToFirebase = async () => {
-      try {
-        const docRef = doc(db, "users", user.uid)
-        const docSnap = await getDoc(docRef)
-        
-        const dataToSave = {
-          uid: user.uid,
-          email: user.email || "",
-          displayName: user.displayName || "",
-          photoURL: user.photoURL || "",
-          appState: JSON.stringify(stateToSave),
-          updatedAt: Date.now()
-        }
-        
-        if (docSnap.exists()) {
-          await setDoc(docRef, {
-            ...dataToSave,
-            createdAt: docSnap.data().createdAt
-          }, { merge: true })
-        } else {
-          await setDoc(docRef, {
-            ...dataToSave,
-            createdAt: Date.now()
-          })
-        }
-      } catch (error: any) {
-        // Check for quota exceeded specifically
-        if (error.message?.includes("quota") || error.code === "resource-exhausted") {
-          console.warn("Firestore Quota Exceeded. Cloud sync disabled for today.")
-        }
-        
-        console.error("Firestore Error: ", JSON.stringify({
-          error: error.message,
-          operationType: "write",
-          path: `users/${user.uid}`
-        }))
-      }
+      await saveStateToFirebase(user.uid, stateToSave, user)
     }
     
-    // Use a much longer debounce for Firebase (10 seconds)
-    // and exclude playbackPosition from dependencies to avoid triggering on every second
-    const timeoutId = setTimeout(saveToFirebase, 10000)
+    // Fast 600ms debounce for responsive cloud persistence
+    const timeoutId = setTimeout(saveToFirebase, 600)
     return () => clearTimeout(timeoutId)
   }, [
     currentTrack,
@@ -386,7 +417,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     playlists,
     likedSongs,
     queue,
-    // playbackPosition excluded from dependencies
     volume,
     shuffle,
     repeat,
@@ -427,72 +457,106 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const addPlaylist = (name: string, description?: string, coverImage?: string) => {
+    lastLocalMutationTime.current = Date.now()
     const newPlaylist: Playlist = {
       id: crypto.randomUUID(),
-      name,
+      name: name.trim() || "New Playlist",
       description: description || "",
       coverImage,
       tracks: [],
       createdAt: Date.now(),
     }
-    setPlaylists([...playlists, newPlaylist])
+    setPlaylists((prev) => [...prev, newPlaylist])
+    toast.success(`Created playlist "${newPlaylist.name}"`)
   }
 
   const deletePlaylist = (id: string) => {
-    setPlaylists(playlists.filter((p) => p.id !== id))
+    lastLocalMutationTime.current = Date.now()
+    setPlaylists((prev) => prev.filter((p) => p.id !== id))
     if (currentPlaylistId === id) {
       setCurrentPlaylistId(null)
     }
+    toast.success("Playlist deleted")
   }
 
   const renamePlaylist = (id: string, name: string) => {
-    setPlaylists(playlists.map((p) => (p.id === id ? { ...p, name } : p)))
+    lastLocalMutationTime.current = Date.now()
+    setPlaylists((prev) => prev.map((p) => (p.id === id ? { ...p, name: name.trim() } : p)))
+    toast.success("Playlist renamed")
   }
 
   const updatePlaylistDescription = (id: string, description: string) => {
-    setPlaylists(playlists.map((p) => (p.id === id ? { ...p, description } : p)))
+    lastLocalMutationTime.current = Date.now()
+    setPlaylists((prev) => prev.map((p) => (p.id === id ? { ...p, description } : p)))
   }
 
   const updatePlaylistCover = (id: string, coverImage: string) => {
-    setPlaylists(playlists.map((p) => (p.id === id ? { ...p, coverImage } : p)))
+    lastLocalMutationTime.current = Date.now()
+    setPlaylists((prev) => prev.map((p) => (p.id === id ? { ...p, coverImage } : p)))
   }
 
   const addTrackToPlaylist = (playlistId: string, track: Track) => {
-    setPlaylists(
-      playlists.map((p) => {
+    lastLocalMutationTime.current = Date.now()
+    const trackId = track.id || (track as any).videoId || crypto.randomUUID()
+    const normalizedTrack: Track = {
+      ...track,
+      id: trackId,
+      title: track.title || "Untitled Track",
+      artist: track.artist || "Unknown Artist",
+      thumbnail: track.thumbnail || "",
+      duration: track.duration || "0:00",
+    }
+
+    setPlaylists((prev) => {
+      return prev.map((p) => {
         if (p.id === playlistId) {
-          // Check if track already exists
-          if (p.tracks.some((t) => t.id === track.id)) {
+          // Check if track already exists by id or videoId
+          const exists = p.tracks.some((t) => (t.id || (t as any).videoId) === trackId)
+          if (exists) {
+            toast.info(`"${normalizedTrack.title}" is already in ${p.name}`)
             return p
           }
-          return { ...p, tracks: [...p.tracks, track] }
+          toast.success(`Added "${normalizedTrack.title}" to ${p.name}`)
+          return {
+            ...p,
+            tracks: [...p.tracks, normalizedTrack],
+          }
         }
         return p
-      }),
-    )
+      })
+    })
   }
 
   const removeTrackFromPlaylist = (playlistId: string, trackId: string) => {
-    setPlaylists(
-      playlists.map((p) => {
+    lastLocalMutationTime.current = Date.now()
+    setPlaylists((prev) =>
+      prev.map((p) => {
         if (p.id === playlistId) {
-          return { ...p, tracks: p.tracks.filter((t) => t.id !== trackId) }
+          return { ...p, tracks: p.tracks.filter((t) => (t.id || (t as any).videoId) !== trackId) }
         }
         return p
-      }),
+      })
     )
+    toast.success("Song removed from playlist")
   }
 
   const reorderPlaylistTracks = (playlistId: string, tracks: Track[]) => {
-    setPlaylists(playlists.map((p) => (p.id === playlistId ? { ...p, tracks } : p)))
+    lastLocalMutationTime.current = Date.now()
+    setPlaylists((prev) => prev.map((p) => (p.id === playlistId ? { ...p, tracks } : p)))
   }
 
   const addToQueue = (track: Track) => {
-    setQueue([...queue, track])
+    const trackId = track.id || (track as any).videoId || crypto.randomUUID()
+    const normalizedTrack: Track = {
+      ...track,
+      id: trackId,
+    }
+    setQueue((prev) => [...prev, normalizedTrack])
+    toast.success(`Added "${normalizedTrack.title}" to Queue`)
   }
 
   const removeFromQueue = (index: number) => {
-    setQueue(queue.filter((_, i) => i !== index))
+    setQueue((prev) => prev.filter((_, i) => i !== index))
   }
 
   const toggleShuffle = () => {
@@ -508,16 +572,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const toggleLikedSong = (track: Track) => {
-    const isLiked = likedSongs.some((t) => t.id === track.id)
-    if (isLiked) {
-      setLikedSongs(likedSongs.filter((t) => t.id !== track.id))
-    } else {
-      setLikedSongs([...likedSongs, track])
+    lastLocalMutationTime.current = Date.now()
+    const trackId = track.id || (track as any).videoId || crypto.randomUUID()
+    const normalizedTrack: Track = {
+      ...track,
+      id: trackId,
     }
+    setLikedSongs((prev) => {
+      const isLiked = prev.some((t) => (t.id || (t as any).videoId) === trackId)
+      if (isLiked) {
+        toast.info(`Removed "${normalizedTrack.title}" from Liked Songs`)
+        return prev.filter((t) => (t.id || (t as any).videoId) !== trackId)
+      } else {
+        toast.success(`Saved "${normalizedTrack.title}" to Liked Songs`)
+        return [...prev, normalizedTrack]
+      }
+    })
   }
 
   const isTrackLiked = (trackId: string): boolean => {
-    return likedSongs.some((t) => t.id === trackId)
+    return likedSongs.some((t) => (t.id || (t as any).videoId) === trackId)
   }
 
   const addRecentlyPlayed = (item: { type: "track" | "playlist"; id: string }) => {

@@ -36,7 +36,19 @@ export function FirebaseLogin() {
       ))
     } catch (error: any) {
       console.error("Firebase login error:", error)
-      toast.error("Failed to log in", { description: error.message })
+      if (error?.code === "auth/unauthorized-domain") {
+        toast.error("Unauthorized Domain", {
+          description: `Add "${typeof window !== 'undefined' ? window.location.hostname : 'your domain'}" to Firebase Console -> Authentication -> Settings -> Authorized Domains.`
+        })
+      } else if (error?.code === "auth/popup-blocked") {
+        toast.error("Popup Blocked", {
+          description: "Please allow popups in your browser to sign in with Google."
+        })
+      } else if (error?.code === "auth/popup-closed-by-user") {
+        // User voluntarily dismissed popup
+      } else {
+        toast.error("Failed to log in", { description: error?.message || "Authentication failed" })
+      }
     }
   }
 

@@ -42,6 +42,7 @@ export interface AppState {
     customEQ: number[]
     youtubeQuality: "audio" | "360p" | "720p" | "1080p"
   }
+  lastModified?: number
 }
 
 const STORAGE_KEY = "joelify-app-state"

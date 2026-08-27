@@ -1,9 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, useTransition, memo } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, PlusSquare, Music2, GripVertical, Play, Heart, RefreshCw, Lock, Unlock, Download, X } from "lucide-react";
+import { 
+  Check, 
+  Trash2, 
+  PlusSquare, 
+  Music2, 
+  GripVertical, 
+  Play, 
+  Heart, 
+  RefreshCw, 
+  Lock, 
+  Download, 
+  X, 
+  Search, 
+  Share2, 
+  Shuffle,
+  Clock,
+  ListMusic
+} from "lucide-react";
 import { CustomToast } from "./CustomToast";
 import { Input } from "@/components/ui/input";
 import { TrackImage as Image } from "./TrackImage";
@@ -28,52 +45,92 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { FALLBACK_JOELS_SONGS as FALLBACK_SONGS, JOEL_PLAYLIST_ID } from "@/lib/constants";
-import { downloadSunoTrack, isSunoDownloaded, deleteSunoDownload } from "@/lib/sunoOffline";
+import { downloadSunoTrack, deleteSunoDownload, listDownloadedSunoIds } from "@/lib/sunoOffline";
+
+export const cleanSunoText = (val: string): string => {
+  if (!val) return "";
+  let text = val
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x22;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#38;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\s+by\s+@[A-Za-z0-9_.-]+/i, "")
+    .replace(/\s*\|\s*Suno.*$/i, "")
+    .replace(/\s*-\s*Suno.*$/i, "")
+    .replace(/\s*-\s*Playlist by.*$/i, "")
+    .replace(/on Suno$/i, "")
+    .trim();
+  return text;
+};
 
 export const PLAYLISTS = [
   { 
     id: JOEL_PLAYLIST_ID, 
     name: "Originals", 
-    type: "public" 
+    tag: "ORIGINAL",
+    defaultTitle: "Joel's Originals",
+    defaultDesc: "",
+    type: "public",
+    artist: "ELITEJOE"
   },
   { 
     id: "627c2d15-0cca-4c07-91b3-5f203c981e6e", 
     name: "Worship", 
+    tag: "WORSHIP",
+    defaultTitle: "Private Worship Sanctuary",
+    defaultDesc: "",
     type: "password", 
     password: "joelify", 
     storageKey: "joelify_worship_unlocked", 
-    label: "Private Worship Sanctuary", 
-    desc: "This Worship collection is private. Enter passcode to unlock and enjoy the spirits of praise." 
+    label: "Private Worship Sanctuary",
+    artist: "ELITEJOE"
   },
   { 
     id: "34ac065b-e68e-4dfa-9780-00c49bae047a", 
     name: "Upcoming", 
+    tag: "UPCOMING",
+    defaultTitle: "Upcoming Releases",
+    defaultDesc: "",
     type: "password", 
     password: "joelify", 
     storageKey: "joelify_special_unlocked", 
-    label: "Upcoming Releases", 
-    desc: "New and exclusive songs are coming soon. Stay tuned! Enter passcode to unlock sneak peaks." 
+    label: "Upcoming Releases",
+    artist: "ELITEJOE"
   }
 ];
 
 interface SortableTrackItemProps {
   track: any;
   index: number;
-  playSunoTrack: any;
-  toggleLikedSong: any;
-  isTrackLiked: any;
-  addToQueue: any;
-  removeSong: any;
+  isPlayingThis: boolean;
+  isCurrentInPlayer: boolean;
+  isDownloaded: boolean;
+  playSunoTrack: (id: string, title?: string, artist?: string, thumbnail?: string, lyrics?: string) => void;
+  toggleLikedSong: (track: any) => void;
+  isTrackLiked: (id: string) => boolean;
+  addToQueue: (track: any) => void;
+  removeSong: (id: string) => void;
+  onDownloadToggle: (trackId: string, currentlyDownloaded: boolean) => Promise<void>;
 }
 
-function SortableTrackItem({ 
+const SortableTrackItem = memo(function SortableTrackItem({ 
   track, 
-  index, 
+  isPlayingThis,
+  isCurrentInPlayer,
+  isDownloaded,
   playSunoTrack, 
   toggleLikedSong, 
   isTrackLiked, 
   addToQueue, 
-  removeSong 
+  removeSong,
+  onDownloadToggle
 }: SortableTrackItemProps) {
   const {
     attributes,
@@ -84,29 +141,25 @@ function SortableTrackItem({
     isDragging
   } = useSortable({ id: track.id });
 
-  const [isDownloaded, setIsDownloaded] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
 
-  useEffect(() => {
-    isSunoDownloaded(track.id).then(setIsDownloaded);
-  }, [track.id]);
-
-  const handleDownloadToggle = async () => {
-    if (isDownloaded) {
-      await deleteSunoDownload(track.id);
-      setIsDownloaded(false);
-      toast.success("Removed from offline storage");
-    } else {
-      try {
+  const handleDownloadClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (!isDownloaded) {
         setDownloadProgress(1);
         await downloadSunoTrack(track.id, setDownloadProgress);
-        setIsDownloaded(true);
+        await onDownloadToggle(track.id, false);
         setDownloadProgress(0);
         toast.success("Saved for offline playback");
-      } catch (e) {
-        setDownloadProgress(0);
-        toast.error("Download failed");
+      } else {
+        await deleteSunoDownload(track.id);
+        await onDownloadToggle(track.id, true);
+        toast.success("Removed from offline storage");
       }
+    } catch (err) {
+      setDownloadProgress(0);
+      toast.error("Download failed");
     }
   };
 
@@ -114,138 +167,262 @@ function SortableTrackItem({
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 50 : "auto",
-    opacity: isDragging ? 0.5 : 1
+    opacity: isDragging ? 0.6 : 1
   };
 
   const isFallback = FALLBACK_SONGS.some(s => s.id === track.id);
+  const liked = isTrackLiked(track.id);
 
   return (
     <div 
       ref={setNodeRef} 
       style={style}
-      className={`group flex items-center justify-between p-1.5 sm:p-2 rounded-xl hover:bg-white/[0.03] transition-all border border-transparent ${isDragging ? 'bg-white/[0.05] border-primary/20 shadow-lg' : ''}`}
+      className={`group relative rounded-xl px-2.5 py-2 transition-all duration-150 flex items-center justify-between gap-3 ${
+        isCurrentInPlayer 
+          ? "bg-primary/15 text-white"
+          : "hover:bg-white/[0.05] text-zinc-300"
+      } ${isDragging ? "bg-zinc-900 shadow-xl opacity-80" : ""}`}
     >
-      <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0 pr-2 sm:pr-4">
+      {/* Left Side: Drag Handle, Thumbnail, Title & Artist */}
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        
         {/* Drag Handle */}
         <div 
           {...attributes} 
           {...listeners} 
-          className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-primary transition-colors touch-none"
+          className="cursor-grab active:cursor-grabbing p-1 text-zinc-600 hover:text-zinc-300 transition-colors touch-none shrink-0"
+          title="Drag to reorder"
         >
-          <GripVertical size={18} />
+          <GripVertical size={16} />
         </div>
 
-        <div className="relative aspect-square w-12 flex-shrink-0 cursor-pointer overflow-hidden border border-white/5" onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail, track.lyrics)}>
-          {track.thumbnail ? (
-            <Image 
-              src={track.thumbnail} 
-              alt={track.title} 
-              fill
-              className="object-cover" 
-              referrerPolicy="no-referrer" 
-            />
-          ) : (
-            <div className="w-full h-full bg-primary/10 flex items-center justify-center border border-primary/20">
-              <Music2 size={20} className="text-primary/70" />
-            </div>
-          )}
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Play size={18} fill="white" className="text-white" />
+        {/* Thumbnail + Play Hover Overlay */}
+        <div 
+          className="relative w-11 h-11 rounded-lg overflow-hidden bg-zinc-800/80 shrink-0 cursor-pointer shadow-sm group/thumb"
+          onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail, track.lyrics)}
+        >
+          <Image 
+            src={track.thumbnail || `https://cdn2.suno.ai/image_${track.id}.jpeg`} 
+            alt={track.title || "Track"} 
+            fill
+            className="object-cover transition-transform group-hover/thumb:scale-105 duration-200" 
+            referrerPolicy="no-referrer"
+          />
+          
+          <div className={`absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${
+            isPlayingThis ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}>
+            <Play size={16} fill="white" className="text-white translate-x-0.5" />
           </div>
         </div>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail, track.lyrics)}>
-          <h3 className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{track.title}</h3>
-          <p className="text-xs text-muted-foreground truncate opacity-70 mt-0.5">{track.artist}</p>
+
+        {/* Title & Artist */}
+        <div 
+          className="flex-1 min-w-0 cursor-pointer"
+          onClick={() => playSunoTrack(track.id, track.title, track.artist, track.thumbnail, track.lyrics)}
+        >
+          <h3 className={`font-semibold text-sm truncate leading-snug ${
+            isCurrentInPlayer ? "text-primary font-bold" : "text-white group-hover:text-primary transition-colors"
+          }`}>
+            {track.title || "Untitled Track"}
+          </h3>
+          <p className="text-xs text-zinc-400 truncate mt-0.5 font-mono">
+            {track.artist || "ELITEJOE"}
+          </p>
         </div>
       </div>
-      
-      <div className="flex items-center gap-1">
-        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 relative" onClick={handleDownloadToggle}>
+
+      {/* Right Side: Actions (Download, Like, Add to Queue, Delete) */}
+      <div className="flex items-center gap-1 shrink-0">
+        
+        {/* Offline Download Button */}
+        <Button 
+          size="icon" 
+          variant="ghost" 
+          className={`h-8 w-8 rounded-lg ${
+            isDownloaded 
+              ? "text-primary hover:text-primary hover:bg-primary/10" 
+              : "text-zinc-500 hover:text-white hover:bg-white/10"
+          }`} 
+          onClick={handleDownloadClick}
+          title={isDownloaded ? "Downloaded offline" : "Download offline"}
+        >
           {downloadProgress > 0 && downloadProgress < 100 ? (
-            <span className="text-[10px] font-medium">{downloadProgress}%</span>
+            <span className="text-[10px] font-mono font-bold text-primary animate-pulse">{downloadProgress}%</span>
           ) : isDownloaded ? (
-            <Check size={16} className="text-primary" />
+            <Check size={15} />
           ) : (
-            <Download size={16} />
+            <Download size={15} />
           )}
         </Button>
-        <Button size="icon" variant="ghost" className={`h-8 w-8 ${isTrackLiked(track.id) ? "text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`} onClick={() => toggleLikedSong(track)}>
-          <Heart size={16} fill={isTrackLiked(track.id) ? "currentColor" : "none"} />
+
+        {/* Like Button */}
+        <Button 
+          size="icon" 
+          variant="ghost" 
+          className={`h-8 w-8 rounded-lg ${
+            liked 
+              ? "text-red-400 hover:text-red-300 hover:bg-red-500/10" 
+              : "text-zinc-400 hover:text-red-400 hover:bg-white/10"
+          }`} 
+          onClick={() => toggleLikedSong(track)}
+          title="Like song"
+        >
+          <Heart size={15} fill={liked ? "currentColor" : "none"} />
         </Button>
-        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => {
-          addToQueue({ ...track, duration: "0:00" });
-          toast.custom((t) => (
-            <CustomToast 
-              t={t} 
-              title="Added to queue" 
-              Icon={PlusSquare} 
-            />
-          ))
-        }}>
-          <PlusSquare size={16} />
+
+        {/* Add to Queue */}
+        <Button 
+          size="icon" 
+          variant="ghost" 
+          className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg" 
+          onClick={() => {
+            addToQueue({ ...track, duration: track.duration || "3:24" });
+            toast.custom((t) => (
+              <CustomToast 
+                t={t} 
+                title="Added to queue" 
+                Icon={PlusSquare} 
+              />
+            ))
+          }}
+          title="Add to queue"
+        >
+          <PlusSquare size={15} />
         </Button>
         
+        {/* Delete Track (Custom Tracks Only) */}
         {!isFallback && (
           <Button 
             size="icon" 
             variant="ghost" 
-            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity" 
+            className="h-8 w-8 text-zinc-500 hover:text-destructive hover:bg-destructive/10 rounded-lg opacity-60 hover:opacity-100 transition-opacity" 
             onClick={() => removeSong(track.id)}
+            title="Remove song"
           >
-            <Trash2 size={16} />
+            <Trash2 size={15} />
           </Button>
         )}
       </div>
     </div>
   );
-}
+});
 
 export function JoelsMusicView() {
   const { 
     setPlaybackSource, 
     setCurrentTrack, 
+    currentTrack,
+    playbackSource,
     toggleLikedSong, 
     isTrackLiked, 
-    addToQueue,
+    addToQueue, 
+    setQueue,
     joelsSongs,
     setJoelsSongs,
-    setCurrentPlaylistId
+    setCurrentPlaylistId,
+    toggleShuffle,
+    shuffle
   } = useApp();
+
   const [syncPlaylistId, setSyncPlaylistId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncError, setSyncError] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [, startTransition] = useTransition();
 
+  // In-memory caches to make tab switches 0ms instant without disk blocking
+  const memoryCacheRef = useRef<Record<string, any[]>>({});
+  const metaMemoryCacheRef = useRef<Record<string, { title: string; desc: string; image?: string }>>({});
 
+  // Metadata cache per playlist (title, description, and cover image from playlist)
+  const [playlistMetaMap, setPlaylistMetaMap] = useState<Record<string, { title: string; desc: string; image?: string }>>({});
 
   // Password / Lock settings map for private playlists
   const [unlockedPlaylists, setUnlockedPlaylists] = useState<Record<string, boolean>>({});
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
+  // Downloaded track IDs Set for instantaneous O(1) checks across all list items
+  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
+
   // Keep track of which playlist IDs have been synced during this mount session
   const [syncedPlaylistsThisSession, setSyncedPlaylistsThisSession] = useState<Record<string, boolean>>({});
 
-  const loadPlaylistLocalCache = (playlistId: string) => {
-    const cachedKey = `joely_tracks_${playlistId}`;
-    const cachedStr = localStorage.getItem(cachedKey);
-    if (cachedStr) {
-      try {
-        setJoelsSongs(JSON.parse(cachedStr));
-        return true;
-      } catch (e) {
-        console.warn("Error parsing cache", e);
+  // Initialize downloaded track IDs once on mount
+  useEffect(() => {
+    listDownloadedSunoIds().then((ids) => {
+      setDownloadedIds(new Set(ids));
+    });
+  }, []);
+
+  const handleDownloadToggle = useCallback(async (trackId: string, currentlyDownloaded: boolean) => {
+    setDownloadedIds(prev => {
+      const next = new Set(prev);
+      if (currentlyDownloaded) {
+        next.delete(trackId);
+      } else {
+        next.add(trackId);
+      }
+      return next;
+    });
+  }, []);
+
+  const loadPlaylistLocalCache = useCallback((playlistId: string) => {
+    // 1. Check in-memory cache first (0ms instant)
+    if (memoryCacheRef.current[playlistId]) {
+      setJoelsSongs(memoryCacheRef.current[playlistId]);
+    } else {
+      // 2. Fallback to localStorage
+      const cachedKey = `joely_tracks_${playlistId}`;
+      const cachedStr = typeof window !== "undefined" ? localStorage.getItem(cachedKey) : null;
+      if (cachedStr) {
+        try {
+          const parsed = JSON.parse(cachedStr);
+          memoryCacheRef.current[playlistId] = parsed;
+          setJoelsSongs(parsed);
+        } catch (e) {
+          console.warn("Error parsing cache", e);
+        }
+      } else {
+        // Fallback if no cache found
+        if (playlistId === JOEL_PLAYLIST_ID) {
+          const fb = [...FALLBACK_SONGS].reverse();
+          memoryCacheRef.current[playlistId] = fb;
+          setJoelsSongs(fb);
+        } else {
+          setJoelsSongs([]);
+        }
       }
     }
-    
-    // Fallback if no cache found
-    if (playlistId === JOEL_PLAYLIST_ID) {
-      setJoelsSongs([...FALLBACK_SONGS].reverse());
+
+    // Load meta
+    if (metaMemoryCacheRef.current[playlistId]) {
+      setPlaylistMetaMap(prev => ({
+        ...prev,
+        [playlistId]: metaMemoryCacheRef.current[playlistId]
+      }));
     } else {
-      setJoelsSongs([]);
+      const metaKey = `joely_meta_${playlistId}`;
+      const metaStr = typeof window !== "undefined" ? localStorage.getItem(metaKey) : null;
+      if (metaStr) {
+        try {
+          const parsed = JSON.parse(metaStr);
+          if (parsed.title || parsed.desc !== undefined || parsed.image) {
+            const metaObj = {
+              title: parsed.title || "",
+              desc: parsed.desc || "",
+              image: parsed.image || ""
+            };
+            metaMemoryCacheRef.current[playlistId] = metaObj;
+            setPlaylistMetaMap(prev => ({
+              ...prev,
+              [playlistId]: metaObj
+            }));
+          }
+        } catch (e) {}
+      }
     }
-    return false;
-  };
+  }, [setJoelsSongs]);
 
   useEffect(() => {
     // Check unlocked state for password-locked playlists
@@ -257,7 +434,7 @@ export function JoelsMusicView() {
     });
     setUnlockedPlaylists(unlockedMap);
 
-    // Default to Originals playlist every time upon initial load
+    // Default to Originals playlist upon initial load
     const savedId = JOEL_PLAYLIST_ID;
     setSyncPlaylistId(savedId);
   }, []);
@@ -265,13 +442,12 @@ export function JoelsMusicView() {
   const syncPlaylist = async (id: string, isRetry = false) => {
     if (!isRetry) {
       setIsSyncing(true);
-      setSyncError(false);
     }
     
     let serverData: any = null;
     let didServerSucceed = false;
 
-    // TRY SERVER PROXIES
+    // 1. Try server proxy
     try {
       const res = await fetch(`/api/suno-playlist?id=${id}&_t=${Date.now()}`);
       const text = await res.text();
@@ -283,9 +459,8 @@ export function JoelsMusicView() {
       console.warn("Server route failed, trying client proxies.");
     }
 
-    // TRY CLIENT PROXIES (Bypass Vercel blocks)
+    // 2. Client-side fallback proxies
     if (!didServerSucceed) {
-      console.log("Attempting client-side extraction...");
       const clientProxies = [
         {
           name: "AllOrigins",
@@ -322,14 +497,54 @@ export function JoelsMusicView() {
           if (!html || typeof html !== "string") continue;
           
           let foundClips: any[] = [];
-          const payloads: string[] = [];
+          let foundTitle = "";
+          let foundDescription = "";
+
+          // HTML meta tags extraction
+          const titleTagMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                                html.match(/<meta\s+name=["']twitter:title["']\s+content=["']([^"']+)["']/i) ||
+                                html.match(/<title>([^<]+)<\/title>/i);
+          if (titleTagMatch && titleTagMatch[1]) {
+            const cleaned = titleTagMatch[1]
+              .replace(/\s*\|\s*Suno.*$/i, '')
+              .replace(/\s*-\s*Suno.*$/i, '')
+              .replace(/\s*-\s*Playlist by.*$/i, '')
+              .replace(/on Suno$/i, '')
+              .trim();
+            if (cleaned && !["Suno", "Suno AI", "Listen on Suno", "Explore"].includes(cleaned)) {
+              foundTitle = cleaned;
+            }
+          }
+
+          const descTagMatch = html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i) ||
+                               html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
+          if (descTagMatch && descTagMatch[1]) {
+            const cleaned = descTagMatch[1].trim();
+            if (cleaned && 
+                !cleaned.toLowerCase().includes("listen to songs by") && 
+                !cleaned.toLowerCase().includes("listen to this playlist") && 
+                !cleaned.toLowerCase().includes("suno is building")) {
+              foundDescription = cleaned;
+            }
+          }
+
+          let foundImage = "";
+          const imgTagMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                              html.match(/<meta\s+name=["']twitter:image["']\s+content=["']([^"']+)["']/i) ||
+                              html.match(/<meta\s+name=["']image["']\s+content=["']([^"']+)["']/i);
+          if (imgTagMatch && imgTagMatch[1]) {
+            const im = imgTagMatch[1].trim();
+            if (im && !im.includes("suno.com/favicon") && !im.endsWith(".ico") && !im.includes("1x1")) {
+              foundImage = im;
+            }
+          }
+
           let idx = 0;
           while (true) {
             const pushIdx = html.indexOf('__next_f.push(', idx);
             if (pushIdx === -1) break;
             
             const startIdx = pushIdx + '__next_f.push('.length; 
-            let parenCount = 1;
             let inString = false;
             let stringChar = '';
             let isEscaped = false;
@@ -337,344 +552,133 @@ export function JoelsMusicView() {
             
             for (let i = startIdx; i < html.length; i++) {
               const char = html[i];
-              
               if (inString) {
-                if (isEscaped) {
-                  isEscaped = false;
-                } else if (char === '\\') {
-                  isEscaped = true;
-                } else if (char === stringChar) {
-                  inString = false;
-                }
+                if (isEscaped) isEscaped = false;
+                else if (char === '\\') isEscaped = true;
+                else if (char === stringChar) inString = false;
               } else {
                 if (char === '"' || char === "'") {
                   inString = true;
                   stringChar = char;
-                  isEscaped = false;
-                } else if (char === '(') {
-                  parenCount++;
                 } else if (char === ')') {
-                  parenCount--;
-                  if (parenCount === 0) {
-                    foundEnd = i;
-                    break;
-                  }
+                  foundEnd = i;
+                  break;
                 }
               }
             }
-            
             if (foundEnd !== -1) {
-                const argumentStr = html.substring(startIdx, foundEnd).trim();
+              const payload = html.substring(startIdx, foundEnd);
+              const playlistClipRegex = /"clip":\s*(\{[^}]+\})/g;
+              let match;
+              while ((match = playlistClipRegex.exec(payload)) !== null) {
                 try {
-                    const arr = JSON.parse(argumentStr);
-                    if (Array.isArray(arr) && typeof arr[1] === 'string') {
-                        payloads.push(arr[1]);
-                    }
-                } catch (e) {
-                    const strMatch = argumentStr.match(/^\[\s*\d+\s*,\s*"([\s\S]*)"\s*\]$/);
-                    if (strMatch) {
-                        try {
-                            const decoded = JSON.parse(`"${strMatch[1]}"`);
-                            payloads.push(decoded);
-                        } catch (err) {
-                            let s = strMatch[1]
-                                .replace(/\\"/g, '"')
-                                .replace(/\\n/g, '\n')
-                                .replace(/\\r/g, '\r')
-                                .replace(/\\t/g, '\t')
-                                .replace(/\\\\/g, '\\');
-                            payloads.push(s);
-                        }
-                    }
-                }
-                idx = foundEnd + 1;
+                  const clipObj = JSON.parse(match[1]);
+                  if (clipObj && clipObj.id && clipObj.audio_url) {
+                    foundClips.push(clipObj);
+                  }
+                } catch {}
+              }
+              const titleM = payload.match(/"name"\s*:\s*"([^"]+)"/);
+              if (titleM && titleM[1] && !["chirp", "v4", "v3", "Suno"].includes(titleM[1])) {
+                foundTitle = titleM[1];
+              }
+              const descM = payload.match(/"description"\s*:\s*"([^"]+)"/);
+              if (descM && descM[1]) {
+                foundDescription = descM[1];
+              }
+              const imgM = payload.match(/"image_url"\s*:\s*"([^"]+)"/);
+              if (imgM && imgM[1] && !foundImage) {
+                foundImage = imgM[1];
+              }
+
+              idx = foundEnd + 1;
             } else {
-                idx = pushIdx + 1;
+              idx = pushIdx + 1;
             }
           }
 
-          const combinedDecodedText = payloads.join("");
-          if (combinedDecodedText) {
-             const playlistClipsIdx = combinedDecodedText.indexOf('"playlist_clips":');
-             if (playlistClipsIdx !== -1) {
-                 const startArrIdx = combinedDecodedText.indexOf('[', playlistClipsIdx);
-                 if (startArrIdx !== -1) {
-                     let bracketCount = 0;
-                     for (let i = startArrIdx; i < combinedDecodedText.length; i++) {
-                         if (combinedDecodedText[i] === '[') bracketCount++;
-                         else if (combinedDecodedText[i] === ']') {
-                             bracketCount--;
-                             if (bracketCount === 0) {
-                                 const arrayStr = combinedDecodedText.substring(startArrIdx, i + 1);
-                                 try {
-                                     const arr = JSON.parse(arrayStr);
-                                     if (Array.isArray(arr) && arr.length > 0) {
-                                         foundClips = arr.map((item: any) => item.clip || item).filter(Boolean);
-                                     }
-                                 } catch (e) {}
-                                 break;
-                             }
-                         }
-                     }
-                 }
-             }
-
-             if (foundClips.length === 0) {
-                 const clipsIdx = combinedDecodedText.indexOf('"clips":');
-                 if (clipsIdx !== -1) {
-                     const startArrIdx = combinedDecodedText.indexOf('[', clipsIdx);
-                     if (startArrIdx !== -1) {
-                         let bracketCount = 0;
-                         for (let i = startArrIdx; i < combinedDecodedText.length; i++) {
-                             if (combinedDecodedText[i] === '[') bracketCount++;
-                             else if (combinedDecodedText[i] === ']') {
-                                 bracketCount--;
-                                 if (bracketCount === 0) {
-                                     const arrayStr = combinedDecodedText.substring(startArrIdx, i + 1);
-                                     try {
-                                         const arr = JSON.parse(arrayStr);
-                                         if (Array.isArray(arr) && arr.length > 0) {
-                                             foundClips = arr.map((item: any) => item.clip || item).filter(Boolean);
-                                         }
-                                     } catch (e) {}
-                                     break;
-                                 }
-                             }
-                         }
-                     }
-                 }
-             }
-          }
-
-          const formatDuration = (val: number) => {
-            if (!val) return "0:00";
-            const d = Math.round(val);
-            return `${Math.floor(d / 60)}:${Math.floor(d % 60).toString().padStart(2, "0")}`;
-          };
-
           if (foundClips.length > 0) {
-            const formattedTracks = foundClips.map((clip: any) => ({
-              id: clip.id || clip.clip_id,
-              title: clip.title || "Unknown Title",
-              artist: clip.display_name || "Suno AI",
-              coverImage: clip.image_url || clip.image_large_url,
-              src: clip.audio_url || clip.video_url,
-              duration: clip.metadata?.duration ? formatDuration(clip.metadata.duration) : "0:00",
-              source: "suno",
-              lyrics: clip.metadata?.prompt || clip.metadata?.text || undefined,
-              thumbnail: clip.image_url || clip.image_large_url || null,
+            const clientTracks = foundClips.map((c: any) => ({
+              id: c.id,
+              title: c.title || "Untitled",
+              artist: c.display_name || "ELITEJOE",
+              thumbnail: c.image_url || `https://cdn2.suno.ai/image_${c.id}.jpeg`,
+              lyrics: c.metadata?.prompt || ""
             })).reverse();
-            serverData = { tracks: formattedTracks };
+
+            serverData = { 
+              name: foundTitle, 
+              description: foundDescription,
+              image_url: foundImage,
+              tracks: clientTracks 
+            };
             didServerSucceed = true;
-            console.log(`Client-side scraping succeeded with ${proxy.name}:`, formattedTracks.length, "tracks");
             break;
           }
         } catch (err) {
-          console.warn(`Proxy fallback ${proxy.name} failed:`, err);
+          console.warn(`Proxy ${proxy.name} error:`, err);
         }
       }
     }
 
-    if (!didServerSucceed) {
-        // Silent fallback - users just see existing or fallback songs specific to this playlist id
-        console.warn("Suno API restricted or proxies failed");
-        const cachedKey = `joely_tracks_${id}`;
-        const cachedStr = localStorage.getItem(cachedKey);
-        
-        if (cachedStr) {
-          try {
-            setJoelsSongs(JSON.parse(cachedStr));
-          } catch (e) {
-            setJoelsSongs([]);
-          }
-        } else {
-          if (id === JOEL_PLAYLIST_ID) {
-            setJoelsSongs([...FALLBACK_SONGS].reverse());
-          } else {
-            setJoelsSongs([]);
-          }
-        }
-        setIsSyncing(false);
-        setInitialLoading(false);
-        return;
-    }
-    
-    if (serverData?.tracks) {
-      // Apply cache buster to images, but NOT to video (.mp4 or video_upload) files to prevent stuttering
-      const timestamp = Date.now();
-      const tracksWithBuster = serverData.tracks.map((t: any) => {
-        const isVideo = t.thumbnail ? (t.thumbnail.includes('.mp4') || t.thumbnail.includes('video_upload')) : false;
-        return {
-          ...t,
-          thumbnail: t.thumbnail ? (isVideo ? t.thumbnail : (t.thumbnail.includes('?') ? `${t.thumbnail}&_t=${timestamp}` : `${t.thumbnail}?_t=${timestamp}`)) : t.thumbnail
-        };
-      });
+    if (serverData?.tracks && Array.isArray(serverData.tracks) && serverData.tracks.length > 0) {
+      memoryCacheRef.current[id] = serverData.tracks;
+      setJoelsSongs(serverData.tracks);
+      localStorage.setItem(`joely_tracks_${id}`, JSON.stringify(serverData.tracks));
+
+      // Save metadata if provided
+      const finalTitle = (serverData.name && serverData.name !== "Suno Playlist") ? serverData.name : "";
+      const finalDesc = serverData.description || "";
+      const finalImage = serverData.image_url || "";
       
-      const cachedKey = `joely_tracks_${id}`;
-      let cachedTracks: any[] = [];
-      const cachedStr = localStorage.getItem(cachedKey);
-      if (cachedStr) {
-        try { cachedTracks = JSON.parse(cachedStr); } catch (e) {}
-      } else if (id === JOEL_PLAYLIST_ID) {
-        cachedTracks = [...FALLBACK_SONGS].reverse();
+      const metaObj = {
+        title: finalTitle || playlistMetaMap[id]?.title || "",
+        desc: finalDesc,
+        image: finalImage || playlistMetaMap[id]?.image || ""
+      };
+      metaMemoryCacheRef.current[id] = metaObj;
+
+      setPlaylistMetaMap(prev => ({
+        ...prev,
+        [id]: metaObj
+      }));
+      localStorage.setItem(`joely_meta_${id}`, JSON.stringify(metaObj));
+
+      toast.custom((t) => (
+        <CustomToast 
+          t={t} 
+          title="Playlist Synced" 
+          description={`Updated with ${serverData.tracks.length} tracks.`} 
+          Icon={Check} 
+        />
+      ));
+    } else {
+      if (!isRetry) {
+        toast.info("Using cached songs. Updating playlist...");
+        setTimeout(() => {
+          syncPlaylist(id, true);
+        }, 1500);
       }
-
-      // Sync list properly: remove any cached track that is no longer returned in Suno's live track scope,
-      // while keeping custom ordering of remaining tracks and appending new ones.
-      const liveTrackIds = new Set(tracksWithBuster.map((t: any) => t.id));
-      const activeCached = cachedTracks.filter((t: any) => t && t.id && liveTrackIds.has(t.id));
-      
-      const updatedCached = activeCached.map((oldTrack: any) => {
-        const liveTrack = tracksWithBuster.find((t: any) => t.id === oldTrack.id);
-        return { ...oldTrack, ...liveTrack };
-      });
-      
-      const uniqueNewTracks = tracksWithBuster.filter((t: any) => !activeCached.some((old: any) => old && old.id === t.id));
-      const merged = [...updatedCached, ...uniqueNewTracks];
-
-      localStorage.setItem(cachedKey, JSON.stringify(merged));
-      localStorage.setItem(`joely_playlist_synced_${id}`, 'true');
-
-      // Update global synced thumbnails & lyrics cache
-      let thumbCache: Record<string, string> = {};
-      try {
-        const existing = localStorage.getItem("joely_synced_thumbnails_cache");
-        if (existing) thumbCache = JSON.parse(existing);
-      } catch {}
-
-      let lyricsCache: Record<string, string> = {};
-      try {
-        const existing = localStorage.getItem("joely_synced_lyrics_cache");
-        if (existing) lyricsCache = JSON.parse(existing);
-      } catch {}
-
-      merged.forEach((t: any) => {
-        if (t.id) {
-          if (t.thumbnail) thumbCache[t.id] = t.thumbnail;
-          if (t.lyrics) lyricsCache[t.id] = t.lyrics;
-        }
-      });
-
-      try {
-        localStorage.setItem("joely_synced_thumbnails_cache", JSON.stringify(thumbCache));
-        localStorage.setItem("joely_synced_lyrics_cache", JSON.stringify(lyricsCache));
-      } catch (e) {}
-
-      setJoelsSongs(merged);
-      
-      setSyncPlaylistId(id);
-      localStorage.setItem('joel_sync_playlist_id', id);
-
-      // Auto-trigger background metadata refresh (especially critical for regex fallback)
-      updateMetadataOnly(merged, id);
     }
-    
     setIsSyncing(false);
-    setInitialLoading(false);
   };
 
-
-
+  // Whenever syncPlaylistId changes, load cache and auto-sync once
   useEffect(() => {
-    if (!syncPlaylistId) return;
+    if (syncPlaylistId) {
+      loadPlaylistLocalCache(syncPlaylistId);
 
-    const currentPlaylistConfig = PLAYLISTS.find(p => p.id === syncPlaylistId);
-    if (currentPlaylistConfig?.type === "password") {
-      const isUnlocked = unlockedPlaylists[syncPlaylistId];
-      if (!isUnlocked) {
-        setInitialLoading(false);
-        return;
+      const targetPlaylist = PLAYLISTS.find(p => p.id === syncPlaylistId);
+      const isLocked = targetPlaylist?.type === "password" && !unlockedPlaylists[syncPlaylistId];
+
+      if (!isLocked) {
+        if (!syncedPlaylistsThisSession[syncPlaylistId]) {
+          setSyncedPlaylistsThisSession(prev => ({ ...prev, [syncPlaylistId]: true }));
+          syncPlaylist(syncPlaylistId);
+        }
       }
-    }
-
-    // Load partition cache instantly
-    loadPlaylistLocalCache(syncPlaylistId);
-
-    // Sync live from Suno in background only once per mount session IF NOT already synced previously
-    const hasSyncedBefore = localStorage.getItem(`joely_playlist_synced_${syncPlaylistId}`) === 'true';
-    if (!hasSyncedBefore && !syncedPlaylistsThisSession[syncPlaylistId]) {
-      setSyncedPlaylistsThisSession(prev => ({ ...prev, [syncPlaylistId]: true }));
-      syncPlaylist(syncPlaylistId);
-    } else {
-      setInitialLoading(false);
     }
   }, [syncPlaylistId, unlockedPlaylists, syncedPlaylistsThisSession]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const updateMetadataOnly = async (tracksToUpdate = joelsSongs, id = syncPlaylistId || JOEL_PLAYLIST_ID) => {
-    try {
-      const allIds = tracksToUpdate.map(s => s.id).filter(Boolean);
-      if (allIds.length === 0) return;
-
-      // Ensure we don't exceed URL length limits (around 2048 chars for safety)
-      const maxIdsPerRequest = 20; 
-      let allClips: any[] = [];
-      let isRestricted = false;
-
-      for (let i = 0; i < allIds.length; i += maxIdsPerRequest) {
-        const chunkIds = allIds.slice(i, i + maxIdsPerRequest).join(",");
-        const res = await fetch(`/api/suno-metadata?ids=${chunkIds}`);
-        
-        const text = await res.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          console.error(`Invalid JSON response: ${res.status} - ${text.substring(0, 50)}`);
-          continue; // Skip this chunk if it fails to parse
-        }
-        
-        if (data.isRestricted || !res.ok) {
-           isRestricted = true;
-           break;
-        }
-
-        if (data.clips && Array.isArray(data.clips)) {
-           allClips.push(...data.clips);
-        }
-      }
-      
-      if (isRestricted || allClips.length === 0) return;
-      
-      const timestamp = Date.now();
-      const updatedSongs = tracksToUpdate.map(song => {
-        const fresh = allClips.find((c: any) => c.id === song.id);
-        if (fresh) {
-          const fallbackTrack = FALLBACK_SONGS.find(f => f.id === song.id);
-          let sunoProvidedMp4 = null;
-          if (fresh.video_cover_url?.includes('.mp4') || fresh.video_cover_url?.includes('video_upload')) {
-            sunoProvidedMp4 = fresh.video_cover_url;
-          } else if (fresh.video_url?.includes('video_upload')) {
-            sunoProvidedMp4 = fresh.video_url;
-          }
-
-          let latestImg = sunoProvidedMp4 || fresh.custom_image_url || fresh.image_url || fresh.cover_url || fresh.artwork_url || song.thumbnail;
-          
-          if (!sunoProvidedMp4) {
-            if (fallbackTrack?.thumbnail?.includes('.mp4') || fallbackTrack?.thumbnail?.includes('video_upload')) {
-              latestImg = fallbackTrack.thumbnail;
-            } else if (song.thumbnail?.includes('.mp4') || song.thumbnail?.includes('video_upload')) {
-              latestImg = song.thumbnail;
-            }
-          }
-          
-          const isLatestImgVideo = latestImg.includes('.mp4') || latestImg.includes('video_upload');
-          const buster = latestImg.includes("?") ? `&_t=${timestamp}` : `?_t=${timestamp}`;
-          return {
-            ...song,
-            title: fresh.title || song.title,
-            artist: fresh.display_name || song.artist,
-            thumbnail: isLatestImgVideo ? latestImg : latestImg + buster,
-            lyrics: fresh.metadata?.prompt || song.lyrics || ""
-          };
-        }
-        return song;
-      });
-      localStorage.setItem(`joely_tracks_${id}`, JSON.stringify(updatedSongs));
-      setJoelsSongs(updatedSongs);
-    } catch (error) {
-      console.error("Metadata update error", error);
-    }
-  };
 
   const handleAutoSync = () => {
     if (syncPlaylistId) {
@@ -692,12 +696,10 @@ export function JoelsMusicView() {
     const correctPassword = currentPlaylistConfig.password?.toLowerCase();
 
     if (attemptedInput === correctPassword) {
-      // Store in localStorage
       if (currentPlaylistConfig.storageKey) {
         localStorage.setItem(currentPlaylistConfig.storageKey, 'true');
       }
 
-      // Update state map
       setUnlockedPlaylists(prev => ({
         ...prev,
         [currentPlaylistConfig.id]: true
@@ -714,7 +716,6 @@ export function JoelsMusicView() {
       setPasswordError("");
       setPasswordInput("");
       
-      // Load and sync instantly
       loadPlaylistLocalCache(currentPlaylistConfig.id);
       setSyncedPlaylistsThisSession(prev => ({ ...prev, [currentPlaylistConfig.id]: true }));
       syncPlaylist(currentPlaylistConfig.id);
@@ -723,11 +724,11 @@ export function JoelsMusicView() {
     }
   };
 
-  const removeSong = (id: string) => {
+  const removeSong = useCallback((id: string) => {
     const updated = joelsSongs.filter(s => s.id !== id);
-    setJoelsSongs(updated);
-    
     const activeId = syncPlaylistId || JOEL_PLAYLIST_ID;
+    memoryCacheRef.current[activeId] = updated;
+    setJoelsSongs(updated);
     localStorage.setItem(`joely_tracks_${activeId}`, JSON.stringify(updated));
 
     toast.custom((t) => (
@@ -736,10 +737,10 @@ export function JoelsMusicView() {
         title="Song removed from playlist" 
         Icon={Trash2} 
       />
-    ))
-  };
+    ));
+  }, [joelsSongs, syncPlaylistId, setJoelsSongs]);
 
-  const playSunoTrack = (id: string, title?: string, artist?: string, thumbnail?: string, lyrics?: string) => {
+  const playSunoTrack = useCallback((id: string, title?: string, artist?: string, thumbnail?: string, lyrics?: string) => {
     setPlaybackSource("suno");
     const timestamp = Date.now();
     const isVideo = thumbnail ? (thumbnail.includes('.mp4') || thumbnail.includes('video_upload')) : false;
@@ -750,13 +751,35 @@ export function JoelsMusicView() {
     setCurrentTrack({
       id,
       title: title || "Joel's Song",
-      artist: artist || "Joel",
+      artist: artist || "ELITEJOE",
       thumbnail: finalThumbnail,
-      duration: "0:00",
+      duration: "3:24",
       lyrics: lyrics || ""
     });
     setCurrentPlaylistId("joels_music");
-  };
+  }, [setPlaybackSource, setCurrentTrack, setCurrentPlaylistId]);
+
+  const handlePlayAll = useCallback(() => {
+    if (joelsSongs.length === 0) return;
+    const first = joelsSongs[0];
+    playSunoTrack(first.id, first.title, first.artist, first.thumbnail, first.lyrics);
+    setQueue(joelsSongs);
+    toast.success(`Playing ${joelsSongs.length} tracks`);
+  }, [joelsSongs, playSunoTrack, setQueue]);
+
+  const handleSharePlaylist = useCallback(() => {
+    const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+    if (navigator.share) {
+      navigator.share({
+        title: "Joel's Music Collection",
+        text: "Check out Joel's music collection!",
+        url: shareUrl
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      toast.success("Playlist link copied to clipboard!");
+    }
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -775,110 +798,236 @@ export function JoelsMusicView() {
     })
   );
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
       const oldIndex = joelsSongs.findIndex(s => s.id === active.id);
       const newIndex = joelsSongs.findIndex(s => s.id === over.id);
       const updated = arrayMove(joelsSongs, oldIndex, newIndex);
-      setJoelsSongs(updated);
-      
       const activeId = syncPlaylistId || JOEL_PLAYLIST_ID;
+      memoryCacheRef.current[activeId] = updated;
+      setJoelsSongs(updated);
       localStorage.setItem(`joely_tracks_${activeId}`, JSON.stringify(updated));
     }
-  };
+  }, [joelsSongs, syncPlaylistId, setJoelsSongs]);
+
+  // Filtered song list
+  const filteredSongs = useMemo(() => {
+    if (!searchQuery.trim()) return joelsSongs;
+    const q = searchQuery.toLowerCase();
+    return joelsSongs.filter(s => 
+      s.title?.toLowerCase().includes(q) || 
+      s.artist?.toLowerCase().includes(q)
+    );
+  }, [joelsSongs, searchQuery]);
+
+  // Compute active config & playlist metadata
+  const activePlaylistConfig = PLAYLISTS.find(p => p.id === syncPlaylistId) || PLAYLISTS[0];
+  const isCurrentLocked = activePlaylistConfig?.type === "password" && !unlockedPlaylists[syncPlaylistId || ""];
+
+  // Playlist Title & Description priority: Actual synced Suno metadata -> Config default
+  const activeMeta = syncPlaylistId ? playlistMetaMap[syncPlaylistId] : null;
+  const displayTitle = activeMeta?.title || activePlaylistConfig.defaultTitle || activePlaylistConfig.name;
+  const displayDesc = activeMeta?.desc?.trim() || "";
+
+  // Playlist cover image: Synced cover image returned by the playlist itself -> first track's thumbnail -> fallback default
+  const playlistCoverImage = activeMeta?.image || 
+    (joelsSongs.length > 0 && joelsSongs[0]?.thumbnail
+      ? joelsSongs[0].thumbnail
+      : (FALLBACK_SONGS[0]?.thumbnail || "https://cdn2.suno.ai/24c69462-2727-415e-8f27-cdc43e0184db.jpeg?width=480"));
+
+  // Approximate total duration calculation (average ~3:05 per track or actual duration string)
+  const totalDurationFormatted = useMemo(() => {
+    let totalSeconds = 0;
+    joelsSongs.forEach((song) => {
+      if (song.duration && song.duration.includes(":")) {
+        const parts = song.duration.split(":");
+        const min = parseInt(parts[0], 10) || 0;
+        const sec = parseInt(parts[1], 10) || 0;
+        totalSeconds += min * 60 + sec;
+      } else {
+        totalSeconds += 185; // ~3m 05s default
+      }
+    });
+
+    if (totalSeconds === 0) return "0:00";
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  }, [joelsSongs]);
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[hsl(var(--primary)/0.06)] to-transparent text-foreground pb-32 md:pb-36 overflow-y-auto relative">
-      <div className="max-w-7xl mx-auto p-2 md:p-8 space-y-4 md:space-y-8 relative z-10 w-full">
-        
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-xl shadow-primary/10">
-              <Image 
-                src={`https://cdn2.suno.ai/24c69462-2727-415e-8f27-cdc43e0184db.jpeg?width=360`} 
-                alt="Profile" 
-                width={64} 
-                height={64} 
-                className="w-full h-full object-cover" 
-                referrerPolicy="no-referrer" 
-              />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold mb-1 flex items-center gap-2">
-                <Music2 className="text-primary" /> Joel's Music
-                {syncError && <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" title="Sync issue - using cache" />}
-                {isSyncing && !syncError && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" title="Syncing..." />}
-              </h1>
-              <p className="text-muted-foreground text-sm font-medium">
-                {joelsSongs.length} Exclusive Tracks
-              </p>
-            </div>
-          </div>
+    <div className="flex-1 bg-transparent text-foreground pb-44 md:pb-52 overflow-y-auto relative">
+      
+      <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 relative z-10 w-full">
+
+        {/* ── PLAYLIST HEADER (MATCHING SCREENSHOT LAYOUT & STYLING) ───────── */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 sm:gap-6 pt-2">
           
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="h-9 px-4 font-medium border-primary/20 hover:bg-primary/10" 
+          {/* Left: Artwork Cover */}
+          <div className="relative w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48 rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0 bg-zinc-900/90 group">
+            <Image 
+              src={playlistCoverImage} 
+              alt={cleanSunoText(displayTitle)} 
+              fill
+              className="object-cover transition-transform duration-500 group-hover:scale-105" 
+              referrerPolicy="no-referrer" 
+            />
+          </div>
+
+          {/* Right: Metadata, Title, Description, Stats & Action Buttons */}
+          <div className="flex-1 min-w-0 flex flex-col justify-between space-y-3 sm:space-y-0 w-full py-0.5">
+            
+            {/* Top Group: Tag Pill, Artist, Title, Description */}
+            <div className="space-y-2 sm:space-y-2.5">
+              {/* Tag Pill + Artist */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-md bg-primary/15 border border-primary/40 text-primary font-mono text-xs font-bold shadow-sm">
+                  {activePlaylistConfig.name}
+                </span>
+                <span className="text-xs font-mono text-zinc-400">
+                  Artist: <strong className="text-white font-bold tracking-wide">{activePlaylistConfig.artist || "ELITEJOE"}</strong>
+                </span>
+              </div>
+
+              {/* Main Title (Cleaned of HTML entities and boilerplate) */}
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold font-mono text-white tracking-tight leading-tight">
+                {cleanSunoText(displayTitle)}
+              </h1>
+
+              {/* Description (Only displays if playlist has a description on Suno) */}
+              {displayDesc && displayDesc.length > 0 && (
+                <p className="text-xs sm:text-sm text-zinc-400 font-mono leading-relaxed line-clamp-2">
+                  {cleanSunoText(displayDesc)}
+                </p>
+              )}
+            </div>
+
+            {/* Bottom Group: Stats & Action Buttons */}
+            <div className="space-y-2.5 sm:space-y-3 pt-2 sm:pt-3">
+              {/* Stats Row */}
+              <div className="flex items-center gap-3 sm:gap-4 flex-wrap text-xs sm:text-sm font-mono text-zinc-400">
+                <div className="flex items-center gap-1.5 text-white font-bold">
+                  <ListMusic size={16} className="text-primary" />
+                  <span>{joelsSongs.length} Songs</span>
+                </div>
+                
+                <span className="text-zinc-600">•</span>
+                
+                <div className="flex items-center gap-1.5 text-zinc-300">
+                  <Clock size={15} className="text-cyan-400" />
+                  <span>{totalDurationFormatted} Total</span>
+                </div>
+              </div>
+
+              {/* Action Buttons Row: PLAY ALL, SHUFFLE, SHARE */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Play All Button */}
+                <button
+                  onClick={handlePlayAll}
+                  disabled={joelsSongs.length === 0}
+                  className="h-10 px-5 rounded-xl bg-primary text-primary-foreground font-mono font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Play size={15} fill="currentColor" />
+                  <span>PLAY ALL</span>
+                </button>
+
+                {/* Shuffle Toggle Button */}
+                <button
+                  onClick={toggleShuffle}
+                  className={`h-10 px-4 rounded-xl font-mono text-xs sm:text-sm font-bold flex items-center gap-2 border transition-all cursor-pointer ${
+                    shuffle
+                      ? "bg-primary/20 border-primary text-primary"
+                      : "bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-white"
+                  }`}
+                  title={shuffle ? "Shuffle is ON" : "Shuffle is OFF"}
+                >
+                  <Shuffle size={14} />
+                  <span>SHUFFLE</span>
+                </button>
+
+                {/* Share Button */}
+                <button
+                  onClick={handleSharePlaylist}
+                  className="h-10 px-4 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-white/10 text-white font-mono text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer"
+                  title="Share playlist"
+                >
+                  <Share2 size={14} />
+                  <span>Share</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* Subtle Divider */}
+        <div className="border-t border-white/10 my-1" />
+
+        {/* ── PLAYLIST TABS / SELECTOR & SYNC BUTTON (PLACED ABOVE THE SEARCH BAR) ──────── */}
+        <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pt-1">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {PLAYLISTS.map((playlist) => {
+              const isSelected = syncPlaylistId === playlist.id;
+              const isLocked = playlist.type === "password" && !unlockedPlaylists[playlist.id];
+              
+              return (
+                <button
+                  key={playlist.id}
+                  onClick={() => {
+                    startTransition(() => {
+                      setSyncPlaylistId(playlist.id);
+                    });
+                  }}
+                  className={`h-8 px-3.5 rounded-lg font-mono text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                    isSelected
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                      : "bg-zinc-900/80 text-zinc-400 hover:text-white hover:bg-zinc-800 border border-white/5"
+                  }`}
+                >
+                  {playlist.type === "password" ? (
+                    <Lock 
+                      size={12} 
+                      className={isSelected ? "text-primary-foreground" : isLocked ? "text-amber-400" : "text-zinc-400"} 
+                    />
+                  ) : (
+                    <Music2 size={12} />
+                  )}
+                  <span>{playlist.name}</span>
+                  {isLocked && (
+                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-ping" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sync Button Inline with Playlist tabs */}
+          <button
             onClick={handleAutoSync}
             disabled={isSyncing}
+            className="h-8 px-3 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 hover:border-primary/40 text-zinc-300 hover:text-white font-mono text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 ml-auto"
+            title="Sync playlist"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} /> 
-            Sync Playlist
-          </Button>
+            <RefreshCw size={13} className={`text-primary ${isSyncing ? "animate-spin" : ""}`} />
+            <span>{isSyncing ? "Syncing..." : "Sync"}</span>
+          </button>
         </div>
 
-        {/* Playlist Tabs Selector */}
-        <div className="flex items-center gap-2 border-b border-white/[0.06] pb-3 overflow-x-auto scrollbar-none">
-          {PLAYLISTS.map((playlist) => {
-            const isSelected = syncPlaylistId === playlist.id;
-            const isLocked = playlist.type === "password" && !unlockedPlaylists[playlist.id];
-            
-            return (
-              <Button
-                key={playlist.id}
-                variant={isSelected ? "default" : "ghost"}
-                onClick={() => setSyncPlaylistId(playlist.id)}
-                className={`h-9 px-4 rounded-xl font-bold transition-all duration-300 flex items-center gap-1.5 shrink-0 ${
-                  isSelected
-                    ? "bg-primary text-white shadow-lg shadow-primary/20"
-                    : "text-muted-foreground hover:text-white"
-                }`}
-              >
-                {playlist.type === "password" ? (
-                  <Lock 
-                    size={14} 
-                    className={isSelected && !isLocked ? "text-primary-foreground" : isLocked ? "text-amber-500 animate-pulse" : "text-muted-foreground"} 
-                  />
-                ) : (
-                  <Music2 size={14} />
-                )}
-                <span>{playlist.name}</span>
-                {isLocked && (
-                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
-                )}
-              </Button>
-            );
-          })}
-        </div>
-
+        {/* ── Password Locked View or Tracks View ────────────────────────────── */}
         {(() => {
-          const activePlaylistConfig = PLAYLISTS.find(p => p.id === syncPlaylistId);
-          const isCurrentLocked = activePlaylistConfig?.type === "password" && !unlockedPlaylists[syncPlaylistId || ""];
-
           if (isCurrentLocked) {
             return (
-              /* Private Playlist Passkey Entry Card */
-              <div className="flex flex-col items-center justify-center py-20 px-6 max-w-md mx-auto text-center bg-black/20 backdrop-blur-md border border-white/5 rounded-3xl space-y-6 shadow-xl shadow-black/40 my-8">
-                <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex items-center justify-center text-amber-500 shadow-lg shadow-amber-500/5 animate-bounce">
-                  <Lock size={30} />
+              <div className="flex flex-col items-center justify-center py-16 px-6 max-w-md mx-auto text-center bg-zinc-900/80 backdrop-blur-xl border border-white/10 rounded-3xl space-y-6 shadow-2xl my-6">
+                <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-400 shadow-lg animate-bounce">
+                  <Lock size={28} />
                 </div>
                 
                 <div className="space-y-2">
                   <h2 className="text-xl font-bold tracking-tight text-white">{activePlaylistConfig?.label || "Private Collection"}</h2>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    {activePlaylistConfig?.desc || "This playlist is secure. Please enter the correct passkey to access."}
+                  <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed">
+                    This playlist is encrypted. Enter passcode to unlock.
                   </p>
                 </div>
 
@@ -892,15 +1041,15 @@ export function JoelsMusicView() {
                       setPasswordError("");
                     }}
                     onKeyDown={(e) => e.key === 'Enter' && handleVerifyPassword()}
-                    className="bg-black/35 border-white/10 rounded-xl pr-10 focus-visible:ring-primary h-11 text-center font-mono tracking-widest text-lg"
+                    className="bg-black/50 border-white/10 rounded-xl pr-10 focus-visible:ring-primary focus:border-primary h-11 text-center font-mono tracking-widest text-lg text-white"
                   />
                   {passwordError && (
-                    <p className="text-xs text-red-400 font-medium animate-pulse">{passwordError}</p>
+                    <p className="text-xs text-red-400 font-mono font-medium animate-pulse">{passwordError}</p>
                   )}
                   <Button
                     variant="default"
                     onClick={handleVerifyPassword}
-                    className="w-full h-11 rounded-xl bg-primary hover:bg-primary/95 text-white font-bold tracking-wide shadow-lg shadow-primary/15 transition-all duration-300"
+                    className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-mono font-bold tracking-wide transition-all cursor-pointer"
                   >
                     Unlock Playlist
                   </Button>
@@ -910,45 +1059,74 @@ export function JoelsMusicView() {
           }
 
           return (
-            <>
-              {/* Tracks List */}
-              <div className="space-y-1">
-                {joelsSongs.length > 0 ? (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
+            <div className="space-y-4">
+              {/* Search Bar - with generous left padding so icon never overlaps placeholder */}
+              <div className="relative max-w-md">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                <Input 
+                  type="text"
+                  placeholder="Search songs or artist..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-10 pl-11 pr-8 bg-zinc-900/60 border-white/10 rounded-xl text-white placeholder:text-zinc-500 font-mono text-xs w-full focus:border-primary/50"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-1 cursor-pointer"
                   >
-                    <SortableContext
-                      items={joelsSongs.map(s => s.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {joelsSongs.map((track, i) => (
-                        <SortableTrackItem
-                          key={track.id}
-                          track={track}
-                          index={i}
-                          playSunoTrack={playSunoTrack}
-                          toggleLikedSong={toggleLikedSong}
-                          isTrackLiked={isTrackLiked}
-                          addToQueue={addToQueue}
-                          removeSong={removeSong}
-                        />
-                      ))}
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  <div className="text-center py-20 bg-black/5 rounded-2xl border border-dashed border-white/5">
-                    <Music2 className="w-10 h-10 text-muted-foreground opacity-20 mx-auto mb-3" />
-                    <p className="text-muted-foreground text-sm">No tracks found.</p>
-                  </div>
+                    <X size={14} />
+                  </button>
                 )}
               </div>
-            </>
+
+              {/* Clean Track Rows (No individual card borders, matching earlier version) */}
+              {filteredSongs.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={filteredSongs.map(s => s.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1">
+                      {filteredSongs.map((track, i) => {
+                        const isCurrentInPlayer = currentTrack?.id === track.id && playbackSource === "suno";
+                        const isPlayingThis = isCurrentInPlayer;
+
+                        return (
+                          <SortableTrackItem
+                            key={track.id}
+                            track={track}
+                            index={i}
+                            isPlayingThis={isPlayingThis}
+                            isCurrentInPlayer={isCurrentInPlayer}
+                            isDownloaded={downloadedIds.has(track.id)}
+                            playSunoTrack={playSunoTrack}
+                            toggleLikedSong={toggleLikedSong}
+                            isTrackLiked={isTrackLiked}
+                            addToQueue={addToQueue}
+                            removeSong={removeSong}
+                            onDownloadToggle={handleDownloadToggle}
+                          />
+                        );
+                      })}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="text-center py-16 bg-zinc-900/20 rounded-2xl border border-dashed border-white/10">
+                  <Music2 className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                  <p className="text-zinc-400 font-mono text-xs">No matching tracks found.</p>
+                </div>
+              )}
+            </div>
           );
         })()}
+
       </div>
     </div>
   );
 }
-

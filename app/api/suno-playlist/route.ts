@@ -213,6 +213,8 @@ export async function GET(req: NextRequest) {
     let page = 0;
     let hasMore = true;
     let playlistName = "Suno Playlist";
+    let playlistDescription = "";
+    let playlistImage = "";
 
     const headers = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -274,6 +276,7 @@ export async function GET(req: NextRequest) {
     const extractClips = (html: string) => {
       let foundClips: any[] = [];
       let foundName = playlistName;
+      let foundDescription = playlistDescription;
 
       // Tier 1: Next.js __next_f.push extraction and reassembly
       const payloads: string[] = [];
@@ -477,6 +480,18 @@ export async function GET(req: NextRequest) {
                  }
              }
          }
+
+         // Try to find playlist description in reconstituted text
+         const descRegexes = [
+             /"description"\s*:\s*"([^"]+)"/
+         ];
+         for (const r of descRegexes) {
+             const m = combinedDecodedText.match(r);
+             if (m && m[1] && m[1].length > 0 && m[1].length < 500) {
+                 foundDescription = m[1];
+                 break;
+             }
+         }
       }
 
       // Tier 2: Absolute worst-case scenario. Extract any Suno audio links from raw HTML
@@ -528,6 +543,7 @@ export async function GET(req: NextRequest) {
                                      if (json?.playlist_clips?.length > 0) {
                                          foundClips = json.playlist_clips.map((pc: any) => pc.clip).filter(Boolean);
                                          foundName = json.name || foundName;
+                                         foundDescription = json.description || foundDescription;
                                          break;
                                      }
                                   } catch(e) {}
@@ -540,7 +556,110 @@ export async function GET(req: NextRequest) {
           }
       }
 
-      return { foundClips, foundName };
+      const cleanText = (val: string): string => {
+        if (!val) return "";
+        let t = val
+          .replace(/&#x27;/g, "'")
+          .replace(/&#39;/g, "'")
+          .replace(/&apos;/g, "'")
+          .replace(/&quot;/g, '"')
+          .replace(/&#x22;/g, '"')
+          .replace(/&amp;/g, '&')
+          .replace(/&#38;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+          .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+          .replace(/\s+by\s+@[A-Za-z0-9_.-]+/i, '')
+          .replace(/\s*\|\s*Suno.*$/i, '')
+          .replace(/\s*-\s*Suno.*$/i, '')
+          .replace(/\s*-\s*Playlist by.*$/i, '')
+          .replace(/on Suno$/i, '')
+          .trim();
+        return t;
+      };
+
+      let foundImage = "";
+
+      // Try extracting title, description, and image from HTML meta tags
+      const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                           html.match(/<meta\s+name=["']twitter:title["']\s+content=["']([^"']+)["']/i) ||
+                           html.match(/<title>([^<]+)<\/title>/i);
+      if (ogTitleMatch && ogTitleMatch[1]) {
+        let cleanedTitle = cleanText(ogTitleMatch[1]);
+        if (cleanedTitle && !["Suno", "Suno AI", "Listen on Suno", "Explore", "Explore Playlists"].includes(cleanedTitle)) {
+          foundName = cleanedTitle;
+        }
+      }
+
+      const ogDescMatch = html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i) ||
+                          html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i) ||
+                          html.match(/<meta\s+name=["']twitter:description["']\s+content=["']([^"']+)["']/i);
+      if (ogDescMatch && ogDescMatch[1]) {
+        let cleanedDesc = cleanText(ogDescMatch[1]);
+        if (cleanedDesc && 
+            !cleanedDesc.toLowerCase().includes("listen to songs by") && 
+            !cleanedDesc.toLowerCase().includes("listen to this playlist on suno") && 
+            !cleanedDesc.toLowerCase().includes("suno is building a future") &&
+            !cleanedDesc.toLowerCase().includes("create songs with suno")) {
+          foundDescription = cleanedDesc;
+        }
+      }
+
+      // Try extracting playlist cover image from meta tags
+      const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                           html.match(/<meta\s+name=["']twitter:image["']\s+content=["']([^"']+)["']/i) ||
+                           html.match(/<meta\s+name=["']image["']\s+content=["']([^"']+)["']/i);
+      if (ogImageMatch && ogImageMatch[1]) {
+        const img = ogImageMatch[1].trim();
+        if (img && !img.includes("suno.com/favicon") && !img.endsWith(".ico") && !img.includes("1x1")) {
+          foundImage = img;
+        }
+      }
+
+      // Check for JSON-LD structured data in HTML
+      const jsonLdMatch = html.match(/<script\s+type=["']application\/ld\+json["']>([^<]+)<\/script>/i);
+      if (jsonLdMatch && jsonLdMatch[1]) {
+        try {
+          const ld = JSON.parse(jsonLdMatch[1]);
+          if (ld?.name && typeof ld.name === "string" && !ld.name.includes("Suno")) {
+            foundName = cleanText(ld.name);
+          }
+          if (ld?.description && typeof ld.description === "string") {
+            foundDescription = cleanText(ld.description);
+          }
+          if (ld?.image && typeof ld.image === "string") {
+            foundImage = ld.image;
+          } else if (ld?.thumbnailUrl && typeof ld.thumbnailUrl === "string") {
+            foundImage = ld.thumbnailUrl;
+          }
+        } catch (e) {}
+      }
+
+      // Check specific playlist object by ID inside combinedDecodedText
+      if (combinedDecodedText) {
+        try {
+          const idRegex = new RegExp(`"id"\\s*:\\s*"${id}"[^}]*?"name"\\s*:\\s*"([^"]+)"`, 'i');
+          const mId = combinedDecodedText.match(idRegex);
+          if (mId && mId[1] && mId[1] !== "Suno Playlist") {
+            foundName = cleanText(mId[1]);
+          }
+
+          const idDescRegex = new RegExp(`"id"\\s*:\\s*"${id}"[^}]*?"description"\\s*:\\s*"([^"]+)"`, 'i');
+          const mDescId = combinedDecodedText.match(idDescRegex);
+          if (mDescId && mDescId[1]) {
+            foundDescription = cleanText(mDescId[1]);
+          }
+
+          const idImageRegex = new RegExp(`"id"\\s*:\\s*"${id}"[^}]*?"image_url"\\s*:\\s*"([^"]+)"`, 'i');
+          const mImgId = combinedDecodedText.match(idImageRegex);
+          if (mImgId && mImgId[1]) {
+            foundImage = mImgId[1];
+          }
+        } catch (e) {}
+      }
+
+      return { foundClips, foundName, foundDescription, foundImage };
     };
 
     const tryScrapeUrl = async (urlStr: string, isJsonHtml = false) => {
@@ -556,12 +675,14 @@ export async function GET(req: NextRequest) {
         if (response.ok) {
           let html = await response.text();
           if (isJsonHtml) {
-             try { html = JSON.parse(html).contents || html; } catch(e){}
+              try { html = JSON.parse(html).contents || html; } catch(e){}
           }
-          const { foundClips, foundName } = extractClips(html);
+          const { foundClips, foundName, foundDescription, foundImage } = extractClips(html);
           if (foundClips.length > 0) {
              clipsToUse = foundClips;
              playlistName = foundName;
+             playlistDescription = foundDescription || playlistDescription;
+             playlistImage = foundImage || playlistImage;
              hasMore = false;
              page = 10;
              console.log("Successfully scraped from:", urlStr.substring(0, 50));
@@ -602,6 +723,8 @@ export async function GET(req: NextRequest) {
         }
 
         playlistName = data.name || playlistName;
+        playlistDescription = data.description || playlistDescription;
+        playlistImage = data.image_url || data.avatar_image_url || data.cover_image_url || playlistImage;
         
         let pageClips = [];
         if (data.playlist_clips && Array.isArray(data.playlist_clips)) {
@@ -702,6 +825,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ 
       name: playlistName,
+      description: playlistDescription,
+      image_url: playlistImage,
       id,
       tracks,
       count: tracks.length

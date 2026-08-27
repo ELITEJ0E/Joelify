@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Play, ChevronDown, Plus, MoreVertical, ArrowLeft } from "lucide-react"
+import { Search, Play, ChevronDown, Plus, MoreVertical, ArrowLeft, ListPlus, ListMusic, Flame } from "lucide-react"
 import { TrackImage as Image } from "./TrackImage"
 import { useApp } from "@/contexts/AppContext"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu"
 import { getCachedData, setCachedData } from "@/lib/cache"
 
@@ -302,16 +305,89 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
                     onClick={() => handlePlayTrack(video, genreVideos, idx)}
                     className="group flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] transition-all cursor-pointer"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-secondary">
                         <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Play size={16} fill="currentColor" className="text-primary" />
+                        </div>
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-primary transition-colors">
                           {idx + 1}. {video.title}
                         </h3>
                         <p className="text-xs text-gray-400 line-clamp-1">{video.artist}</p>
                       </div>
+                    </div>
+
+                    {/* Actions menu (3 dots) */}
+                    <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="p-2 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                            aria-label="More options"
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white">
+                          <DropdownMenuItem
+                            onClick={() => handlePlayTrack(video, genreVideos, idx)}
+                            className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                          >
+                            <Play size={14} />
+                            Play Now
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              addToQueue({
+                                id: video.id,
+                                title: video.title,
+                                artist: video.artist,
+                                thumbnail: video.thumbnail,
+                                duration: "0:00",
+                              })
+                            }
+                            className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                          >
+                            <ListPlus size={14} />
+                            Add to Queue
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-white/10" />
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20">
+                              <ListMusic size={14} className="text-primary" />
+                              Add to Playlist
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="w-48 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white">
+                              {playlists.length === 0 ? (
+                                <div className="p-3 text-xs text-gray-400 text-center">No playlists created yet</div>
+                              ) : (
+                                playlists.map((p) => (
+                                  <DropdownMenuItem
+                                    key={p.id}
+                                    onClick={() =>
+                                      addTrackToPlaylist(p.id, {
+                                        id: video.id,
+                                        title: video.title,
+                                        artist: video.artist,
+                                        thumbnail: video.thumbnail,
+                                        duration: "0:00",
+                                      })
+                                    }
+                                    className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                                  >
+                                    <ListMusic size={13} className="text-primary shrink-0" />
+                                    <span className="truncate">{p.name}</span>
+                                  </DropdownMenuItem>
+                                ))
+                              )}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 ))}
@@ -327,25 +403,101 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
                   <div
                     key={item.id}
                     onClick={() => handlePlayTrack(item, heroVideos, idx)}
-                    className="flex-shrink-0 w-72 md:w-80 group cursor-pointer"
+                    className="flex-shrink-0 w-72 md:w-80 group cursor-pointer bg-zinc-900/40 border border-white/5 rounded-2xl p-2.5 hover:border-primary/30 transition-all flex flex-col justify-between"
                   >
-                    <div className="relative aspect-video rounded-2xl overflow-hidden bg-secondary shadow-lg border border-white/10 mb-2">
-                      <Image
-                        src={item.thumbnail || "/placeholder.svg"}
-                        alt={item.title}
-                        fill
-                        className="object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <Button size="icon" className="bg-primary text-black rounded-full h-12 w-12 shadow-lg">
-                          <Play fill="currentColor" size={20} className="ml-0.5" />
-                        </Button>
+                    <div>
+                      <div className="relative aspect-video rounded-xl overflow-hidden bg-secondary shadow-lg mb-2">
+                        <Image
+                          src={item.thumbnail || "/placeholder.svg"}
+                          alt={item.title}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full bg-primary text-black flex items-center justify-center shadow-lg">
+                            <Play fill="currentColor" size={16} className="translate-x-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-start justify-between gap-2 mt-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-primary transition-colors">
+                            {item.title}
+                          </h3>
+                          <p className="text-xs text-gray-400 line-clamp-1">{item.artist}</p>
+                        </div>
+
+                        {/* 3 dots menu */}
+                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                aria-label="More options"
+                              >
+                                <MoreVertical size={15} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white">
+                              <DropdownMenuItem
+                                onClick={() => handlePlayTrack(item, heroVideos, idx)}
+                                className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                              >
+                                <Play size={14} />
+                                Play Now
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  addToQueue({
+                                    id: item.id,
+                                    title: item.title,
+                                    artist: item.artist,
+                                    thumbnail: item.thumbnail,
+                                    duration: "0:00",
+                                  })
+                                }
+                                className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                              >
+                                <ListPlus size={14} />
+                                Add to Queue
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="bg-white/10" />
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20">
+                                  <ListMusic size={14} className="text-primary" />
+                                  Add to Playlist
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="w-48 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white">
+                                  {playlists.length === 0 ? (
+                                    <div className="p-3 text-xs text-gray-400 text-center">No playlists created yet</div>
+                                  ) : (
+                                    playlists.map((p) => (
+                                      <DropdownMenuItem
+                                        key={p.id}
+                                        onClick={() =>
+                                          addTrackToPlaylist(p.id, {
+                                            id: item.id,
+                                            title: item.title,
+                                            artist: item.artist,
+                                            thumbnail: item.thumbnail,
+                                            duration: "0:00",
+                                          })
+                                        }
+                                        className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                                      >
+                                        <ListMusic size={13} className="text-primary shrink-0" />
+                                        <span className="truncate">{p.name}</span>
+                                      </DropdownMenuItem>
+                                    ))
+                                  )}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </div>
-                    <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-primary transition-colors">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-gray-400 line-clamp-1">{item.artist}</p>
                   </div>
                 ))}
               </div>
@@ -411,6 +563,112 @@ export function ExploreView({ onNavigate, onOpenSidebar }: ExploreViewProps) {
                 </div>
               )}
             </section>
+
+            {/* TRENDING NOW IN REGION SECTION */}
+            {!loading && trendingVideos.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Flame size={20} className="text-orange-500" />
+                  <h2 className="text-xl font-bold text-white tracking-tight">Trending in {currentRegion.name}</h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {trendingVideos.slice(0, 8).map((video, idx) => (
+                    <div
+                      key={video.id}
+                      onClick={() => handlePlayTrack(video, trendingVideos, idx)}
+                      className="group bg-zinc-900/60 border border-white/[0.06] hover:border-primary/30 rounded-2xl overflow-hidden p-3 cursor-pointer transition-all hover:bg-zinc-900 flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-800 mb-2.5">
+                          <Image src={video.thumbnail || "/placeholder.svg"} alt={video.title} fill className="object-cover group-hover:scale-105 transition-transform" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+                              <Play size={16} fill="currentColor" className="translate-x-0.5" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-start justify-between gap-2 mt-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-white truncate group-hover:text-primary transition-colors">{video.title}</p>
+                            <p className="text-xs text-gray-400 truncate">{video.artist}</p>
+                          </div>
+
+                          {/* 3 dots menu */}
+                          <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                  aria-label="More options"
+                                >
+                                  <MoreVertical size={15} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-52 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white">
+                                <DropdownMenuItem
+                                  onClick={() => handlePlayTrack(video, trendingVideos, idx)}
+                                  className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                                >
+                                  <Play size={14} />
+                                  Play Now
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    addToQueue({
+                                      id: video.id,
+                                      title: video.title,
+                                      artist: video.artist,
+                                      thumbnail: video.thumbnail,
+                                      duration: "0:00",
+                                    })
+                                  }
+                                  className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                                >
+                                  <ListPlus size={14} />
+                                  Add to Queue
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="bg-white/10" />
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20">
+                                    <ListMusic size={14} className="text-primary" />
+                                    Add to Playlist
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent className="w-48 bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white">
+                                    {playlists.length === 0 ? (
+                                      <div className="p-3 text-xs text-gray-400 text-center">No playlists created yet</div>
+                                    ) : (
+                                      playlists.map((p) => (
+                                        <DropdownMenuItem
+                                          key={p.id}
+                                          onClick={() =>
+                                            addTrackToPlaylist(p.id, {
+                                              id: video.id,
+                                              title: video.title,
+                                              artist: video.artist,
+                                              thumbnail: video.thumbnail,
+                                              duration: "0:00",
+                                            })
+                                          }
+                                          className="gap-2 cursor-pointer text-xs hover:bg-primary/20 focus:bg-primary/20"
+                                        >
+                                          <ListMusic size={13} className="text-primary shrink-0" />
+                                          <span className="truncate">{p.name}</span>
+                                        </DropdownMenuItem>
+                                      ))
+                                    )}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* GENRES SECTION */}
             <section className="space-y-3">
