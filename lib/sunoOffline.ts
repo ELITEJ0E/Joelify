@@ -2,16 +2,20 @@ export async function downloadSunoTrack(
   songId: string,
   onProgress: (percent: number) => void
 ): Promise<void> {
-  const url = `https://cdn1.suno.ai/${songId}.mp3`;
+  const primaryUrl = `/api/suno-stream/${songId}`;
+  const cdnUrl = `https://cdn1.suno.ai/${songId}.mp3`;
   try {
     const cache = await caches.open("joelify-suno-offline-v1");
-    const existing = await cache.match(url);
+    const existing = await cache.match(cdnUrl) || await cache.match(primaryUrl);
     if (existing) {
       onProgress(100);
       return;
     }
 
-    const response = await fetch(url);
+    let response = await fetch(primaryUrl);
+    if (!response.ok) {
+      response = await fetch(cdnUrl);
+    }
     if (!response.ok) throw new Error("Failed to fetch track");
     if (!response.body) throw new Error("No response body");
 
@@ -34,12 +38,13 @@ export async function downloadSunoTrack(
       }
     }
 
-    const blob = new Blob(chunks as BlobPart[], { type: "audio/mpeg" });
+    const contentType = response.headers.get("content-type") || "audio/mp4";
+    const blob = new Blob(chunks as BlobPart[], { type: contentType });
     const cachedResponse = new Response(blob, {
-      headers: { "Content-Type": "audio/mpeg" },
+      headers: { "Content-Type": contentType },
     });
 
-    await cache.put(url, cachedResponse);
+    await cache.put(cdnUrl, cachedResponse);
     onProgress(100);
   } catch (error) {
     console.error("Error downloading track:", error);

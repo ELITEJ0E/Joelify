@@ -1649,9 +1649,19 @@ export function PlayerControls() {
     {(playbackSource === "suno" || playbackSource === "local") && (
       <audio
         ref={sunoAudioRef}
-        src={playbackSource === "local" ? (localFileUrl || undefined) : (offlineSunoUrl ? offlineSunoUrl : (currentTrack ? `https://cdn1.suno.ai/${currentTrack.id}.mp3` : undefined))}
+        src={playbackSource === "local" ? (localFileUrl || undefined) : (offlineSunoUrl ? offlineSunoUrl : (currentTrack ? `/api/suno-stream/${currentTrack.id}` : undefined))}
         preload="auto"
         className="hidden"
+        onError={(e) => {
+          console.warn("[Player] Suno proxy audio error, trying direct CDN fallback:", e);
+          if (currentTrack && sunoAudioRef.current && sunoAudioRef.current.src.includes("/api/suno-stream/")) {
+            sunoAudioRef.current.src = `https://cdn1.suno.ai/${currentTrack.id}.mp3`;
+            sunoAudioRef.current.load();
+            if (isPlaying) {
+              sunoAudioRef.current.play().catch(err => console.warn("Fallback play error:", err));
+            }
+          }
+        }}
       />
     )}
     </>
