@@ -46,6 +46,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { FALLBACK_JOELS_SONGS as FALLBACK_SONGS, JOEL_PLAYLIST_ID } from "@/lib/constants";
 import { downloadSunoTrack, deleteSunoDownload, listDownloadedSunoIds } from "@/lib/sunoOffline";
+import { safeJsonStringify, sanitizeTrack } from "@/lib/storage";
 
 export const cleanSunoText = (val: string): string => {
   if (!val) return "";
@@ -622,9 +623,10 @@ export function JoelsMusicView() {
     }
 
     if (serverData?.tracks && Array.isArray(serverData.tracks) && serverData.tracks.length > 0) {
-      memoryCacheRef.current[id] = serverData.tracks;
-      setJoelsSongs(serverData.tracks);
-      localStorage.setItem(`joely_tracks_${id}`, JSON.stringify(serverData.tracks));
+      const cleanTracks = serverData.tracks.map(sanitizeTrack).filter(Boolean) as any[];
+      memoryCacheRef.current[id] = cleanTracks;
+      setJoelsSongs(cleanTracks);
+      localStorage.setItem(`joely_tracks_${id}`, safeJsonStringify(cleanTracks));
 
       // Save metadata if provided
       const finalTitle = (serverData.name && serverData.name !== "Suno Playlist") ? serverData.name : "";
@@ -642,7 +644,7 @@ export function JoelsMusicView() {
         ...prev,
         [id]: metaObj
       }));
-      localStorage.setItem(`joely_meta_${id}`, JSON.stringify(metaObj));
+      localStorage.setItem(`joely_meta_${id}`, safeJsonStringify(metaObj));
 
       toast.custom((t) => (
         <CustomToast 
@@ -727,9 +729,10 @@ export function JoelsMusicView() {
   const removeSong = useCallback((id: string) => {
     const updated = joelsSongs.filter(s => s.id !== id);
     const activeId = syncPlaylistId || JOEL_PLAYLIST_ID;
-    memoryCacheRef.current[activeId] = updated;
-    setJoelsSongs(updated);
-    localStorage.setItem(`joely_tracks_${activeId}`, JSON.stringify(updated));
+    const cleanUpdated = updated.map(sanitizeTrack).filter(Boolean) as any[];
+    memoryCacheRef.current[activeId] = cleanUpdated;
+    setJoelsSongs(cleanUpdated);
+    localStorage.setItem(`joely_tracks_${activeId}`, safeJsonStringify(cleanUpdated));
 
     toast.custom((t) => (
       <CustomToast 
@@ -805,9 +808,10 @@ export function JoelsMusicView() {
       const newIndex = joelsSongs.findIndex(s => s.id === over.id);
       const updated = arrayMove(joelsSongs, oldIndex, newIndex);
       const activeId = syncPlaylistId || JOEL_PLAYLIST_ID;
-      memoryCacheRef.current[activeId] = updated;
-      setJoelsSongs(updated);
-      localStorage.setItem(`joely_tracks_${activeId}`, JSON.stringify(updated));
+      const cleanUpdated = updated.map(sanitizeTrack).filter(Boolean) as any[];
+      memoryCacheRef.current[activeId] = cleanUpdated;
+      setJoelsSongs(cleanUpdated);
+      localStorage.setItem(`joely_tracks_${activeId}`, safeJsonStringify(cleanUpdated));
     }
   }, [joelsSongs, syncPlaylistId, setJoelsSongs]);
 

@@ -1,3 +1,5 @@
+import { safeJsonStringify } from "./storage"
+
 interface CacheData<T> {
   data: T
   timestamp: number
@@ -31,7 +33,7 @@ export function setCachedData<T>(key: string, data: T, storage: Storage = localS
       data,
       timestamp: Date.now(),
     }
-    storage.setItem(key, JSON.stringify(cacheData))
+    storage.setItem(key, safeJsonStringify(cacheData))
   } catch (error) {
     console.error(`[Cache] Error writing cache for key "${key}":`, error)
   }

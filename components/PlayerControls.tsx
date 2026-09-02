@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { LIKED_SONGS_PLAYLIST_ID } from "./LikedSongsView"
 import { getOfflineAudioBlobUrl } from "@/lib/sunoOffline"
 import { getLocalFileBlob } from "@/lib/localFiles"
+import { safeJsonStringify } from "@/lib/storage"
 
 export function PlayerControls() {
   const {
@@ -919,7 +920,7 @@ export function PlayerControls() {
     })
     
     if (history.length > 2000) history = history.slice(-2000); // safety cap
-    localStorage.setItem("listening_history", JSON.stringify(history))
+    localStorage.setItem("listening_history", safeJsonStringify(history))
 
     // 2. Aggregate all-time stats memory
     let allTimeStats = { totalPlays: 0, totalTime: 0, trackPlays: {} as any, artistPlays: {} as any };
@@ -942,7 +943,7 @@ export function PlayerControls() {
 
     allTimeStats.artistPlays[track.artist] = (allTimeStats.artistPlays[track.artist] || 0) + 1;
 
-    localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats));
+    localStorage.setItem("listening_stats_all_time", safeJsonStringify(allTimeStats));
 
   }, [duration, playbackSource])
 

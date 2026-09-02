@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { useEffect, useState } from "react"
 import { Clock, Music, TrendingUp, Calendar, BarChart3, Share2 } from 'lucide-react'
 import { ShareMenu } from "./ShareMenu"
+import { safeJsonStringify } from "@/lib/storage"
 
 interface ListeningStats {
   totalPlays: number
@@ -59,7 +60,7 @@ export function StatisticsView() {
         allTimeStats.trackPlays[trackKey].count += 1;
         allTimeStats.artistPlays[item.artist] = (allTimeStats.artistPlays[item.artist] || 0) + 1;
       });
-      localStorage.setItem("listening_stats_all_time", JSON.stringify(allTimeStats));
+      localStorage.setItem("listening_stats_all_time", safeJsonStringify(allTimeStats));
     }
 
     // Weekly activity (Last 7 days strictly, or based on days recorded)

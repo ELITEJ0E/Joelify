@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useApp } from "@/contexts/AppContext"
+import { safeJsonStringify, sanitizePlaylist } from "@/lib/storage"
 
 interface ShareMenuProps {
   type: "track" | "playlist" | "stats"
@@ -49,8 +50,9 @@ export function ShareMenu({ type, data, className = "" }: ShareMenuProps) {
       return `${window.location.origin}?${params.toString()}`
     } else if (type === "playlist" && data) {
       // Generate playlist share link
-      const playlistData = JSON.stringify(data)
-      const encoded = btoa(playlistData)
+      const cleanData = sanitizePlaylist(data) || data
+      const playlistData = safeJsonStringify(cleanData)
+      const encoded = btoa(unescape(encodeURIComponent(playlistData)))
       return `${window.location.origin}?playlist=${encoded}`
     }
     return window.location.origin

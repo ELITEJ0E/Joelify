@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useMemo, useRef, type ReactNode } from "react"
-import { type AppState, type Playlist, type Track, loadState, saveState, createDefaultPlaylist } from "@/lib/storage"
+import { type AppState, type Playlist, type Track, loadState, saveState, createDefaultPlaylist, safeJsonStringify, sanitizeAppState, sanitizeTrack } from "@/lib/storage"
 import { FALLBACK_JOELS_SONGS } from "@/lib/constants"
 import { auth, db } from "@/lib/firebase"
 import { onAuthStateChanged, User } from "firebase/auth"
@@ -147,13 +147,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const now = Date.now()
       const docRef = doc(db, "users", uid)
+      const cleanState = sanitizeAppState(stateToSave)
 
       const dataToSave = {
         uid: uid,
         email: currentUser?.email || "",
         displayName: currentUser?.displayName || "",
         photoURL: currentUser?.photoURL || "",
-        appState: JSON.stringify(stateToSave),
+        appState: safeJsonStringify(cleanState),
         updatedAt: now,
       }
 
@@ -305,7 +306,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const signature = joelsSongs.map(s => s.id).join(",")
       if (signature !== joelsSongsKeyRef.current) {
         joelsSongsKeyRef.current = signature
-        localStorage.setItem('joels_custom_songs', JSON.stringify(joelsSongs))
+        const cleanSongs = joelsSongs.map(sanitizeTrack).filter(Boolean)
+        localStorage.setItem('joels_custom_songs', safeJsonStringify(cleanSongs))
       }
     }, [joelsSongs, isInitialized])
 
@@ -681,8 +683,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
 
       try {
-        localStorage.setItem("joely_synced_thumbnails_cache", JSON.stringify(thumbCache));
-        localStorage.setItem("joely_synced_lyrics_cache", JSON.stringify(lyricsCache));
+        localStorage.setItem("joely_synced_thumbnails_cache", safeJsonStringify(thumbCache));
+        localStorage.setItem("joely_synced_lyrics_cache", safeJsonStringify(lyricsCache));
       } catch (e) {
         console.error("Failed to save global caches", e);
       }
@@ -710,7 +712,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return mergeTrackWithFallback(t, fb);
       });
 
-      localStorage.setItem(cachedKey, JSON.stringify(mergedTracks));
+      const cleanMerged = mergedTracks.map(sanitizeTrack).filter(Boolean);
+      localStorage.setItem(cachedKey, safeJsonStringify(cleanMerged));
       localStorage.setItem(`joely_playlist_synced_${id}`, "true");
 
       // Exception: if this background synced playlist is the one currently loaded in player/active view,
