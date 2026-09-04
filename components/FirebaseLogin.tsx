@@ -4,15 +4,17 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogIn, LogOut, Cloud, Check } from "lucide-react"
+import { LogIn, LogOut, Cloud, Check, Music, Heart } from "lucide-react"
 import { auth } from "@/lib/firebase"
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth"
+import { useApp } from "@/contexts/AppContext"
 import { CustomToast } from "./CustomToast"
 import { toast } from "sonner"
 
 export function FirebaseLogin() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const { playlists, likedSongs } = useApp()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -101,6 +103,16 @@ export function FirebaseLogin() {
               <p className="text-sm font-semibold truncate">{user.displayName}</p>
               <p className="text-xs text-muted-foreground truncate">{user.email}</p>
             </div>
+          </div>
+          <div className="flex items-center gap-3 pt-1 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Music className="w-3 h-3 text-primary" />
+              {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
+            </span>
+            <span className="flex items-center gap-1">
+              <Heart className="w-3 h-3 text-red-400" />
+              {likedSongs.length} liked
+            </span>
           </div>
           <Button variant="outline" size="sm" onClick={handleLogout} className="w-full h-8">
             <LogOut className="h-3 w-3 mr-2" />

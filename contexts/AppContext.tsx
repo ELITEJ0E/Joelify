@@ -140,7 +140,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Track timestamp of latest local user mutation
   const lastLocalMutationTime = useRef<number>(Date.now())
-  const initialLoadCompletedRef = useRef<boolean>(false)
+  const isRemoteUpdateRef = useRef<boolean>(false)
+  const isInitialMountedRef = useRef<boolean>(false)
 
   // Helper function to persist state directly to Firestore
   const saveStateToFirebase = async (uid: string, stateToSave: any, currentUser: User | null) => {
@@ -172,131 +173,185 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe()
   }, [])
 
-  // Load state from localStorage or Firebase on mount/login
+  // Load state on mount and attach real-time Firestore sync when authenticated
   useEffect(() => {
-    const loadData = async () => {
-      // If already initialized and user logs in, sync local changes up without clobbering in-memory state
-      if (initialLoadCompletedRef.current) {
-        if (user) {
-          const localStored = loadState() as Partial<AppState> & { lastModified?: number }
-          if (localStored && localStored.playlists !== undefined) {
-            saveStateToFirebase(user.uid, localStored, user)
-          }
-        }
-        return
-      }
-
-      let stored: Partial<AppState> & { lastModified?: number } = {}
+    // 1. Initial local load if not yet initialized
+    if (!isInitialMountedRef.current) {
+      isInitialMountedRef.current = true
       const localStored = loadState() as Partial<AppState> & { lastModified?: number }
-      const localLastModified = localStored?.lastModified || 0
-      
-      if (user) {
-        try {
-          const docRef = doc(db, "users", user.uid)
-          const docSnap = await getDoc(docRef)
-          if (docSnap.exists()) {
-            const data = docSnap.data()
-            const cloudUpdatedAt = data.updatedAt || 0
-            
-            // If local storage has edits (user created/deleted playlists), prioritize local and sync to cloud!
-            if (localLastModified >= cloudUpdatedAt && localStored.playlists !== undefined) {
-              stored = localStored
-              saveStateToFirebase(user.uid, localStored, user)
-            } else if (data.appState) {
-              try {
-                stored = JSON.parse(data.appState)
-              } catch {
-                stored = localStored
-              }
-            } else {
-              stored = localStored
-            }
-          } else {
-            stored = localStored
-            // Initialize cloud document with local state
-            saveStateToFirebase(user.uid, localStored, user)
-          }
-        } catch (error) {
-          console.error("Failed to load from Firebase:", error)
-          stored = localStored
-        }
-      } else {
-        stored = localStored
-      }
 
-      if (stored.currentTrack) {
-        const fallback = FALLBACK_JOELS_SONGS.find(f => f.id === stored.currentTrack?.id);
-        setCurrentTrack(mergeTrackWithFallback(stored.currentTrack, fallback));
+      if (localStored.currentTrack) {
+        const fallback = FALLBACK_JOELS_SONGS.find(f => f.id === localStored.currentTrack?.id)
+        setCurrentTrack(mergeTrackWithFallback(localStored.currentTrack, fallback))
       }
-      if (stored.currentPlaylistId) setCurrentPlaylistId(stored.currentPlaylistId)
-      
-      // If stored.playlists is explicitly defined (even as an empty array []), respect it!
-      if (stored.playlists !== undefined && Array.isArray(stored.playlists)) {
-        setPlaylists(stored.playlists)
-      } else if (localStored.playlists !== undefined && Array.isArray(localStored.playlists)) {
+      if (localStored.currentPlaylistId) setCurrentPlaylistId(localStored.currentPlaylistId)
+      if (localStored.playlists !== undefined && Array.isArray(localStored.playlists) && localStored.playlists.length > 0) {
         setPlaylists(localStored.playlists)
       } else {
-        // First run ever with no prior saved data
         setPlaylists([createDefaultPlaylist()])
       }
-
-      if (stored.likedSongs) setLikedSongs(stored.likedSongs)
-      if (stored.queue) setQueue(stored.queue)
-      if (stored.playbackPosition !== undefined) setPlaybackPosition(stored.playbackPosition)
-      if (stored.volume !== undefined) setVolume(stored.volume)
-      if (stored.shuffle !== undefined) setShuffle(stored.shuffle)
-      if (stored.repeat) setRepeat(stored.repeat)
-      if (stored.theme) setTheme(stored.theme)
-      if (stored.videoMode !== undefined) setVideoMode(stored.videoMode)
-      if (stored.customTheme) setCustomThemeState(stored.customTheme)
-      if (stored.playbackSource) setPlaybackSource(stored.playbackSource as PlaybackSource)
-      if (stored.audioSettings) {
-        setAudioSettingsState(prev => ({ ...prev, ...stored.audioSettings }))
+      if (localStored.likedSongs) setLikedSongs(localStored.likedSongs)
+      if (localStored.queue) setQueue(localStored.queue)
+      if (localStored.playbackPosition !== undefined) setPlaybackPosition(localStored.playbackPosition)
+      if (localStored.volume !== undefined) setVolume(localStored.volume)
+      if (localStored.shuffle !== undefined) setShuffle(localStored.shuffle)
+      if (localStored.repeat) setRepeat(localStored.repeat)
+      if (localStored.theme) setTheme(localStored.theme)
+      if (localStored.videoMode !== undefined) setVideoMode(localStored.videoMode)
+      if (localStored.customTheme) setCustomThemeState(localStored.customTheme)
+      if (localStored.playbackSource) setPlaybackSource(localStored.playbackSource as PlaybackSource)
+      if (localStored.audioSettings) {
+        setAudioSettingsState(prev => ({ ...prev, ...localStored.audioSettings }))
       }
+
+      const JOEL_PLAYLIST_ID = "ff247038-e0ae-4778-989d-0529e575027b"
+      const activePlaylistId = localStorage.getItem('joel_sync_playlist_id') || JOEL_PLAYLIST_ID
+      const cachedKey = `joely_tracks_${activePlaylistId}`
+      const savedTracksStr = localStorage.getItem(cachedKey) || localStorage.getItem('joels_custom_songs')
       
-      const JOEL_PLAYLIST_ID = "ff247038-e0ae-4778-989d-0529e575027b";
-      const activePlaylistId = localStorage.getItem('joel_sync_playlist_id') || JOEL_PLAYLIST_ID;
-      const cachedKey = `joely_tracks_${activePlaylistId}`;
-      const savedTracksStr = localStorage.getItem(cachedKey) || localStorage.getItem('joels_custom_songs');
-      
-      let joelSongsToLoad: Track[] = [];
+      let joelSongsToLoad: Track[] = []
       if (savedTracksStr) {
         try {
-          let parsed: Track[] = JSON.parse(savedTracksStr);
+          let parsed: Track[] = JSON.parse(savedTracksStr)
           parsed = parsed.map(pTrack => {
-            const fallback = FALLBACK_JOELS_SONGS.find(f => f.id === pTrack.id);
-            return mergeTrackWithFallback(pTrack, fallback);
-          });
+            const fallback = FALLBACK_JOELS_SONGS.find(f => f.id === pTrack.id)
+            return mergeTrackWithFallback(pTrack, fallback)
+          })
           
           if (activePlaylistId === JOEL_PLAYLIST_ID) {
             const missingFallbacks = FALLBACK_JOELS_SONGS.filter(
               f => !parsed.some(p => p.id === f.id)
-            );
+            )
             if (missingFallbacks.length > 0) {
-              parsed = [...missingFallbacks, ...parsed];
+              parsed = [...missingFallbacks, ...parsed]
             }
           }
-          joelSongsToLoad = parsed;
+          joelSongsToLoad = parsed
         } catch (e) {
-          console.error("Failed to load Joel's partition music from storage", e);
-          joelSongsToLoad = [...FALLBACK_JOELS_SONGS].reverse();
+          console.error("Failed to load Joel's partition music from storage", e)
+          joelSongsToLoad = [...FALLBACK_JOELS_SONGS].reverse()
         }
       } else {
-        joelSongsToLoad = [...FALLBACK_JOELS_SONGS].reverse();
+        joelSongsToLoad = [...FALLBACK_JOELS_SONGS].reverse()
       }
       
-      // Ensure all tracks in joelSongsToLoad have their synced thumbnails resolved
       joelSongsToLoad = joelSongsToLoad.map(s => {
-        const fb = FALLBACK_JOELS_SONGS.find(f => f.id === s.id);
-        return mergeTrackWithFallback(s, fb);
-      });
-      setJoelsSongs(joelSongsToLoad);
-
-      initialLoadCompletedRef.current = true
+        const fb = FALLBACK_JOELS_SONGS.find(f => f.id === s.id)
+        return mergeTrackWithFallback(s, fb)
+      })
+      setJoelsSongs(joelSongsToLoad)
       setIsInitialized(true)
     }
 
-    loadData()
+    // 2. Real-time Firestore sync when a user is signed in
+    if (!user) return
+
+    const userDocRef = doc(db, "users", user.uid)
+    const unsubscribeSnapshot = onSnapshot(
+      userDocRef,
+      (docSnap) => {
+        if (!docSnap.exists()) {
+          // Document does not exist yet on cloud, initialize it with current local state
+          const currentLocal = loadState()
+          saveStateToFirebase(user.uid, currentLocal, user)
+          return
+        }
+
+        const data = docSnap.data()
+        if (!data?.appState) return
+
+        try {
+          const cloudState: Partial<AppState> = JSON.parse(data.appState)
+          const localStored = loadState() as Partial<AppState>
+
+          // Intelligently merge playlists: keep cloud playlists + add any newly created local playlists
+          const cloudPlaylists: Playlist[] = Array.isArray(cloudState.playlists) ? cloudState.playlists : []
+          const localPlaylists: Playlist[] = Array.isArray(localStored.playlists) ? localStored.playlists : []
+          
+          const mergedPlaylistsMap = new Map<string, Playlist>()
+          cloudPlaylists.forEach(p => {
+            if (p && p.id) mergedPlaylistsMap.set(p.id, p)
+          })
+          localPlaylists.forEach(p => {
+            if (p && p.id && !mergedPlaylistsMap.has(p.id)) {
+              mergedPlaylistsMap.set(p.id, p)
+            }
+          })
+          const finalPlaylists = Array.from(mergedPlaylistsMap.values())
+
+          // Intelligently merge liked songs without duplicates
+          const cloudLiked: Track[] = Array.isArray(cloudState.likedSongs) ? cloudState.likedSongs : []
+          const localLiked: Track[] = Array.isArray(localStored.likedSongs) ? localStored.likedSongs : []
+          
+          const mergedLikedMap = new Map<string, Track>()
+          cloudLiked.forEach(t => {
+            const trackId = t.id || (t as any).videoId
+            if (trackId) mergedLikedMap.set(trackId, t)
+          })
+          localLiked.forEach(t => {
+            const trackId = t.id || (t as any).videoId
+            if (trackId && !mergedLikedMap.has(trackId)) {
+              mergedLikedMap.set(trackId, t)
+            }
+          })
+          const finalLikedSongs = Array.from(mergedLikedMap.values())
+
+          // Mark as remote update to prevent immediate echo back to Firebase
+          isRemoteUpdateRef.current = true
+
+          if (finalPlaylists.length > 0) {
+            setPlaylists(finalPlaylists)
+          }
+          setLikedSongs(finalLikedSongs)
+
+          if (cloudState.queue && Array.isArray(cloudState.queue)) {
+            setQueue(cloudState.queue)
+          }
+          if (cloudState.currentTrack) {
+            const fallback = FALLBACK_JOELS_SONGS.find(f => f.id === cloudState.currentTrack?.id)
+            setCurrentTrack(mergeTrackWithFallback(cloudState.currentTrack, fallback))
+          }
+          if (cloudState.currentPlaylistId !== undefined) {
+            setCurrentPlaylistId(cloudState.currentPlaylistId)
+          }
+          if (cloudState.theme) {
+            setTheme(cloudState.theme)
+          }
+          if (cloudState.customTheme) {
+            setCustomThemeState(cloudState.customTheme)
+          }
+          if (cloudState.videoMode !== undefined) {
+            setVideoMode(cloudState.videoMode)
+          }
+          if (cloudState.audioSettings) {
+            setAudioSettingsState(prev => ({ ...prev, ...cloudState.audioSettings }))
+          }
+
+          // Update local storage with merged state
+          saveState({
+            ...localStored,
+            playlists: finalPlaylists,
+            likedSongs: finalLikedSongs,
+            queue: cloudState.queue || localStored.queue || [],
+            theme: cloudState.theme || localStored.theme || "dark",
+            customTheme: cloudState.customTheme || localStored.customTheme,
+            audioSettings: cloudState.audioSettings || localStored.audioSettings,
+            lastModified: Date.now(),
+          })
+
+          setTimeout(() => {
+            isRemoteUpdateRef.current = false
+          }, 300)
+        } catch (err) {
+          console.error("Failed to parse cloud appState from Firestore:", err)
+        }
+      },
+      (error) => {
+        console.error("Firestore real-time sync error:", error)
+      }
+    )
+
+    return () => unsubscribeSnapshot()
   }, [user])
 
     // Cache joelsSongs to storage only when actual song list content changes
@@ -385,7 +440,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Save state to Firebase whenever it changes (debounced and excluding frequent playback updates)
   useEffect(() => {
-    if (!isInitialized || !user) return
+    if (!isInitialized || !user || isRemoteUpdateRef.current) return
 
     const now = Date.now()
     const stateToSave = {
